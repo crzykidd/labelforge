@@ -1,0 +1,37 @@
+# Enforce LF line endings on all text files regardless of contributor OS.
+# This catches the CRLF problem we've hit in other repos.
+
+* text=auto eol=lf
+
+# Explicit: environment files MUST be LF (CRLF breaks .env parsing silently)
+*.env text eol=lf
+.env* text eol=lf
+
+# Shell scripts MUST be LF (CRLF breaks #!/bin/bash)
+*.sh text eol=lf
+
+# Compose, YAML, TOML, JSON: LF
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+
+# Python / TypeScript: LF
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+
+# Markdown: LF
+*.md text eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.ttf binary
+*.otf binary
