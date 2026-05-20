@@ -1,0 +1,125 @@
+# labelforge default label catalog
+# Maps brother_ql library identifiers to user-friendly metadata.
+# Required fields: id, display_name
+# All other fields are optional. Unknown fields are ignored.
+# Reload: restart the app or POST /api/admin/reload-catalog (future slice).
+
+labels:
+
+  # ── Continuous (mono) ─────────────────────────────────────────────────────
+
+  - id: "12"
+    display_name: "12mm Continuous"
+    description: "Narrow continuous tape, black on white."
+    category: continuous
+    color_capable: false
+
+  - id: "29"
+    display_name: "29mm Continuous"
+    description: "Medium-width continuous tape, black on white."
+    category: continuous
+    color_capable: false
+
+  - id: "38"
+    display_name: "38mm Continuous"
+    description: "Wide continuous tape, black on white."
+    category: continuous
+    color_capable: false
+
+  - id: "50"
+    display_name: "50mm Continuous"
+    description: "50mm continuous tape, black on white."
+    category: continuous
+    color_capable: false
+
+  - id: "54"
+    display_name: "54mm Continuous"
+    description: "54mm continuous tape, black on white."
+    category: continuous
+    color_capable: false
+
+  - id: "62"
+    display_name: "62mm Continuous (Black)"
+    brother_part: "DK-22205"
+    description: "General-purpose paper tape, black on white."
+    category: continuous
+    color_capable: false
+    common_use:
+      - "address labels"
+      - "file folders"
+      - "spool labels"
+
+  # ── Continuous (two-color) ────────────────────────────────────────────────
+
+  - id: "62red"
+    display_name: "62mm Continuous (Black + Red)"
+    brother_part: "DK-22251"
+    description: "Two-color paper tape. Requires QL-800 series printer."
+    category: continuous
+    color_capable: true
+    printer_requirements:
+      - "QL-800"
+      - "QL-810W"
+      - "QL-820NWB"
+
+  # ── Die-cut ───────────────────────────────────────────────────────────────
+
+  - id: "17x54"
+    display_name: "17mm × 54mm Die-cut"
+    description: "Small die-cut label."
+    category: die-cut
+    color_capable: false
+
+  - id: "17x87"
+    display_name: "17mm × 87mm Die-cut"
+    description: "Small elongated die-cut label."
+    category: die-cut
+    color_capable: false
+
+  - id: "29x90"
+    display_name: "29mm × 90mm Address Label"
+    brother_part: "DK-11201"
+    description: "Standard address label, die-cut."
+    category: die-cut
+    color_capable: false
+    common_use:
+      - "address"
+      - "file folder"
+      - "spool"
+
+  - id: "38x90"
+    display_name: "38mm × 90mm Die-cut"
+    description: "Medium die-cut label."
+    category: die-cut
+    color_capable: false
+
+  - id: "52x29"
+    display_name: "52mm × 29mm Die-cut"
+    description: "Wide short die-cut label."
+    category: die-cut
+    color_capable: false
+
+  - id: "62x29"
+    display_name: "62mm × 29mm Die-cut"
+    description: "Wide short die-cut label."
+    category: die-cut
+    color_capable: false
+
+  - id: "62x100"
+    display_name: "62mm × 100mm Shipping Label"
+    brother_part: "DK-11202"
+    description: "Larger die-cut, good for shipping or product labels."
+    category: die-cut
+    color_capable: false
+    common_use:
+      - "shipping"
+      - "product"
+
+  # ── Round ─────────────────────────────────────────────────────────────────
+
+  - id: "d24"
+    display_name: "24mm Round"
+    brother_part: "DK-11218"
+    description: "Round die-cut, 24mm diameter."
+    category: round
+    color_capable: false

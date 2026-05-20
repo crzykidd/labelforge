@@ -1,0 +1,31 @@
+name: labelforge
+
+services:
+  labelforge:
+    build: .
+    image: labelforge:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /var/docker/labelforge:/var/docker/labelforge
+    networks:
+      - traefik
+      - dockflare
+    labels:
+      # ── Traefik (LAN — labels.home.arpa via internal Traefik instance) ────
+      traefik.enable: "true"
+      traefik.http.routers.labelforge-lan.rule: "Host(`labels.home.arpa`)"
+      traefik.http.routers.labelforge-lan.entrypoints: "web"
+      traefik.http.services.labelforge.loadbalancer.server.port: "8000"
+
+      # ── Dockflare (Cloudflare Tunnel — labels.crzynet.com) ───────────────
+      # Adjust label keys to match your Dockflare version / configuration.
+      dockflare.enable: "true"
+      dockflare.hostname: "labels.crzynet.com"
+      dockflare.service: "http://labelforge:8000"
+
+networks:
+  traefik:
+    external: true
+  dockflare:
+    external: true
