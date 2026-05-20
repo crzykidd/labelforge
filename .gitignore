@@ -63,6 +63,9 @@ logs/
 .vexp/daemon.pipe
 .vexp/vexp.log
 
+# claude 
+.claude/
+
 # Test artifacts
 .coverage
 htmlcov/
