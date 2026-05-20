@@ -1,0 +1,39 @@
+name: Cleanup Container Images
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+
+jobs:
+  prune-sha-tags:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: labelforge
+          package-type: container
+          min-versions-to-keep: 10
+          ignore-versions: '^(?!main-).*$'
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: labelforge
+          package-type: container
+          min-versions-to-keep: 10
+          ignore-versions: '^(?!dev-).*$'
+
+  prune-untagged:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      # actions/delete-package-versions has no native age gating; runs weekly
+      # for finer control a script querying the GHCR API by date would be needed
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: labelforge
+          package-type: container
+          min-versions-to-keep: 0
+          delete-only-untagged-versions: true
