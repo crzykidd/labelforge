@@ -4,6 +4,30 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-20 — Print API reports `sent`, not `printed`, on the network backend
+
+**Decision**: `POST /api/print/*` returns the print outcome verbatim from the brother_ql backend. For the network (TCP) backend this is `sent`, meaning the raster was transmitted but the result is unconfirmed. Only backends that can read printer status back (USB) return `printed`. The API never claims `printed` for a network send.
+
+**Why**: The brother_ql network backend writes raster bytes and returns immediately — the QL-820NWB does not support status read-back over TCP, so the library cannot know whether a label actually printed. Reporting `printed` would be a lie that misleads API consumers (e.g. Home Assistant) into trusting a success that may not have happened. `sent` accurately means "transmitted, outcome unknown."
+
+**Considered**:
+- Always report `printed` on a successful send (rejected — false positive; hides real failures like a rejected roll)
+- Add a follow-up status query after sending (rejected for v1 — the network backend doesn't reliably answer status requests; revisit with printer-status feature)
+
+**Would revisit if**: the printer-status feature lands and we can poll for completion, or we add a USB backend path that confirms prints.
+
+---
+
+## 2026-05-20 — brother_ql `convert()` called with explicit `rotate="0"`
+
+**Decision**: `printer/client.py` passes `rotate="0"` to `brother_ql.conversion.convert()` rather than relying on the library default of `rotate="auto"`. The renderer (`render/text.py`) produces images already in the correct orientation for the print head.
+
+**Why**: `auto` rotation can flip a wide continuous image into a geometry that misrepresents the label width. Keeping `rotate="0"` makes the rendered image's pixel width (e.g. 696px for 62mm) the print-head width directly, matching what the renderer intends. Verified that for the current render path both produce identical rasters, but explicit-zero removes ambiguity if the renderer's output dimensions change.
+
+**Would revisit if**: a future render path produces images in the feed-direction orientation, at which point rotation handling moves into the renderer or this flag changes accordingly.
+
+---
+
 ## 2026-05-19 — Use `brother-ql-inventree` as the printer library
 
 **Decision**: Take `brother-ql-inventree` (PyPI) as the printer protocol library. Pin as a normal dependency, do not fork.

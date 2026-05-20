@@ -41,6 +41,7 @@ Thumbs.db
 
 # Runtime data (should never be committed)
 data/
+data-dev/
 *.db
 *.db-journal
 *.sqlite
@@ -66,3 +67,4 @@ logs/
 .coverage
 htmlcov/
 coverage.xml
+test-print.json
