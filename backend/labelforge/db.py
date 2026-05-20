@@ -3,18 +3,30 @@ from pathlib import Path
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS print_jobs (
-    id          INTEGER PRIMARY KEY,
-    template_id TEXT    NULL,
-    payload_json TEXT   NOT NULL,
-    label_media TEXT    NOT NULL,
-    preview_path TEXT   NULL,
-    pinned      INTEGER NOT NULL DEFAULT 0,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    id           INTEGER PRIMARY KEY,
+    template_id  TEXT    NULL,
+    payload_json TEXT    NOT NULL,
+    label_media  TEXT    NOT NULL,
+    preview_path TEXT    NULL,
+    pinned       INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS templates (
+    id           INTEGER PRIMARY KEY,
+    name         TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    label_media  TEXT NOT NULL,
+    canvas_json  TEXT NOT NULL,
+    field_schema TEXT NOT NULL DEFAULT '[]',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at   TEXT NULL
 );
 """
 
@@ -26,9 +38,19 @@ def get_connection(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _migrate_print_jobs(conn: sqlite3.Connection) -> None:
+    """Idempotently add columns to print_jobs that post-date the initial schema."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(print_jobs)")}
+    if "field_values" not in existing:
+        conn.execute("ALTER TABLE print_jobs ADD COLUMN field_values TEXT NULL")
+    if "batch_id" not in existing:
+        conn.execute("ALTER TABLE print_jobs ADD COLUMN batch_id TEXT NULL")
+    conn.commit()
+
+
 def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = get_connection(db_path)
     conn.executescript(_SCHEMA)
-    conn.commit()
+    _migrate_print_jobs(conn)
     conn.close()

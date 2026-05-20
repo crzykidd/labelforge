@@ -18,6 +18,8 @@ dependencies = [
     "pydantic-settings>=2.6",
     "pyyaml>=6.0",
     "pillow>=10.4",
+    "qrcode[pil]>=8.0",
+    "python-barcode>=0.15",
     "brother-ql-inventree>=1.3",
 ]
 
