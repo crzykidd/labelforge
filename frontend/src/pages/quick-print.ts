@@ -1,14 +1,5 @@
-import { getFonts, getLabels, quickPrint, TOKEN_KEY } from '../api'
+import { getFonts, getLabels, getSettings, previewQuick, quickPrint, TOKEN_KEY } from '../api'
 import type { LabelEntry, QuickPrintRequest } from '../types'
-
-// localStorage is the v1 stand-in for saved settings; replace when GET/PUT /api/settings exists
-const PREF = {
-  font: 'labelforge_font',
-  font_size: 'labelforge_font_size',
-  label_media: 'labelforge_label_media',
-  alignment: 'labelforge_alignment',
-  orientation: 'labelforge_orientation',
-}
 
 const FORM_FACTOR_LABEL: Record<number, string> = {
   1: 'Die-cut',
@@ -17,7 +8,6 @@ const FORM_FACTOR_LABEL: Record<number, string> = {
   4: 'P-touch Continuous',
 }
 
-// Render order for form-factor groups
 const FF_ORDER = [2, 1, 3, 4]
 
 function esc(s: string): string {
@@ -111,10 +101,13 @@ function renderForm(root: HTMLElement): void {
         </div>
 
         <div class="actions">
-          <button type="button" id="btn-preview" disabled title="Preview endpoint not yet implemented">Preview</button>
+          <button type="button" id="btn-preview" disabled>Preview</button>
           <button type="submit" id="btn-print" disabled>Print</button>
         </div>
       </form>
+      <div id="preview-area" class="preview-area" hidden>
+        <img id="preview-img" alt="Label preview" />
+      </div>
     </div>
   `
 
@@ -125,8 +118,12 @@ function renderForm(root: HTMLElement): void {
   const labelSelect = root.querySelector<HTMLSelectElement>('#label-media')!
   const boldCheck = root.querySelector<HTMLInputElement>('#bold')!
   const italicCheck = root.querySelector<HTMLInputElement>('#italic')!
+  const btnPreview = root.querySelector<HTMLButtonElement>('#btn-preview')!
   const btnPrint = root.querySelector<HTMLButtonElement>('#btn-print')!
   const statusMsg = root.querySelector<HTMLDivElement>('#status-msg')!
+  const previewArea = root.querySelector<HTMLDivElement>('#preview-area')!
+  const previewImg = root.querySelector<HTMLImageElement>('#preview-img')!
+  let previewObjectUrl: string | null = null
 
   function showStatus(msg: string, kind: 'success' | 'error'): void {
     statusMsg.textContent = msg
@@ -138,21 +135,64 @@ function renderForm(root: HTMLElement): void {
     statusMsg.hidden = true
   }
 
-  function updatePrintButton(): void {
-    btnPrint.disabled = textarea.value.trim() === ''
+  function updateButtons(): void {
+    const empty = textarea.value.trim() === ''
+    btnPrint.disabled = empty
+    btnPreview.disabled = empty
   }
 
-  textarea.addEventListener('input', updatePrintButton)
+  function buildRequest(): QuickPrintRequest {
+    const alignment = (
+      form.querySelector<HTMLInputElement>('input[name="alignment"]:checked')?.value ?? 'left'
+    ) as QuickPrintRequest['alignment']
+    const orientation = (
+      form.querySelector<HTMLInputElement>('input[name="orientation"]:checked')?.value ?? 'standard'
+    ) as QuickPrintRequest['orientation']
+    return {
+      text: textarea.value,
+      font: fontSelect.value,
+      font_size: parseInt(fontSizeInput.value, 10),
+      alignment,
+      orientation,
+      label_media: labelSelect.value,
+      bold: boldCheck.checked,
+      italic: italicCheck.checked,
+    }
+  }
 
-  Promise.all([getFonts(), getLabels()]).then(([fonts, labels]) => {
-    // Populate fonts
+  textarea.addEventListener('input', updateButtons)
+
+  btnPreview.addEventListener('click', async () => {
+    btnPreview.disabled = true
+    hideStatus()
+    try {
+      const blob = await previewQuick(buildRequest())
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl)
+      previewObjectUrl = URL.createObjectURL(blob)
+      previewImg.src = previewObjectUrl
+      previewArea.hidden = false
+    } catch (err) {
+      showStatus((err as Error).message, 'error')
+    } finally {
+      updateButtons()
+    }
+  })
+
+  // Load fonts, labels, and settings in parallel; settings failure is non-fatal
+  Promise.all([
+    getFonts(),
+    getLabels(),
+    getSettings().catch((err: Error) => {
+      console.warn('Failed to load settings:', err.message)
+      return null as Record<string, unknown> | null
+    }),
+  ]).then(([fonts, labels, sett]) => {
+    // Populate fonts dropdown
     fontSelect.innerHTML = fonts
       .map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`)
       .join('')
-    const savedFont = localStorage.getItem(PREF.font)
-    if (savedFont) fontSelect.value = savedFont
 
-    // Group labels by form_factor, sort within groups by display_name
+    // Group labels by form_factor
     const groups = new Map<number, LabelEntry[]>()
     for (const label of labels) {
       const ff = label.form_factor
@@ -162,8 +202,6 @@ function renderForm(root: HTMLElement): void {
     for (const entries of groups.values()) {
       entries.sort((a, b) => a.display_name.localeCompare(b.display_name))
     }
-
-    // Render known order first, then any remaining form_factor values
     const allKeys = [...new Set([...FF_ORDER, ...groups.keys()])]
     labelSelect.innerHTML = allKeys
       .filter(k => groups.has(k))
@@ -177,27 +215,34 @@ function renderForm(root: HTMLElement): void {
       })
       .join('')
 
-    const savedLabel = localStorage.getItem(PREF.label_media)
-    if (savedLabel) labelSelect.value = savedLabel
-
-    // Restore remaining prefs
-    const savedSize = localStorage.getItem(PREF.font_size)
-    if (savedSize) fontSizeInput.value = savedSize
-
-    const savedAlignment = localStorage.getItem(PREF.alignment)
-    if (savedAlignment) {
-      const radio = form.querySelector<HTMLInputElement>(
-        `input[name="alignment"][value="${savedAlignment}"]`
+    // Restore form from settings; last_quick_print takes precedence over per-key defaults
+    const lqp = (sett?.last_quick_print ?? null) as QuickPrintRequest | null
+    if (lqp) {
+      fontSelect.value = lqp.font ?? String(sett?.default_font ?? 'DejaVuSans')
+      fontSizeInput.value = String(lqp.font_size ?? sett?.default_font_size ?? 48)
+      labelSelect.value = String(lqp.label_media ?? sett?.default_label_media ?? '62')
+      boldCheck.checked = lqp.bold ?? false
+      italicCheck.checked = lqp.italic ?? false
+      const aRadio = form.querySelector<HTMLInputElement>(
+        `input[name="alignment"][value="${lqp.alignment ?? 'left'}"]`
       )
-      if (radio) radio.checked = true
-    }
-
-    const savedOrientation = localStorage.getItem(PREF.orientation)
-    if (savedOrientation) {
-      const radio = form.querySelector<HTMLInputElement>(
-        `input[name="orientation"][value="${savedOrientation}"]`
+      if (aRadio) aRadio.checked = true
+      const oRadio = form.querySelector<HTMLInputElement>(
+        `input[name="orientation"][value="${lqp.orientation ?? 'standard'}"]`
       )
-      if (radio) radio.checked = true
+      if (oRadio) oRadio.checked = true
+    } else {
+      const defFont = String(sett?.default_font ?? 'DejaVuSans')
+      const defSize = String(sett?.default_font_size ?? 48)
+      const defMedia = String(sett?.default_label_media ?? '62')
+      const defOrientation = String(sett?.default_orientation ?? 'standard')
+      fontSelect.value = defFont
+      fontSizeInput.value = defSize
+      labelSelect.value = defMedia
+      const oRadio = form.querySelector<HTMLInputElement>(
+        `input[name="orientation"][value="${defOrientation}"]`
+      )
+      if (oRadio) oRadio.checked = true
     }
   }).catch((err: Error) => {
     showStatus(`Failed to load form data: ${err.message}`, 'error')
@@ -208,33 +253,8 @@ function renderForm(root: HTMLElement): void {
     btnPrint.disabled = true
     hideStatus()
 
-    const alignment = (
-      form.querySelector<HTMLInputElement>('input[name="alignment"]:checked')?.value ?? 'left'
-    ) as QuickPrintRequest['alignment']
-
-    const orientation = (
-      form.querySelector<HTMLInputElement>('input[name="orientation"]:checked')?.value ?? 'standard'
-    ) as QuickPrintRequest['orientation']
-
-    const req: QuickPrintRequest = {
-      text: textarea.value,
-      font: fontSelect.value,
-      font_size: parseInt(fontSizeInput.value, 10),
-      alignment,
-      orientation,
-      label_media: labelSelect.value,
-      bold: boldCheck.checked,
-      italic: italicCheck.checked,
-    }
-
-    localStorage.setItem(PREF.font, req.font)
-    localStorage.setItem(PREF.font_size, String(req.font_size))
-    localStorage.setItem(PREF.label_media, req.label_media)
-    localStorage.setItem(PREF.alignment, req.alignment)
-    localStorage.setItem(PREF.orientation, req.orientation)
-
     try {
-      const result = await quickPrint(req)
+      const result = await quickPrint(buildRequest())
       // "sent" = transmitted to printer network backend, not confirmed printed
       showStatus(
         `Sent — job #${result.job_id} (status: ${result.status}). "Sent" means the job was transmitted to the printer; delivery is not confirmed.`,
@@ -243,7 +263,7 @@ function renderForm(root: HTMLElement): void {
     } catch (err) {
       showStatus((err as Error).message, 'error')
     } finally {
-      updatePrintButton()
+      updateButtons()
     }
   })
 }

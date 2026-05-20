@@ -40,3 +40,34 @@ export function quickPrint(req: QuickPrintRequest): Promise<PrintJobResponse> {
     body: JSON.stringify(req),
   })
 }
+
+export async function previewQuick(req: QuickPrintRequest): Promise<Blob> {
+  const res = await fetch('/api/preview/quick', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const body = await res.json() as { detail?: unknown }
+      if (body.detail) detail = String(body.detail)
+    } catch { /* use status fallback */ }
+    throw new Error(detail)
+  }
+  return res.blob()
+}
+
+export function getSettings(): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>('/api/settings')
+}
+
+export function putSettings(partial: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify(partial),
+  })
+}

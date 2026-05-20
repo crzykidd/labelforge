@@ -119,6 +119,17 @@ button:disabled {
   color: #7a1a14;
 }
 
+.preview-area {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.preview-area img {
+  max-width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
 /* token gate */
 .token-gate input[type="password"] {
   width: 100%;
