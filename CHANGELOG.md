@@ -14,6 +14,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 - GPL-3.0 LICENSE
 - .gitattributes enforcing LF line endings
 - .gitignore for Python + Node + IDE artifacts
+- **Slice 2 frontend skeleton** — Vite + TypeScript quick-print SPA: token gate, label/font selectors (grouped by form factor), font size, bold/italic, alignment, orientation, print via `POST /api/print/quick`, localStorage pref persistence; Preview button present but disabled pending backend endpoint
 - **Slice 1 backend skeleton** — FastAPI app with lifespan startup (DB init, catalog load, font scan)
 - `GET /api/health` — unauthenticated liveness probe
 - `GET /api/labels`, `GET /api/labels/{id}` — merged label catalog (library truth + labels.yml metadata)

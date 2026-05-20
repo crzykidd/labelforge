@@ -1,0 +1,130 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #f5f5f5;
+  margin: 0;
+  padding: 1rem;
+  color: #1a1a1a;
+}
+
+#app {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+h2 {
+  margin: 0 0 1.25rem;
+}
+
+.token-gate,
+.quick-print {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 1.5rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+textarea,
+input[type="number"],
+select {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.checkboxes,
+.radio-group {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.checkboxes label,
+.radio-group label {
+  font-weight: normal;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+button {
+  padding: 0.45rem 1.1rem;
+  border: 1px solid #999;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+button[type="submit"] {
+  background: #1a6fdb;
+  color: #fff;
+  border-color: #1a6fdb;
+  font-weight: 600;
+}
+
+button[type="submit"]:disabled,
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.status-msg {
+  padding: 0.6rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.status-msg.success {
+  background: #e6f4ea;
+  border: 1px solid #a8d5b5;
+  color: #1a5c2a;
+}
+
+.status-msg.error {
+  background: #fdecea;
+  border: 1px solid #f5b8b4;
+  color: #7a1a14;
+}
+
+/* token gate */
+.token-gate input[type="password"] {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font: inherit;
+  margin-bottom: 0.5rem;
+}
