@@ -46,6 +46,9 @@ data/
 *.sqlite
 *.sqlite3
 
+# vexp (VS Code extension daemon — all runtime state)
+.vexp/
+
 # Logs
 *.log
 logs/
