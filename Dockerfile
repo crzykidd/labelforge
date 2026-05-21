@@ -1,6 +1,9 @@
-# TODO: Slice N — add a multi-stage frontend build stage (node:lts-alpine, npm ci + npm run build)
-#        before this runtime stage, then COPY --from=frontend /app/frontend/dist /app/frontend/dist
-#        and mount it via FastAPI StaticFiles.
+FROM node:lts-alpine AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
 
 FROM python:3.12-slim
 
@@ -26,6 +29,7 @@ RUN pip install --no-cache-dir -e .
 # Default label catalog shipped in the image.  At startup, if
 # ${DATA_DIR}/labels.yml is absent, main.py copies this into the volume.
 COPY labels.yml /app/labels.yml
+COPY --from=frontend /app/frontend/dist /app/frontend/dist
 
 RUN chown -R labelforge:labelforge /app
 USER labelforge
