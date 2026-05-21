@@ -13,6 +13,7 @@ from labelforge.routes import fonts, health, labels
 from labelforge.routes import print as print_router
 from labelforge.routes import preview as preview_router
 from labelforge.routes import settings as settings_router
+from labelforge.routes import templates as templates_router
 
 
 @asynccontextmanager
@@ -63,3 +64,4 @@ app.include_router(fonts.router, prefix="/api")
 app.include_router(print_router.router, prefix="/api")
 app.include_router(preview_router.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
+app.include_router(templates_router.router, prefix="/api")
