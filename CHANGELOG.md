@@ -9,6 +9,18 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 - QR and barcode template elements render in preview but print as a solid black block (1-bit threshold crushes fine detail). These elements are gated to raise a clear error until fixed. Text, lines, and rectangles print correctly.
 
 ### Added
+
+- **Templates editor foundation (text-only slice)** — canvas editor at `/templates/{name}` built on Fabric.js 6.6.1:
+  - Templates list page at `/templates`: shows name, label media, last-updated; Edit and Delete (soft-delete) per row; empty state
+  - New-template modal: slug-validated name (`^[a-z0-9][a-z0-9-]*$`), label media grouped by form factor (same grouping as quick-print)
+  - Editor toolbar: Add Text, Delete selected, font family selector (populated from `/api/fonts`), font size input, Preview, Save, Back
+  - Canvas geometry: internal coordinates are label pixels at print DPI (300 dpi); canvas is displayed scale-to-fit the viewport while all saved coordinates remain in label pixels — the coordinate space the server renderer consumes
+  - `labelforge_raw_content` custom property: set on every text element at creation and kept in sync on every keystroke; registered via `FabricObject.customProperties` so it survives `canvas.toJSON()` / `loadFromJSON()` round-trips and is available to the server's `detect_fields` and `render_template`
+  - Save: calls `POST /api/templates` on first save of a new template, `PUT /api/templates/{name}` on subsequent saves; blocks if canvas is empty
+  - Load: `GET /api/templates/{name}` → `canvas.loadFromJSON()` with custom-prop re-attachment
+  - Preview button: auto-saves then calls `POST /api/preview/{name}`; shows the server-rendered PNG inline — this is the editor↔server geometry agreement check (text placed in the editor should appear at the same position in the preview PNG)
+  - Router extended with prefix-route support (`registerPrefix`) for parameterised paths like `/templates/:name`
+- `fabric@6.6.1` added to frontend dependencies
 - Project structure and design documentation
 - PRD covering quick-print, templates, label catalog, history, HTTP API, printer status, and settings
 - Architecture doc locking stack: FastAPI + SQLite + brother-ql-inventree + Vite/TS + Fabric.js
