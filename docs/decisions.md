@@ -4,6 +4,18 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-20 (e) — Preview must apply the same 1-bit threshold as print
+
+**Decision**: The preview endpoints return the exact 1-bit (black/white) image the printer will rasterize, produced by the same threshold/dither step as the print path — not the pre-threshold greyscale render. There is a single shared definition of "the bitmap that prints," used by both preview and print.
+
+**Why**: A QR element previewed as a crisp code but printed as a solid black block. Cause: the printer's `convert()` thresholds the greyscale render to 1-bit (~70% default, no dither), which crushed the QR's anti-aliased fine modules; preview returned the pre-threshold greyscale, so it looked fine while the print did not. The rendering ADR's promise that "preview is the exact bitmap that prints" only holds if preview applies the same final threshold. Fine detail (QR, barcode, thin lines, small text) is where preview-vs-print divergence shows up — and it showed up on a physical label, the most expensive place to find it.
+
+**Consequence**: QR/barcode elements are rendered as pure black/white scaled by integer factors so thresholding cannot crush them. Threshold/dither settings are explicit and centralized so preview and print provably agree. This refines (does not contradict) the server-side rendering ADR.
+
+**Would revisit if**: a future need for greyscale/dithered output (e.g. photo-ish images on a label) requires preview to represent dithering, at which point the shared step must reproduce the dither, not just the threshold.
+
+---
+
 ## 2026-05-20 (d) — App stays deployment-generic; branch model is PR-gated main + dev working branch
 
 **Decision (deployment)**: labelforge's repo and docs describe the app generically — a single Docker container serving HTTP on 8000, with persistent data under `$DATA_DIR` (default `/data`). No specific host paths, hostnames, registries, orchestrators, or reverse-proxy wiring appear in the app or its public docs. `compose.yml` ships a standalone example using a named volume; operators substitute their own bind mount / proxy / tunnel.
