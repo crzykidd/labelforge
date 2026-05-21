@@ -3,7 +3,9 @@ import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from labelforge.catalog.loader import load_catalog
 from labelforge.config import settings
@@ -67,3 +69,19 @@ app.include_router(preview_router.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(templates_router.router, prefix="/api")
 app.include_router(template_print_router.router, prefix="/api")
+
+_FRONTEND_DIST = Path("/app/frontend/dist")
+
+if _FRONTEND_DIST.exists():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=_FRONTEND_DIST / "assets"),
+        name="assets",
+    )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(request: Request, full_path: str) -> FileResponse:
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404)
+        return FileResponse(_FRONTEND_DIST / "index.html")
