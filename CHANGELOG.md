@@ -9,7 +9,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 - PRD covering quick-print, templates, label catalog, history, HTTP API, printer status, and settings
 - Architecture doc locking stack: FastAPI + SQLite + brother-ql-inventree + Vite/TS + Fabric.js
 - Glossary defining vocabulary
-- ADR log (library choice, license, name, storage, frontend, label catalog model, auth, print-outcome reporting, convert rotation)
+- ADR log (library choice, license, name, storage, frontend, label catalog model, auth, print-outcome reporting, convert rotation, server-side template rendering, settings source-of-truth, printer status via EWS)
 - CLAUDE.md for AI session context
 - GPL-3.0 LICENSE
 - .gitattributes enforcing LF line endings
@@ -38,7 +38,11 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 - Print API now reports the true send outcome (`sent` for the network backend) instead of always claiming `printed` (see ADR 2026-05-20)
 
 ### Status
-- Slice 1 verified end-to-end: a real label printed on the QL-820NWB (DK-1209 die-cut, `62x29`). The render → convert → network-send path is confirmed working. Deferred to later slices: templates, canvas editor, history UI, printer-status query, settings UI, batch/increment, frontend.
+
+- Slice 1 verified end-to-end: a real label printed on the QL-820NWB (DK-1209 die-cut, `62x29`). The render → convert → network-send path is confirmed working. 62mm continuous print remains a media-coverage test pending a continuous roll (capability proven, that specific media not yet physically run).
+- Templates engine (slice) built and committed: storage, CRUD, server-side renderer, print/preview/batch. Not yet smoke-tested against a created template end-to-end.
+- Printer status: empirically confirmed the network print path (TCP 9100) does not answer status requests; the printer's EWS page (HTTP port 80) does report loaded media and is the chosen status source (opt-in). See ADR 2026-05-20 (c).
+- Deferred to later slices: Fabric.js canvas editor, history UI + retention, printer-status feature (EWS scrape), settings UI, two-color (62red) rendering, image elements / image upload.
 
 ---
 

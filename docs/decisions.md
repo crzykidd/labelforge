@@ -4,6 +4,64 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-20 (c) — Printer status comes from the EWS status page (opt-in), not the print path or vendor SDKs
+
+**Decision**: Live printer status (loaded media type, device-ready state) is read by fetching and parsing the printer's embedded web server (EWS) status page over HTTP — `http://<printer-host>/general/status.html` on the QL-820NWB — **as an opt-in feature, disabled by default**. The raster print path (TCP 9100) and the Brother b-PAC / Mobile SDKs are NOT used for status.
+
+**Why**: Three channels were evaluated against the locked stack (Python/FastAPI, Linux container, networked printer):
+
+- **TCP 9100 (raster/print path)** — send-only. A probe issuing the status-information request opcode (`ESC i S`) then reading returned empty against an idle, ready printer. No status here. (Confirmed empirically.)
+- **Brother b-PAC SDK / Mobile SDK** — these do expose status (e.g. `getLabelInfoStatus` returning a label-ID enum), but b-PAC is a Windows COM component and the Mobile SDK is iOS/Android. Neither runs in a Linux container. Off-stack — rejected. (The enum reports the same sensed-media fact the EWS page already gives us, so nothing is lost.)
+- **EWS over HTTP (port 80)** — the printer serves a status page reporting `Device Status` (e.g. READY), `Media Type` (e.g. "62mm x 29mm"), `Media Status`, and `Emulation`. The Status page is readable with an unauthenticated GET. Verified directly against the device. **Chosen.**
+
+**Scope of this decision**: read-only, unauthenticated status scrape, opt-in.
+
+- Default **off**. A setting (`printer_status_check`) enables it; when off, labelforge assumes nothing about loaded media and relies solely on the user-selected `label_media`.
+- Status is **advisory, never a gate**. A status read never blocks or fails a print. If the fetch fails, times out, or the page can't be parsed, status is reported as "unknown" and printing proceeds normally.
+
+**Consequence — the page is firmware-controlled, so version-track the parser**: The status page is HTML emitted by printer firmware and can change shape across firmware versions. Therefore the parser targets a known page layout and records which layout/firmware it was written against (a parser-version constant); parsing must fail soft (unrecognized layout → status "unknown" + logged warning, never an exception reaching the print flow); treat the scrape as best-effort telemetry, not a contract.
+
+**Deferred open decision — authenticated EWS access (NOT decided here)**: Logging into the EWS with the admin password exposes firmware version and the ability to change raster/printer settings via authenticated POSTs (which carry a CSRF token). This is materially different from read-only status — it means storing the printer admin credential and performing writes against device config. That needs its own decision (security posture, where the password lives, whether write access is in scope for a single-user homelab tool). Flagged as a future fork; deliberately out of scope here.
+
+**Would revisit if**: the EWS page format proves too unstable across firmware to parse reliably, or a feature need pulls the authenticated-EWS decision onto the table.
+
+---
+
+## 2026-05-20 (b) — Settings: DB rows are source of truth, env is bootstrap default
+
+**Decision**: User-adjustable preferences live in the SQLite `settings` table and are the source of truth at runtime. Code holds the default for each setting. Environment variables are NOT the runtime source for these preferences — with one bridge: the `default_label_media` setting falls back to the env value (`config.settings.default_label_media`) when no DB row exists. All other settings fall back to their code-defined defaults.
+
+**Why**: `config.py` already reads `default_label_media` from env, and `features/settings.md` lists the same key as a DB-backed setting — an overlap that needed resolving. The settings doc's model is "defaults in code, DB stores overrides," which fits a UI that lets the user change preferences at runtime (env changes require a container restart; DB changes don't). Making the DB authoritative means the Settings UI is the single place a preference is owned. The one env bridge (`default_label_media`) preserves the existing env-based bootstrap so a fresh install with no DB rows still honors a deployer's configured default.
+
+**Considered**:
+
+- **Env always wins** — rejected. A runtime Settings UI that can't actually change a setting without a container restart is a confusing UI; env is for deploy-time bootstrap, not live preferences.
+- **Ignore env entirely, code defaults only** — rejected. Throws away the existing `default_label_media` env bootstrap that deployers may already rely on.
+- **DB authoritative, env bridges `default_label_media` only** — chosen. DB owns runtime prefs; the existing env bootstrap is preserved for the one key that already had it.
+
+**Consequence**: The settings store reads DB-first, then default; for `default_label_media` the default is the env value rather than a hardcoded literal. `features/settings.md` should note this precedence so the env/DB relationship is documented where settings are specified.
+
+**Would revisit if**: more settings need a deploy-time env bootstrap (then generalize the bridge into a per-key "env default" mechanism rather than special-casing one key).
+
+---
+
+## 2026-05-20 — Templates render server-side from element data, not from a browser-exported image
+
+**Decision**: A template stores its design as structured element data (the canvas scene plus per-element `labelforge_*` content with `{placeholders}`). At print/preview time the **server** resolves placeholder values into element content and rasterizes the scene to a Pillow bitmap. The rendered bitmap is the source of truth for both preview and print. The browser is never in the print path.
+
+**Why**: The API contract is "a client passes *values* for a named template and the server prints that template with those values" (`POST /api/print/{name}` with `{fields: {...}}`). The client sends values, not an image. Any client — a script, a webhook, a phone shortcut, a home-automation call, or the app's own UI — must get the same result with no browser involved. Therefore the server must hold the design and render it itself. This is also what `architecture.md` already assumes (Pillow is the rendering source of truth) and what `features/templates.md` implies (QR/barcode regenerated server-side from the resolved payload).
+
+**Considered**:
+- **Browser exports a PNG, server prints that bitmap** — rejected. Breaks the core API contract: a headless client has no browser, so it could not render a template at all. Only the UI could ever print. This defeats the reason the API exists.
+- **Headless browser on the server (Playwright/Puppeteer renders Fabric)** — rejected for v1. Faithful to the editor, but drags a full browser + Node runtime into the `python:3.12-slim` runtime image, inflating image size and ops weight against the single-small-container design. Disproportionate for a single-user homelab tool.
+- **Server re-renders from element data with Pillow** — chosen. Browser-free, keeps the runtime image lean, and makes the API work for every client by construction. QR via `qrcode[pil]`, barcodes via `python-barcode`, text/line/rect/image via Pillow.
+
+**Consequence / known cost**: There are now two renderers of the same scene — the Fabric.js editor (authoring, in-browser) and the server-side Pillow renderer (preview + print). They must agree on geometry: coordinate origin, the 300dpi label scale, font metrics, and element transforms (`angle`, `scaleX`, `scaleY`). Divergence shows up as "preview/print doesn't match the editor." Mitigations: the editor operates in label-pixel coordinates at print DPI (per `features/templates.md`), and `POST /api/preview/{name}` returns the *server*-rendered bitmap so the user always previews the real output, not the editor's own canvas. The server renderer is the authority; the editor is an approximation of it.
+
+**Would revisit if**: editor/server geometry drift becomes a recurring source of bugs that coordinate-matching can't tame, at which point a headless-browser renderer (accepting the image-size cost) returns to the table.
+
+---
+
 ## 2026-05-20 — Print API reports `sent`, not `printed`, on the network backend
 
 **Decision**: `POST /api/print/*` returns the print outcome verbatim from the brother_ql backend. For the network (TCP) backend this is `sent`, meaning the raster was transmitted but the result is unconfirmed. Only backends that can read printer status back (USB) return `printed`. The API never claims `printed` for a network send.
