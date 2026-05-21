@@ -28,7 +28,7 @@ When working on a task, load the relevant feature doc(s) plus `architecture.md` 
 - **Config**: PyYAML for the label catalog
 - **Frontend**: Vite + TypeScript, vanilla (no React/Vue/Svelte), Fabric.js for the canvas
 - **Deployment**: single Docker container, multi-stage build (frontend → static assets → served by FastAPI)
-- **Container image**: published to Gitea registry (`gitea.crzynet.com`) and Docker Hub
+- **Container image**: built from the included `Dockerfile`; publish to whatever registry you use.
 
 ## Non-negotiables
 
@@ -37,8 +37,7 @@ When working on a task, load the relevant feature doc(s) plus `architecture.md` 
 - **No SaaS dependencies.** Self-hosted only. No cloud functions, no hosted databases, no third-party APIs that aren't user-controllable.
 - **No Next.js, no SSR frameworks.** Frontend is a static SPA served from the FastAPI container.
 - **No alternative printer libraries** without an ADR. We picked `brother-ql-inventree` after evaluation.
-- **Container data path**: `/var/docker/labelforge/` on the host. SQLite at `data/app.db`, label catalog at `labels.yml`, fonts at `fonts/`, optional label preview images at `label-previews/`.
-- **External hostname**: `labels.crzynet.com` (Cloudflare Tunnel via Dockflare). Internal: `labels.home.arpa` (Traefik on LAN).
+- **Data path**: the app reads/writes everything under `$DATA_DIR` (default `/data` in the container): SQLite at `$DATA_DIR/data/app.db`, label catalog at `$DATA_DIR/labels.yml`, fonts at `$DATA_DIR/fonts/`, optional preview images at `$DATA_DIR/label-previews/`. How that path is backed (named volume, bind mount) is the operator's choice.
 
 ## Working style
 
@@ -57,7 +56,7 @@ From the session prompt that owns this project:
 ## Repo conventions
 
 - Line endings: LF only. `.gitattributes` enforces this. If `git diff --stat` shows all files modified, run `git config core.autocrlf input && git checkout -- .`
-- Branches: `main` is deployable. Feature work in `feature/<name>` branches.
+- Branches: `main` is protected — the ONLY way in is a pull request, gated by CodeQL and other checks; never push to `main` directly. `dev` is the working branch (solo work commits straight to `dev`). Use `feature/<name>` branches when more than one person is working; merge those to `dev`, then PR `dev` → `main` for a release.
 - Commits: imperative present tense ("Add template recall endpoint" not "Added"). No conventional-commits prefixes.
 - Compose stack lives at the repo root as `compose.yml`. Dev compose at `compose.dev.yml`.
 
