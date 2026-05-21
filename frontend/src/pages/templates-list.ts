@@ -166,24 +166,22 @@ function showNewTemplateModal(root: HTMLElement, onCreated: () => void): void {
     mediaSelect.addEventListener('change', updateOk)
 
     getLabels().then(labels => {
-      import('../pages/quick-print').then(() => {
-        const groups = new Map<number, typeof labels>()
-        for (const l of labels) {
-          if (!groups.has(l.form_factor)) groups.set(l.form_factor, [])
-          groups.get(l.form_factor)!.push(l)
-        }
-        for (const entries of groups.values()) entries.sort((a, b) => a.display_name.localeCompare(b.display_name))
-        const allKeys = [...new Set([...FF_ORDER, ...groups.keys()])]
-        mediaSelect.innerHTML = allKeys
-          .filter(k => groups.has(k))
-          .map(k => {
-            const groupLabel = FORM_FACTOR_LABEL[k] ?? 'Other'
-            const opts = groups.get(k)!.map(l => `<option value="${esc2(l.id)}">${esc2(l.display_name)}</option>`).join('')
-            return `<optgroup label="${esc2(groupLabel)}">${opts}</optgroup>`
-          })
-          .join('')
-        updateOk()
-      })
+      const groups = new Map<number, typeof labels>()
+      for (const l of labels) {
+        if (!groups.has(l.form_factor)) groups.set(l.form_factor, [])
+        groups.get(l.form_factor)!.push(l)
+      }
+      for (const entries of groups.values()) entries.sort((a, b) => a.display_name.localeCompare(b.display_name))
+      const allKeys = [...new Set([...FF_ORDER, ...groups.keys()])]
+      mediaSelect.innerHTML = allKeys
+        .filter(k => groups.has(k))
+        .map(k => {
+          const groupLabel = FORM_FACTOR_LABEL[k] ?? 'Other'
+          const opts = groups.get(k)!.map(l => `<option value="${esc2(l.id)}">${esc2(l.display_name)}</option>`).join('')
+          return `<optgroup label="${esc2(groupLabel)}">${opts}</optgroup>`
+        })
+        .join('')
+      updateOk()
     })
 
     cancelBtn.addEventListener('click', () => overlay.remove())
