@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     printer_model: str = "QL-820NWB"
     # one of: network, linux_kernel, pyusb
     printer_backend: str = "network"
-    data_dir: Path = Path("/var/docker/labelforge")
+    data_dir: Path = Path("/data")
     default_label_media: str = "62"
     log_level: str = "INFO"
 

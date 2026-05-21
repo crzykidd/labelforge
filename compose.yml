@@ -6,26 +6,13 @@ services:
     image: labelforge:latest
     restart: unless-stopped
     env_file: .env
+    ports:
+      - "8000:8000"
+    # Reverse proxy / tunnel wiring is deployment-specific. labelforge serves plain HTTP on port 8000;
+    # put it behind whatever proxy you use (Traefik, Caddy, nginx, Cloudflare Tunnel, etc.).
+    # To use a host directory instead of a named volume, replace with:  - /your/host/path:/data
     volumes:
-      - /var/docker/labelforge:/var/docker/labelforge
-    networks:
-      - traefik
-      - dockflare
-    labels:
-      # ── Traefik (LAN — labels.home.arpa via internal Traefik instance) ────
-      traefik.enable: "true"
-      traefik.http.routers.labelforge-lan.rule: "Host(`labels.home.arpa`)"
-      traefik.http.routers.labelforge-lan.entrypoints: "web"
-      traefik.http.services.labelforge.loadbalancer.server.port: "8000"
+      - labelforge-data:/data
 
-      # ── Dockflare (Cloudflare Tunnel — labels.crzynet.com) ───────────────
-      # Adjust label keys to match your Dockflare version / configuration.
-      dockflare.enable: "true"
-      dockflare.hostname: "labels.crzynet.com"
-      dockflare.service: "http://labelforge:8000"
-
-networks:
-  traefik:
-    external: true
-  dockflare:
-    external: true
+volumes:
+  labelforge-data:
