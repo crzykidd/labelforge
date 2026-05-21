@@ -109,10 +109,11 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   function updateFontControls(): void {
     if (!fabricCanvas) return
-    const obj = fabricCanvas.getActiveObject() as (Record<string, unknown> & { fontFamily?: string; fontSize?: number }) | null
+    type TextProps = { fontFamily?: string; fontSize?: number; type?: string }
+    const obj = fabricCanvas.getActiveObject() as unknown as TextProps | null
     if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
-      if (obj.fontFamily) fontSelect.value = String(obj.fontFamily)
-      if (obj.fontSize) fontSizeInput.value = String(Math.round(Number(obj.fontSize)))
+      if (obj.fontFamily) fontSelect.value = obj.fontFamily
+      if (obj.fontSize) fontSizeInput.value = String(Math.round(obj.fontSize))
     }
   }
 
@@ -120,7 +121,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
     if (!fabricCanvas) return
     const obj = fabricCanvas.getActiveObject()
     if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
-      obj.set({ fontFamily: fontSelect.value } as Parameters<typeof obj.set>[0])
+      obj.set('fontFamily', fontSelect.value)
       fabricCanvas.renderAll()
     }
   })
@@ -131,7 +132,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
     if (!isNaN(sz) && sz >= 6) {
       const obj = fabricCanvas.getActiveObject()
       if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
-        obj.set({ fontSize: sz } as Parameters<typeof obj.set>[0])
+        obj.set('fontSize', sz)
         fabricCanvas.renderAll()
       }
     }

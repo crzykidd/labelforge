@@ -105,13 +105,13 @@ export function mountTemplatesList(root: HTMLElement): void {
   }
 
   btnNew.addEventListener('click', () => {
-    showNewTemplateModal(root, () => load())
+    showNewTemplateModal(() => load())
   })
 
   void load()
 }
 
-function showNewTemplateModal(root: HTMLElement, onCreated: () => void): void {
+function showNewTemplateModal(onCreated: () => void): void {
   import('../api').then(({ getLabels }) => {
     const overlay = document.createElement('div')
     overlay.className = 'modal-overlay'

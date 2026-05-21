@@ -1,7 +1,9 @@
-import { Canvas, IText } from 'fabric'
-import type { FabricObject } from 'fabric'
+import { Canvas, FabricObject, IText } from 'fabric'
 
 export const CUSTOM_PROPS = ['labelforge_raw_content'] as const
+
+// Register the custom prop so canvas.toJSON() includes it on every object automatically.
+FabricObject.customProperties.push('labelforge_raw_content')
 
 /** Create a Fabric Canvas sized to label pixels, displayed scaled to fit the container. */
 export function initCanvas(
@@ -22,10 +24,10 @@ export function initCanvas(
   canvas.setDimensions({ width: displayW, height: displayH })
   canvas.setZoom(scale)
 
-  // Sync labelforge_raw_content whenever text is edited inline
-  canvas.on('text:changed', (e: { target: FabricObject }) => {
-    const obj = e.target as FabricObject & { text?: string }
-    ;(obj as Record<string, unknown>)['labelforge_raw_content'] = obj.text ?? ''
+  // Sync labelforge_raw_content whenever text is edited inline.
+  // text:changed target is IText — no manual annotation needed.
+  canvas.on('text:changed', (e) => {
+    e.target.set('labelforge_raw_content', e.target.text ?? '')
   })
 
   return { canvas, scale }
@@ -44,11 +46,11 @@ export function addTextElement(canvas: Canvas, defaultFont: string): void {
     fontSize: 48,
     fill: '#000000',
   })
-  ;(text as Record<string, unknown>)['labelforge_raw_content'] = 'Text'
+  text.set('labelforge_raw_content', 'Text')
 
   // Keep raw content in sync when text changes
   text.on('changed', () => {
-    ;(text as Record<string, unknown>)['labelforge_raw_content'] = text.text ?? ''
+    text.set('labelforge_raw_content', text.text ?? '')
   })
 
   canvas.add(text)
@@ -65,7 +67,8 @@ export function deleteSelected(canvas: Canvas): void {
 }
 
 export function getCanvasJSON(canvas: Canvas): Record<string, unknown> {
-  return canvas.toJSON([...CUSTOM_PROPS]) as Record<string, unknown>
+  // customProperties registered above ensures labelforge_raw_content is included.
+  return canvas.toJSON() as Record<string, unknown>
 }
 
 export async function loadCanvasJSON(
@@ -78,7 +81,7 @@ export async function loadCanvasJSON(
     if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
       const t = obj as IText
       t.on('changed', () => {
-        ;(t as Record<string, unknown>)['labelforge_raw_content'] = t.text ?? ''
+        t.set('labelforge_raw_content', t.text ?? '')
       })
     }
   })
