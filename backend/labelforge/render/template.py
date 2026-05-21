@@ -116,15 +116,28 @@ def _render_qr_element(
     if not payload:
         raise RenderError("QR payload is empty after field substitution")
     ec = _QR_CORRECTION.get((correction or "M").upper(), ERROR_CORRECT_M)
-    qr = qrcode.QRCode(error_correction=ec, border=1)
+    # box_size=1 gives the smallest natural image (1px per module) so the
+    # integer scale factor below is maximised and module edges stay crisp.
+    qr = qrcode.QRCode(error_correction=ec, border=1, box_size=1)
     qr.add_data(payload)
     qr.make(fit=True)
     buf = io.BytesIO()
     qr.make_image(fill_color=0, back_color=255).save(buf, "PNG")
     buf.seek(0)
-    img = Image.open(buf)
-    img.load()
-    return img.convert("L").resize((max(box_w, 1), max(box_h, 1)), Image.NEAREST)
+    nat = Image.open(buf).convert("L")
+    nat.load()
+    nat_w, nat_h = nat.size  # always square
+    scale = min(box_w // nat_w, box_h // nat_h)
+    if scale >= 1:
+        # Integer-multiple upscale: every module maps to exactly scale×scale pixels,
+        # pure black/white — no grey edges that the print threshold could crush.
+        scaled_w, scaled_h = nat_w * scale, nat_h * scale
+        scaled = nat.resize((scaled_w, scaled_h), Image.NEAREST)
+        result = Image.new("L", (box_w, box_h), 255)
+        result.paste(scaled, ((box_w - scaled_w) // 2, (box_h - scaled_h) // 2))
+        return result
+    # Fallback: box smaller than natural QR; NEAREST keeps pixels pure B/W.
+    return nat.resize((max(box_w, 1), max(box_h, 1)), Image.NEAREST)
 
 
 def _render_barcode_element(
@@ -146,7 +159,10 @@ def _render_barcode_element(
     buf.seek(0)
     img = Image.open(buf)
     img.load()
-    return img.convert("L").resize((max(box_w, 1), max(box_h, 1)), Image.LANCZOS)
+    # Force pure black/white before scaling; NEAREST keeps bars as whole-pixel
+    # columns with no anti-aliased grey that the print threshold could merge.
+    bw = img.convert("L").point(lambda x: 0 if x < 128 else 255)
+    return bw.resize((max(box_w, 1), max(box_h, 1)), Image.NEAREST)
 
 
 def render_template(template: Template, values: dict[str, str]) -> Image.Image:

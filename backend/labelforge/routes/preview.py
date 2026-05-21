@@ -6,6 +6,7 @@ from fastapi.responses import Response
 
 from labelforge.catalog.loader import get_label
 from labelforge.models import QuickPrintRequest
+from labelforge.printer.client import to_print_bitmap
 from labelforge.render.text import RenderError, render_text
 from labelforge.routes.auth import require_auth
 
@@ -37,5 +38,5 @@ async def preview_quick(request: QuickPrintRequest) -> Response:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     buf = io.BytesIO()
-    image.save(buf, format="PNG")
+    to_print_bitmap(image).save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")

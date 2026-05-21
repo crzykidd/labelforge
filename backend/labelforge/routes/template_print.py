@@ -14,7 +14,7 @@ from labelforge.models import (
     BatchPrintResponse,
     PrintRequest,
 )
-from labelforge.printer.client import PrintError, print_image
+from labelforge.printer.client import PrintError, print_image, to_print_bitmap
 from labelforge.render.template import render_template
 from labelforge.render.text import RenderError
 from labelforge.routes.auth import require_auth
@@ -121,7 +121,7 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     buf = io.BytesIO()
-    image.save(buf, format="PNG")
+    to_print_bitmap(image).save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
 
 
