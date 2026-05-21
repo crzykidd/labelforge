@@ -31,6 +31,10 @@ function parsePath(): { name: string; isNew: boolean; newMedia: string } {
 export function mountTemplateEditor(root: HTMLElement): void {
   const { name, isNew, newMedia } = parsePath()
 
+  // Widen the app container for the editor
+  const appEl = document.getElementById('app')
+  appEl?.classList.add('editor-mode')
+
   root.innerHTML = `
     <div class="editor-shell">
       <div class="editor-toolbar">
@@ -133,7 +137,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
     }
   })
 
-  btnBack.addEventListener('click', () => navigate('/templates'))
+  btnBack.addEventListener('click', () => {
+    document.getElementById('app')?.classList.remove('editor-mode')
+    navigate('/templates')
+  })
 
   btnAddText.addEventListener('click', () => {
     if (!fabricCanvas) return
