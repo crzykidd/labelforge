@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Known Issues
+
+- QR and barcode template elements render in preview but print as a solid black block (1-bit threshold crushes fine detail). These elements are gated to raise a clear error until fixed. Text, lines, and rectangles print correctly.
+
 ### Added
 - Project structure and design documentation
 - PRD covering quick-print, templates, label catalog, history, HTTP API, printer status, and settings

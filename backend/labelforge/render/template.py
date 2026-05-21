@@ -110,6 +110,7 @@ def _render_text_element(
     return sub
 
 
+# TODO: re-enable when QR/barcode 1-bit print bug is fixed
 def _render_qr_element(
     payload: str, correction: str, box_w: int, box_h: int
 ) -> Image.Image:
@@ -140,6 +141,7 @@ def _render_qr_element(
     return nat.resize((max(box_w, 1), max(box_h, 1)), Image.NEAREST)
 
 
+# TODO: re-enable when QR/barcode 1-bit print bug is fixed
 def _render_barcode_element(
     payload: str, symbology: str, box_w: int, box_h: int
 ) -> Image.Image:
@@ -207,17 +209,15 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
 
             elif obj_type == "image":
                 if obj.get("labelforge_qr_payload") is not None:
-                    payload = resolve_content(obj["labelforge_qr_payload"], values)
-                    sub = _render_qr_element(
-                        payload, obj.get("labelforge_qr_error_correction", "M"), box_w, box_h
+                    raise RenderError(
+                        "QR elements are not yet supported for printing"
+                        " (known bug: prints as a solid block)"
                     )
-                    _paste_onto(canvas, sub, left, top, angle)
                 elif obj.get("labelforge_barcode_payload") is not None:
-                    payload = resolve_content(obj["labelforge_barcode_payload"], values)
-                    sub = _render_barcode_element(
-                        payload, obj.get("labelforge_barcode_symbology", "code128"), box_w, box_h
+                    raise RenderError(
+                        "Barcode elements are not yet supported for printing"
+                        " (known bug: prints as a solid block)"
                     )
-                    _paste_onto(canvas, sub, left, top, angle)
                 else:
                     raise RenderError("Image elements not yet supported")
 
