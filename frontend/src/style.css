@@ -130,6 +130,28 @@ button:disabled {
   border-radius: 4px;
 }
 
+/* nav */
+#nav {
+  max-width: 520px;
+  margin: 0 auto 1rem;
+  display: flex;
+  gap: 1.25rem;
+}
+
+#nav a {
+  text-decoration: none;
+  color: #1a1a1a;
+  font-size: 0.875rem;
+  padding: 0.2rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+#nav a.active {
+  border-bottom-color: #1a6fdb;
+  color: #1a6fdb;
+  font-weight: 600;
+}
+
 /* token gate */
 .token-gate input[type="password"] {
   width: 100%;
