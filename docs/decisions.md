@@ -4,6 +4,20 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-20 (d) — App stays deployment-generic; branch model is PR-gated main + dev working branch
+
+**Decision (deployment)**: labelforge's repo and docs describe the app generically — a single Docker container serving HTTP on 8000, with persistent data under `$DATA_DIR` (default `/data`). No specific host paths, hostnames, registries, orchestrators, or reverse-proxy wiring appear in the app or its public docs. `compose.yml` ships a standalone example using a named volume; operators substitute their own bind mount / proxy / tunnel.
+
+**Decision (branches)**: `main` is protected and reachable only via pull request, gated by CodeQL and other checks — never a direct push. `dev` is the working branch; solo work commits directly to `dev`. `feature/<name>` branches are used when more than one person is involved, merged to `dev`, and `dev` is PR'd to `main` for a release.
+
+**Why**: The project is public open source. Baking the owner's homelab (host paths like `/var/docker/labelforge`, hostnames like `labels.crzynet.com`, Dockflare/Traefik labels, Gitea registry, the orchestrator) into the app's defaults and docs made it non-portable and misled readers — a stranger cloning the repo got the author's filesystem as a default and a deploy story they can't use. The deployment specifics are the operator's concern, not the app's. Separately, the documented branch model (`main` deployable, feature branches as default) did not match reality (PR-gated `main`, `dev` as the normal working branch), which repeatedly caused confusion; the docs now match the actual workflow.
+
+**Consequence**: `config.py` defaults `DATA_DIR=/data`; `compose.yml` uses a named volume and carries no proxy/network specifics; CLAUDE.md and architecture.md describe paths as `$DATA_DIR`-relative and deployment as bring-your-own-proxy. The owner's actual homelab deployment (named orchestrator, host paths, tunnel) lives outside this repo. Any future doc or default that reintroduces a specific host/hostname/registry/orchestrator into the app should be rejected and pointed at this ADR.
+
+**Would revisit if**: the project ships an official first-party deployment (e.g. a published image + opinionated compose) — at which point an *example* registry/image name may belong in docs, still framed as one option, not a baked-in default.
+
+---
+
 ## 2026-05-20 (c) — Printer status comes from the EWS status page (opt-in), not the print path or vendor SDKs
 
 **Decision**: Live printer status (loaded media type, device-ready state) is read by fetching and parsing the printer's embedded web server (EWS) status page over HTTP — `http://<printer-host>/general/status.html` on the QL-820NWB — **as an opt-in feature, disabled by default**. The raster print path (TCP 9100) and the Brother b-PAC / Mobile SDKs are NOT used for status.
