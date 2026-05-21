@@ -37,3 +37,29 @@ export interface PrintJobResponse {
   status: string;
   preview_url: string | null;
 }
+
+export interface FieldSpec {
+  name: string;
+  type: 'text' | 'number' | 'date' | 'enum';
+  required: boolean;
+  default: string | null;
+  increment: boolean;
+  enum_values: string[];
+}
+
+export interface Template {
+  name: string;
+  display_name: string;
+  label_media: string;
+  canvas_json: Record<string, unknown>;
+  field_schema: FieldSpec[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TemplateCreate {
+  name: string;
+  display_name?: string;
+  label_media: string;
+  canvas_json: Record<string, unknown>;
+}

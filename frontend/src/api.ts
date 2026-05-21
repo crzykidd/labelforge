@@ -1,4 +1,4 @@
-import type { FontInfo, LabelEntry, PrintJobResponse, QuickPrintRequest } from './types'
+import type { FontInfo, LabelEntry, PrintJobResponse, QuickPrintRequest, Template, TemplateCreate } from './types'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -49,6 +49,52 @@ export async function previewQuick(req: QuickPrintRequest): Promise<Blob> {
       Authorization: `Bearer ${getToken()}`,
     },
     body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const body = await res.json() as { detail?: unknown }
+      if (body.detail) detail = String(body.detail)
+    } catch { /* use status fallback */ }
+    throw new Error(detail)
+  }
+  return res.blob()
+}
+
+export function listTemplates(): Promise<Template[]> {
+  return apiFetch<Template[]>('/api/templates')
+}
+
+export function getTemplate(name: string): Promise<Template> {
+  return apiFetch<Template>(`/api/templates/${encodeURIComponent(name)}`)
+}
+
+export function createTemplate(body: TemplateCreate): Promise<Template> {
+  return apiFetch<Template>('/api/templates', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function updateTemplate(name: string, body: Partial<TemplateCreate>): Promise<Template> {
+  return apiFetch<Template>(`/api/templates/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteTemplate(name: string): Promise<void> {
+  return apiFetch<void>(`/api/templates/${encodeURIComponent(name)}`, { method: 'DELETE' })
+}
+
+export async function previewTemplate(name: string, fields: Record<string, string>): Promise<Blob> {
+  const res = await fetch(`/api/preview/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ fields }),
   })
   if (!res.ok) {
     let detail = `HTTP ${res.status}`
