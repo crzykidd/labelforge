@@ -47,21 +47,13 @@ data-dev/
 *.sqlite
 *.sqlite3
 
-# vexp (VS Code extension daemon — all runtime state)
+# vexp (VS Code extension daemon — all runtime state, config regenerable)
 .vexp/
+vexp.toml
 
 # Logs
 *.log
 logs/
-
-# vexp — local index only; manifest.json and .gitattributes are tracked
-.vexp/index.db
-.vexp/index.db-wal
-.vexp/index.db-shm
-.vexp/healthy
-.vexp/daemon.pid
-.vexp/daemon.pipe
-.vexp/vexp.log
 
 # claude 
 .claude/
