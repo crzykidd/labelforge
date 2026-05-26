@@ -57,8 +57,10 @@ vexp.toml
 *.log
 logs/
 
-# claude 
+# claude
 .claude/
+!.claude/settings.json
+!.claude/CLAUDE.md
 
 # Test artifacts
 .coverage
