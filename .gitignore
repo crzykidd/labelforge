@@ -25,6 +25,8 @@ node_modules/
 
 # Frontend build output (consumed by FastAPI in container build)
 frontend/dist/
+# Compiled TS output emitted next to source (tsc artifacts; not used by Vite)
+frontend/src/**/*.js
 
 # IDE
 .vscode/
