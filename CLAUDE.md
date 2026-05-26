@@ -74,7 +74,7 @@ Every task follows: **plan → decide → execute → document**.
    ---
    ```
    The **last instruction** in every handoff prompt must be: update this file's frontmatter — set status, completed date, and result summary.
-4. **To run a handoff prompt:** `cat prompts/file.md | claude`
+4. **To run a handoff prompt:** `claude "$(cat prompts/file.md)"` (interactive session with file as opening prompt)
 5. **Changelog entry required.** Every change — feature, fix, refactor — gets a short entry in `CHANGELOG.md` under `## [Unreleased]`. Write it for release notes (concise, user-facing language).
 6. **All dev work on `dev`** unless explicitly told otherwise.
 7. **Commit, don't push.** Sessions commit their work with a descriptive message. The owner pushes.
