@@ -1,4 +1,4 @@
-import type { FontInfo, LabelEntry, PrintJobResponse, QuickPrintRequest, Template, TemplateCreate } from './types'
+import type { BatchPrintResponse, FontInfo, LabelEntry, PrintJobResponse, QuickPrintRequest, Template, TemplateCreate } from './types'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -105,6 +105,20 @@ export async function previewTemplate(name: string, fields: Record<string, strin
     throw new Error(detail)
   }
   return res.blob()
+}
+
+export function printTemplate(name: string, fields: Record<string, string>): Promise<PrintJobResponse> {
+  return apiFetch<PrintJobResponse>(`/api/print/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    body: JSON.stringify({ fields }),
+  })
+}
+
+export function batchPrint(name: string, labels: Record<string, string>[]): Promise<BatchPrintResponse> {
+  return apiFetch<BatchPrintResponse>(`/api/print/${encodeURIComponent(name)}/batch`, {
+    method: 'POST',
+    body: JSON.stringify({ labels }),
+  })
 }
 
 export function getSettings(): Promise<Record<string, unknown>> {

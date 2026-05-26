@@ -63,6 +63,7 @@ export function mountTemplatesList(root: HTMLElement): void {
               <td><code>${esc(t.label_media)}</code></td>
               <td>${esc(fmtDate(t.updated_at))}</td>
               <td class="tpl-actions">
+                <button class="btn-print" data-name="${esc(t.name)}">Print</button>
                 <button class="btn-edit" data-name="${esc(t.name)}">Edit</button>
                 <button class="btn-delete" data-name="${esc(t.name)}">Delete</button>
               </td>
@@ -71,6 +72,10 @@ export function mountTemplatesList(root: HTMLElement): void {
         </tbody>
       </table>
     `
+
+    bodyEl.querySelectorAll<HTMLButtonElement>('.btn-print').forEach(btn => {
+      btn.addEventListener('click', () => navigate(`/templates/${btn.dataset.name!}/print`))
+    })
 
     bodyEl.querySelectorAll<HTMLButtonElement>('.btn-edit').forEach(btn => {
       btn.addEventListener('click', () => navigate(`/templates/${btn.dataset.name!}`))

@@ -4,6 +4,21 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-25 — Compiled `.js` is not tracked; `.ts` is the only source in `frontend/src`
+
+**Decision**: `frontend/src` tracks TypeScript only. The `.js` files `tsc` emits next to each `.ts` are build artifacts: `tsconfig.json` sets `noEmit: true` (so `tsc` in the `build` script is typecheck-only), `.gitignore` ignores `frontend/src/**/*.js`, and the 9 previously-committed `src/**/*.js` were untracked.
+
+**Why**: The repo had a compiled `.js` committed beside every `.ts`. Nothing consumed them — Vite compiles the `.ts` directly (esbuild in dev, Rollup in prod) and the Docker image builds from source — so they were stale dead weight that doubled every source diff and risked misleading anyone reading the tree. Committing build output beside source is an anti-pattern for an app with a build step.
+
+**Considered**:
+- Keep committing the `.js` in sync with source — rejected; perpetuates the smell for zero runtime benefit.
+- Untrack only, leave `tsc` emitting — rejected; artifacts would silently reappear on the next local build and risk being re-added.
+- Untrack + `noEmit` + ignore — chosen; removes the artifacts and the mechanism that created them.
+
+**Would revisit if**: the project ever ships hand-authored `.js` in `src` (it shouldn't) or moves to a build that legitimately emits into `src`.
+
+---
+
 ## 2026-05-20 (e) — Preview must apply the same 1-bit threshold as print
 
 **Decision**: The preview endpoints return the exact 1-bit (black/white) image the printer will rasterize, produced by the same threshold/dither step as the print path — not the pre-threshold greyscale render. There is a single shared definition of "the bitmap that prints," used by both preview and print.

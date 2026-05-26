@@ -38,6 +38,18 @@ export interface PrintJobResponse {
   preview_url: string | null;
 }
 
+export interface BatchJobResult {
+  job_id: number;
+  status: string;
+}
+
+export interface BatchPrintResponse {
+  batch_id: string;
+  jobs: BatchJobResult[];
+  succeeded: number;
+  failed: number;
+}
+
 export interface FieldSpec {
   name: string;
   type: 'text' | 'number' | 'date' | 'enum';

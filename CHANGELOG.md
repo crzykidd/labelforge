@@ -10,6 +10,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Added
 
+- **Template recall UI** — fill variable fields, preview, and print from saved templates at `/templates/{name}/print`; batch printing with auto-increment for numeric fields
 - **Templates editor foundation (text-only slice)** — canvas editor at `/templates/{name}` built on Fabric.js 6.6.1:
   - Templates list page at `/templates`: shows name, label media, last-updated; Edit and Delete (soft-delete) per row; empty state
   - New-template modal: slug-validated name (`^[a-z0-9][a-z0-9-]*$`), label media grouped by form factor (same grouping as quick-print)

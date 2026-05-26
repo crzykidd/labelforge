@@ -1,9 +1,9 @@
 ---
 name: 2026-05-25-template-recall-ui
-status: pending
+status: completed
 created: 2026-05-25
-completed:
-result:
+completed: 2026-05-25
+result: Recall page at /templates/:name/print — auto-generated field form, debounced live preview, single + batch print with client-side increment matching backend advance(); Print button added to templates list; printTemplate/batchPrint API added. Build + typecheck pass. (Side cleanup: untracked compiled src .js artifacts, see ADR 2026-05-25.)
 ---
 
 # Template Recall UI
