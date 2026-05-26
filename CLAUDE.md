@@ -53,11 +53,38 @@ From the session prompt that owns this project:
 - Don't write a 50-line README before there's code
 - Don't propose features not in the PRD
 
+## Session workflow
+
+Every task follows: **plan → decide → execute → document**.
+
+1. **Plan first.** Before writing code, outline what will change and why. For small fixes the plan can be verbal in-session. For larger features, produce a handoff prompt (see below).
+2. **Decide: current session or handoff.** If the plan is scoped and the current session has context, do it here. If it's a large feature slice or a fresh context would be cleaner, write a handoff prompt for a new session.
+3. **Handoff prompts live in `prompts/`.** Checked into git. Format:
+   ```
+   prompts/YYYY-MM-DD-short-description.md
+   ```
+   Frontmatter:
+   ```yaml
+   ---
+   name: YYYY-MM-DD-short-description
+   status: pending          # pending | completed | failed
+   created: YYYY-MM-DD
+   completed:               # filled when done
+   result:                  # one-line summary of outcome
+   ---
+   ```
+   The **last instruction** in every handoff prompt must be: update this file's frontmatter — set status, completed date, and result summary.
+4. **To run a handoff prompt:** `cat prompts/file.md | claude`
+5. **Changelog entry required.** Every change — feature, fix, refactor — gets a short entry in `CHANGELOG.md` under `## [Unreleased]`. Write it for release notes (concise, user-facing language).
+6. **All dev work on `dev`** unless explicitly told otherwise.
+7. **Commit, don't push.** Sessions commit their work with a descriptive message. The owner pushes.
+8. **Planning prompts for large features.** The owner will ask for a planning session prompt when scoping a new feature block. That prompt gets handed to a fresh session to execute.
+
 ## Repo conventions
 
 - Line endings: LF only. `.gitattributes` enforces this. If `git diff --stat` shows all files modified, run `git config core.autocrlf input && git checkout -- .`
 - Branches: `main` is protected — the ONLY way in is a pull request, gated by CodeQL and other checks; never push to `main` directly. `dev` is the working branch (solo work commits straight to `dev`). Use `feature/<name>` branches when more than one person is working; merge those to `dev`, then PR `dev` → `main` for a release.
-- Commits: imperative present tense ("Add template recall endpoint" not "Added"). No conventional-commits prefixes.
+- Commits: imperative present tense ("Add template recall endpoint" not "Added"). No conventional-commits prefixes. No co-author tags.
 - Compose stack lives at the repo root as `compose.yml`. Dev compose at `compose.dev.yml`.
 
 ## Things to never do
