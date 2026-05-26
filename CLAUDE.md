@@ -73,7 +73,7 @@ Every task follows: **plan → decide → execute → document**.
    result:                  # one-line summary of outcome
    ---
    ```
-   The **last instruction** in every handoff prompt must be: update this file's frontmatter — set status, completed date, and result summary.
+   The **last instruction** in every handoff prompt must be: update this file's frontmatter — set status, completed date, and result summary. If any non-obvious decisions were made during the session (approach changed, alternative rejected, workaround needed), record them in `docs/decisions.md` as an ADR entry.
 4. **To run a handoff prompt:** `claude -- "$(cat prompts/file.md)"` (interactive session with file as opening prompt)
 5. **Changelog entry required.** Every change — feature, fix, refactor — gets a short entry in `CHANGELOG.md` under `## [Unreleased]`. Write it for release notes (concise, user-facing language).
 6. **All dev work on `dev`** unless explicitly told otherwise.
