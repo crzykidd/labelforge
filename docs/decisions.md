@@ -35,7 +35,7 @@ So the helper is both crash-prone and wrong. Computing from `restricted_to_model
 
 ## 2026-05-26 — Label selectors show `brother_part: display_name`; `52x29` intentionally has no part number
 
-**Decision**: Label-media `<select>` options render as `{brother_part}: {display_name}` (e.g. `DK-22205: 62mm Continuous (Black)`) when the catalog entry has a `brother_part`, and as the display name alone when it doesn't. The grouping/formatting lives in one shared helper (`frontend/src/labels.ts::buildLabelOptionsHtml`) used by every label selector. The default `labels.yml` was backfilled so 14 of 15 entries carry a `brother_part`; `52x29` is deliberately left without one.
+**Decision**: Label-media `<select>` options render as `{brother_part}: {display_name}` (e.g. `DK-2205: 62mm Continuous (Black)`) when the catalog entry has a `brother_part`, and as the display name alone when it doesn't. The grouping/formatting lives in one shared helper (`frontend/src/labels.ts::buildLabelOptionsHtml`) used by every label selector. The default `labels.yml` was backfilled so 14 of 15 entries carry a `brother_part`; `52x29` is deliberately left without one.
 
 **Why**: The part number is how the owner actually identifies a roll to load, so it belongs in front of the human name in every place a label is chosen. Brother's QL-820NWB consumables list confirmed the part numbers; `52x29` is a `brother_ql`-printable size with **no consumer DK roll**, so there is nothing to map — the empty `brother_part` is correct, not an oversight. The format degrades cleanly (no dangling `: `). Centralizing in one helper keeps quick-print and the new-template modal from drifting and makes a future third selector consistent for free.
 

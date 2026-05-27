@@ -2,6 +2,7 @@
 # Maps brother_ql library identifiers to user-friendly metadata.
 # Required fields: id, display_name
 # All other fields are optional. Unknown fields are ignored.
+# brother_part uses Brother's 4-digit SKU format (e.g. DK-1209), as printed on US/NA boxes.
 # Reload: restart the app or POST /api/admin/reload-catalog (future slice).
 
 labels:
@@ -10,42 +11,42 @@ labels:
 
   - id: "12"
     display_name: "12mm Continuous"
-    brother_part: "DK-22214"
+    brother_part: "DK-2214"
     description: "Narrow continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "29"
     display_name: "29mm Continuous"
-    brother_part: "DK-22210"
+    brother_part: "DK-2210"
     description: "Medium-width continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "38"
     display_name: "38mm Continuous"
-    brother_part: "DK-22225"
+    brother_part: "DK-2225"
     description: "Wide continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "50"
     display_name: "50mm Continuous"
-    brother_part: "DK-22223"
+    brother_part: "DK-2223"
     description: "50mm continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "54"
     display_name: "54mm Continuous"
-    brother_part: "DK-N55224"
+    brother_part: "DK-N5224"
     description: "54mm continuous tape, black on white. Non-adhesive."
     category: continuous
     color_capable: false
 
   - id: "62"
     display_name: "62mm Continuous (Black)"
-    brother_part: "DK-22205"
+    brother_part: "DK-2205"
     description: "General-purpose paper tape, black on white."
     category: continuous
     color_capable: false
@@ -58,7 +59,7 @@ labels:
 
   - id: "62red"
     display_name: "62mm Continuous (Black + Red)"
-    brother_part: "DK-22251"
+    brother_part: "DK-2251"
     description: "Two-color paper tape. Requires QL-800 series printer."
     category: continuous
     color_capable: true
@@ -67,21 +68,21 @@ labels:
 
   - id: "17x54"
     display_name: "17mm × 54mm Die-cut"
-    brother_part: "DK-11204"
+    brother_part: "DK-1204"
     description: "Small die-cut label."
     category: die-cut
     color_capable: false
 
   - id: "17x87"
     display_name: "17mm × 87mm Die-cut"
-    brother_part: "DK-11203"
+    brother_part: "DK-1203"
     description: "Small elongated die-cut label."
     category: die-cut
     color_capable: false
 
   - id: "29x90"
     display_name: "29mm × 90mm Address Label"
-    brother_part: "DK-11201"
+    brother_part: "DK-1201"
     description: "Standard address label, die-cut."
     category: die-cut
     color_capable: false
@@ -92,7 +93,7 @@ labels:
 
   - id: "38x90"
     display_name: "38mm × 90mm Die-cut"
-    brother_part: "DK-11208"
+    brother_part: "DK-1208"
     description: "Medium die-cut label."
     category: die-cut
     color_capable: false
@@ -105,15 +106,15 @@ labels:
     color_capable: false
 
   - id: "62x29"
-    display_name: "62mm × 29mm Die-cut"
-    brother_part: "DK-11209"
-    description: "Wide short die-cut label."
+    display_name: "62mm × 29mm Small Address"
+    brother_part: "DK-1209"
+    description: "Small address label, die-cut."
     category: die-cut
     color_capable: false
 
   - id: "62x100"
     display_name: "62mm × 100mm Shipping Label"
-    brother_part: "DK-11202"
+    brother_part: "DK-1202"
     description: "Larger die-cut, good for shipping or product labels."
     category: die-cut
     color_capable: false
@@ -125,7 +126,7 @@ labels:
 
   - id: "d24"
     display_name: "24mm Round"
-    brother_part: "DK-11218"
+    brother_part: "DK-1218"
     description: "Round die-cut, 24mm diameter."
     category: round
     color_capable: false
