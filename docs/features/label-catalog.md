@@ -47,10 +47,6 @@ labels:
     description: "Two-color paper tape. Requires QL-800 series printer."
     category: continuous
     color_capable: true
-    printer_requirements:
-      - "QL-800"
-      - "QL-810W"
-      - "QL-820NWB"
 
   - id: "29x90"
     display_name: "29mm × 90mm Address Label"
@@ -88,11 +84,39 @@ labels:
 | `description` | no | Long description, shown on hover or in selector |
 | `category` | no | `continuous` / `die-cut` / `round` — drives grouping in the picker |
 | `color_capable` | no | bool — drives a UI hint when red elements are used |
-| `printer_requirements` | no | list of QL models that support this media — drives a warning if a different printer is configured |
+| `printer_requirements` | no | **Deprecated and ignored.** Printer compatibility is now library-derived (see below), not declared per-entry. Remove it from entries; it has no effect. |
 | `common_use` | no | list of tags, used to surface "Recommended for X" hints in the template-create flow |
 | `preview_image` | no | filename relative to `/var/docker/labelforge/label-previews/` |
 
 Unknown fields in `labels.yml` are ignored (forward-compatible).
+
+## Printer compatibility
+
+Whether a given media can actually be printed depends on the **configured printer** (`PRINTER_MODEL`, default `QL-820NWB`), not on `labels.yml`. Compatibility is therefore **derived from the `brother_ql` library**, the same source of truth as the printable list — never hand-maintained. (This is why the old `printer_requirements` yml field is deprecated: a hand-kept printer list drifts from the library and can't know two-color capability.)
+
+Each catalog entry gets two extra library-derived fields plus the computed result:
+
+| Field | Source | Meaning |
+|---|---|---|
+| `restricted_to_models` | `brother_ql` `Label.restricted_to_models` | Models this media is restricted to. Empty = works on all models. Populated only for the six wide-format rolls, all restricted to the QL-1xxx series. |
+| `color` | `brother_ql` `Label.color` | `1` = two-color media (e.g. `62red`), `0` = mono. |
+| `supported` | computed | Whether the configured printer can print this media. |
+| `incompatible_reason` | computed | Human-readable reason shown as a tooltip when `supported` is false. |
+
+The rule, computed once at catalog load against the configured printer's `Model` (looked up by `identifier` in `brother_ql.models.ALL_MODELS`, whose `two_color: bool` flags the QL-800 series):
+
+```python
+supported = (not label.restricted_to_models or printer_model in label.restricted_to_models) \
+            and (label.color == 0 or model.two_color)
+```
+
+- Restricted to other models → `incompatible_reason = "Requires a wide-format printer (QL-1100 series)"`.
+- Two-color media on a mono printer → `incompatible_reason = "Requires a two-color printer (QL-800 series)"`.
+- If `PRINTER_MODEL` is not found in the library, a warning is logged and **all** media are treated as supported (don't wrongly disable everything).
+
+On the default `QL-820NWB`: the six wide rolls (`102`, `103`, `104`, `102x51`, `102x152`, `103x164`) → `supported = false`; everything else including `62red` → `supported = true`.
+
+> Computed at load because `PRINTER_MODEL` is fixed in config. A future `POST /api/admin/reload-catalog` recomputes it. `brother_ql`'s `Label.works_with_model()` is **not** used — it's broken in the pinned fork (raises `NameError` on restricted labels and ignores two-color). See `docs/decisions.md`.
 
 ## Loading
 
@@ -118,7 +142,7 @@ Reload on `SIGHUP` or via an admin endpoint (`POST /api/admin/reload-catalog`). 
 - Label picker dropdown groups by `category` (`Continuous`, `Die-cut`, `Round`)
 - Within a category, entries are sorted by `display_name`
 - Color-capable labels show a small red/black indicator
-- When the configured printer doesn't match `printer_requirements`, the entry is shown but disabled with a tooltip
+- Media the configured printer can't print (`supported = false`, see "Printer compatibility") stays visible in its group but is rendered as a **disabled, greyed `<option>`** with a `— unavailable` marker and a `title` tooltip carrying the `incompatible_reason`. The browser won't let a user pick a disabled option; selectors also guard programmatic default/restored selections, falling back to the first supported entry.
 
 ## Defaults shipped in repo
 

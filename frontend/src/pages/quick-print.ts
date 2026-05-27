@@ -1,6 +1,6 @@
 import { getFonts, getLabels, getSettings, previewQuick, quickPrint, TOKEN_KEY } from '../api'
 import type { QuickPrintRequest } from '../types'
-import { buildLabelOptionsHtml } from '../labels'
+import { buildLabelOptionsHtml, firstSupportedId } from '../labels'
 
 function esc(s: string): string {
   return s
@@ -214,6 +214,14 @@ function renderForm(root: HTMLElement): void {
         `input[name="orientation"][value="${defOrientation}"]`
       )
       if (oRadio) oRadio.checked = true
+    }
+
+    // The chosen default/restored media may be unsupported by the configured
+    // printer (its <option> is disabled). Fall back to the first supported id.
+    const chosen = labels.find(l => l.id === labelSelect.value)
+    if (!chosen || !chosen.supported) {
+      const fallback = firstSupportedId(labels)
+      if (fallback) labelSelect.value = fallback
     }
   }).catch((err: Error) => {
     showStatus(`Failed to load form data: ${err.message}`, 'error')

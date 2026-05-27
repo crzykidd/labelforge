@@ -12,7 +12,6 @@ class LabelEntry(BaseModel):
     description: str | None = None
     category: str | None = None
     color_capable: bool = False
-    printer_requirements: list[str] = []
     common_use: list[str] = []
     preview_image: str | None = None
     # library-derived fields
@@ -20,6 +19,14 @@ class LabelEntry(BaseModel):
     tape_size: tuple[int, int] = (0, 0)
     # form_factor integer: 1=die-cut, 2=continuous, 3=round, 4=ptouch-continuous
     form_factor: int = 0
+    # models this media is restricted to ([] = works on all); from brother_ql
+    restricted_to_models: list[str] = []
+    # 1 = two-color media (needs a two-color printer), 0 = mono
+    color: int = 0
+    # whether the configured printer can print this media (computed at load)
+    supported: bool = True
+    # human-readable reason when supported is False
+    incompatible_reason: str | None = None
 
 
 class FontInfo(BaseModel):

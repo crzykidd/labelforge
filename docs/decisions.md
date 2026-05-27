@@ -4,6 +4,35 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-26 — Printer↔label compatibility is library-derived, computed at catalog load; `printer_requirements` deprecated
+
+**Decision**: A label's printability on the configured printer is computed at catalog load from primitive `brother_ql` fields, not declared in `labels.yml`. Each catalog entry gains `restricted_to_models` (`Label.restricted_to_models`), `color` (`Label.color`), a computed `supported: bool`, and `incompatible_reason: str | None`. The rule:
+
+```python
+supported = (not label.restricted_to_models or printer_model in label.restricted_to_models) \
+            and (label.color == 0 or model.two_color)
+```
+
+`model` is the entry in `brother_ql.models.ALL_MODELS` whose `identifier == PRINTER_MODEL`; `two_color` flags the QL-800 series. If the configured model isn't found, a warning is logged and all media are treated as supported. Selectors render unsupported media as disabled+greyed `<option>`s with a tooltip and guard programmatic default selection. The `printer_requirements` yml field is **deprecated and ignored** (removed from the model, the default yml, and the loader).
+
+**Why**: The catalog already follows "library is truth, yml is the UX layer" (see the 2026-05-19 label-catalog ADR). A hand-maintained `printer_requirements` list violated that — it drifts from the library and can't express two-color capability, which lives on the printer model, not the media. Deriving compatibility from the library keeps a single source of truth and means new media/printer support from a library bump Just Works. On the configured QL-820NWB this correctly disables the six wide-format rolls the printer physically can't feed while keeping `62red` available.
+
+**Why not `Label.works_with_model()`**: The obvious library helper is unusable in the pinned `brother-ql-inventree>=1.3`. Verified against the installed library:
+- It raises `NameError: name 'models' is not defined` for **any** restricted label (`brother_ql/labels.py:67`) — e.g. `labels['102'].works_with_model('QL-820NWB')` throws.
+- It ignores two-color capability — `labels['62red'].works_with_model('QL-700')` returns `True` even though a mono QL-700 can't print two-color media.
+
+So the helper is both crash-prone and wrong. Computing from `restricted_to_models` + `color` vs `model.two_color` sidesteps both bugs. This is an upstream bug worth reporting to `inventree/brother_ql`; until fixed (and the fix reaches our pin) we do not call `works_with_model()`.
+
+**Considered**:
+- Keep `printer_requirements` in yml — rejected; contradicts the library-truth ADR and can't know two-color.
+- Use `Label.works_with_model()` — rejected; crashes on restricted labels and ignores color (above).
+- Hide unsupported media entirely — rejected; the spec calls for disable+tooltip so the user understands *why* a roll they own isn't offered.
+- Recompute per request — unnecessary; `PRINTER_MODEL` is fixed in config, so compute once at load. A future `POST /api/admin/reload-catalog` recomputes.
+
+**Would revisit if**: a future printer becomes runtime-configurable (then compatibility must recompute on change, not just at load), or upstream fixes `works_with_model()` and the fix reaches our pin (then prefer the library helper over the open-coded rule).
+
+---
+
 ## 2026-05-26 — Label selectors show `brother_part: display_name`; `52x29` intentionally has no part number
 
 **Decision**: Label-media `<select>` options render as `{brother_part}: {display_name}` (e.g. `DK-22205: 62mm Continuous (Black)`) when the catalog entry has a `brother_part`, and as the display name alone when it doesn't. The grouping/formatting lives in one shared helper (`frontend/src/labels.ts::buildLabelOptionsHtml`) used by every label selector. The default `labels.yml` was backfilled so 14 of 15 entries carry a `brother_part`; `52x29` is deliberately left without one.

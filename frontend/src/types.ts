@@ -5,13 +5,20 @@ export interface LabelEntry {
   description: string | null;
   category: string | null;
   color_capable: boolean;
-  printer_requirements: string[];
   common_use: string[];
   preview_image: string | null;
   dots_printable: [number, number];
   tape_size: [number, number];
   // 1=die-cut, 2=continuous, 3=round, 4=ptouch-continuous
   form_factor: number;
+  // models this media is restricted to ([] = works on all)
+  restricted_to_models: string[];
+  // 1 = two-color media, 0 = mono
+  color: number;
+  // whether the configured printer can print this media
+  supported: boolean;
+  // human-readable reason when supported is false
+  incompatible_reason: string | null;
 }
 
 export interface FontInfo {

@@ -62,10 +62,6 @@ labels:
     description: "Two-color paper tape. Requires QL-800 series printer."
     category: continuous
     color_capable: true
-    printer_requirements:
-      - "QL-800"
-      - "QL-810W"
-      - "QL-820NWB"
 
   # ── Die-cut ───────────────────────────────────────────────────────────────
 

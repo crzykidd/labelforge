@@ -3,7 +3,9 @@ from pathlib import Path
 
 import yaml
 from brother_ql.labels import ALL_LABELS, FormFactor
+from brother_ql.models import ALL_MODELS
 
+from labelforge.config import settings
 from labelforge.models import LabelEntry
 
 logger = logging.getLogger(__name__)
@@ -15,10 +17,45 @@ _catalog: dict[str, LabelEntry] = {}
 _FORM_FACTOR_INT: dict[FormFactor, int] = {ff: ff.value for ff in FormFactor}
 
 
+def _compute_compatibility(
+    lib_label, printer_model: str, two_color: bool | None
+) -> tuple[bool, str | None]:
+    """Whether the configured printer can print this media, and why not.
+
+    Library-derived (not from labels.yml). brother_ql's Label.works_with_model()
+    is unusable in the pinned fork: it raises NameError on any restricted label
+    and ignores two-color capability — see docs/decisions.md. Compute from the
+    primitive Label fields instead.
+
+    `two_color is None` means the configured model wasn't found in the library;
+    treat all media as supported rather than wrongly disabling everything.
+    """
+    if two_color is None:
+        return True, None
+    restricted = list(getattr(lib_label, "restricted_to_models", []) or [])
+    if restricted and printer_model not in restricted:
+        return False, "Requires a wide-format printer (QL-1100 series)"
+    if getattr(lib_label, "color", 0) and not two_color:
+        return False, "Requires a two-color printer (QL-800 series)"
+    return True, None
+
+
 def load_catalog(yml_path: Path) -> None:
     global _catalog
 
     lib_labels = {label.identifier: label for label in ALL_LABELS}
+
+    # Compatibility is computed against the configured printer at load time
+    # (printer_model is fixed in config). A future POST /api/admin/reload-catalog
+    # should call this again to recompute.
+    printer_model = settings.printer_model
+    model = next((m for m in ALL_MODELS if m.identifier == printer_model), None)
+    if model is None:
+        logger.warning(
+            "Configured printer_model '%s' not in brother_ql — treating all media as supported",
+            printer_model,
+        )
+    two_color = model.two_color if model is not None else None
 
     yml_entries: dict[str, dict] = {}
     if yml_path.exists():
@@ -39,6 +76,9 @@ def load_catalog(yml_path: Path) -> None:
         form_factor_int = _FORM_FACTOR_INT.get(lib_label.form_factor, 0)
         dots = (lib_label.dots_printable[0], lib_label.dots_printable[1])
         tape = (lib_label.tape_size[0], lib_label.tape_size[1])
+        restricted = list(getattr(lib_label, "restricted_to_models", []) or [])
+        color = int(getattr(lib_label, "color", 0) or 0)
+        supported, reason = _compute_compatibility(lib_label, printer_model, two_color)
 
         if lib_id in yml_entries:
             y = yml_entries[lib_id]
@@ -49,12 +89,15 @@ def load_catalog(yml_path: Path) -> None:
                 description=y.get("description"),
                 category=y.get("category"),
                 color_capable=bool(y.get("color_capable", False)),
-                printer_requirements=y.get("printer_requirements") or [],
                 common_use=y.get("common_use") or [],
                 preview_image=y.get("preview_image"),
                 dots_printable=dots,
                 tape_size=tape,
                 form_factor=form_factor_int,
+                restricted_to_models=restricted,
+                color=color,
+                supported=supported,
+                incompatible_reason=reason,
             )
         else:
             entry = LabelEntry(
@@ -63,6 +106,10 @@ def load_catalog(yml_path: Path) -> None:
                 dots_printable=dots,
                 tape_size=tape,
                 form_factor=form_factor_int,
+                restricted_to_models=restricted,
+                color=color,
+                supported=supported,
+                incompatible_reason=reason,
             )
             lib_only += 1
 

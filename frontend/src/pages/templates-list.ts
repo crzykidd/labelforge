@@ -1,7 +1,7 @@
 import { deleteTemplate, listTemplates } from '../api'
 import type { Template } from '../types'
 import { navigate } from '../router'
-import { buildLabelOptionsHtml } from '../labels'
+import { buildLabelOptionsHtml, firstSupportedId } from '../labels'
 
 function esc(s: string): string {
   return s
@@ -167,6 +167,12 @@ function showNewTemplateModal(onCreated: () => void): void {
 
     getLabels().then(labels => {
       mediaSelect.innerHTML = buildLabelOptionsHtml(labels)
+      // Don't let the select default to a disabled (unsupported) option.
+      const chosen = labels.find(l => l.id === mediaSelect.value)
+      if (!chosen || !chosen.supported) {
+        const fallback = firstSupportedId(labels)
+        if (fallback) mediaSelect.value = fallback
+      }
       updateOk()
     })
 
