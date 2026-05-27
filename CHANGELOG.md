@@ -10,6 +10,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Added
 
+- **Brother DK part numbers in label selectors** — the label-media dropdown (quick-print and the new-template modal) now shows the part number with the name, e.g. `DK-22205: 62mm Continuous (Black)`; entries without a part number show the name alone. Backfilled `brother_part` for 9 more default catalog entries (14 of 15 now carry a part number; `52x29` has no consumer DK roll). Grouping/formatting moved into a shared `frontend/src/labels.ts` helper.
 - **Template recall UI** — fill variable fields, preview, and print from saved templates at `/templates/{name}/print`; batch printing with auto-increment for numeric fields
 - **Templates editor foundation (text-only slice)** — canvas editor at `/templates/{name}` built on Fabric.js 6.6.1:
   - Templates list page at `/templates`: shows name, label media, last-updated; Edit and Delete (soft-delete) per row; empty state

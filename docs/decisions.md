@@ -4,6 +4,21 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-26 — Label selectors show `brother_part: display_name`; `52x29` intentionally has no part number
+
+**Decision**: Label-media `<select>` options render as `{brother_part}: {display_name}` (e.g. `DK-22205: 62mm Continuous (Black)`) when the catalog entry has a `brother_part`, and as the display name alone when it doesn't. The grouping/formatting lives in one shared helper (`frontend/src/labels.ts::buildLabelOptionsHtml`) used by every label selector. The default `labels.yml` was backfilled so 14 of 15 entries carry a `brother_part`; `52x29` is deliberately left without one.
+
+**Why**: The part number is how the owner actually identifies a roll to load, so it belongs in front of the human name in every place a label is chosen. Brother's QL-820NWB consumables list confirmed the part numbers; `52x29` is a `brother_ql`-printable size with **no consumer DK roll**, so there is nothing to map — the empty `brother_part` is correct, not an oversight. The format degrades cleanly (no dangling `: `). Centralizing in one helper keeps quick-print and the new-template modal from drifting and makes a future third selector consistent for free.
+
+**Considered**:
+- Suffix form `display_name (DK-…)` — rejected; the part number is the lookup key, so it reads better leading.
+- Backfill a guessed part for `52x29` — rejected; no such product exists, a fake number would mislead.
+- Edit the two duplicated option blocks in place — rejected in favor of the shared helper (the grouping logic was already duplicated verbatim).
+
+**Would revisit if**: Brother ships a DK roll at 52×29 mm (add its `brother_part`), or a selector needs richer option markup than a flat string (the helper returns an HTML string today).
+
+---
+
 ## 2026-05-25 — Compiled `.js` is not tracked; `.ts` is the only source in `frontend/src`
 
 **Decision**: `frontend/src` tracks TypeScript only. The `.js` files `tsc` emits next to each `.ts` are build artifacts: `tsconfig.json` sets `noEmit: true` (so `tsc` in the `build` script is typecheck-only), `.gitignore` ignores `frontend/src/**/*.js`, and the 9 previously-committed `src/**/*.js` were untracked.

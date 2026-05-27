@@ -10,31 +10,36 @@ labels:
 
   - id: "12"
     display_name: "12mm Continuous"
+    brother_part: "DK-22214"
     description: "Narrow continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "29"
     display_name: "29mm Continuous"
+    brother_part: "DK-22210"
     description: "Medium-width continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "38"
     display_name: "38mm Continuous"
+    brother_part: "DK-22225"
     description: "Wide continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "50"
     display_name: "50mm Continuous"
+    brother_part: "DK-22223"
     description: "50mm continuous tape, black on white."
     category: continuous
     color_capable: false
 
   - id: "54"
     display_name: "54mm Continuous"
-    description: "54mm continuous tape, black on white."
+    brother_part: "DK-N55224"
+    description: "54mm continuous tape, black on white. Non-adhesive."
     category: continuous
     color_capable: false
 
@@ -66,12 +71,14 @@ labels:
 
   - id: "17x54"
     display_name: "17mm × 54mm Die-cut"
+    brother_part: "DK-11204"
     description: "Small die-cut label."
     category: die-cut
     color_capable: false
 
   - id: "17x87"
     display_name: "17mm × 87mm Die-cut"
+    brother_part: "DK-11203"
     description: "Small elongated die-cut label."
     category: die-cut
     color_capable: false
@@ -89,18 +96,21 @@ labels:
 
   - id: "38x90"
     display_name: "38mm × 90mm Die-cut"
+    brother_part: "DK-11208"
     description: "Medium die-cut label."
     category: die-cut
     color_capable: false
 
   - id: "52x29"
     display_name: "52mm × 29mm Die-cut"
+    # No consumer Brother DK roll exists at this size; library-printable only.
     description: "Wide short die-cut label."
     category: die-cut
     color_capable: false
 
   - id: "62x29"
     display_name: "62mm × 29mm Die-cut"
+    brother_part: "DK-11209"
     description: "Wide short die-cut label."
     category: die-cut
     color_capable: false

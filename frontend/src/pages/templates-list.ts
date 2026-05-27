@@ -1,6 +1,7 @@
 import { deleteTemplate, listTemplates } from '../api'
 import type { Template } from '../types'
 import { navigate } from '../router'
+import { buildLabelOptionsHtml } from '../labels'
 
 function esc(s: string): string {
   return s
@@ -148,12 +149,6 @@ function showNewTemplateModal(onCreated: () => void): void {
     const nameError = overlay.querySelector<HTMLSpanElement>('#name-error')!
 
     const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
-    const FORM_FACTOR_LABEL: Record<number, string> = { 1: 'Die-cut', 2: 'Continuous', 3: 'Round', 4: 'P-touch Continuous' }
-    const FF_ORDER = [2, 1, 3, 4]
-
-    function esc2(s: string): string {
-      return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    }
 
     function validate(): boolean {
       const v = nameInput.value.trim()
@@ -171,21 +166,7 @@ function showNewTemplateModal(onCreated: () => void): void {
     mediaSelect.addEventListener('change', updateOk)
 
     getLabels().then(labels => {
-      const groups = new Map<number, typeof labels>()
-      for (const l of labels) {
-        if (!groups.has(l.form_factor)) groups.set(l.form_factor, [])
-        groups.get(l.form_factor)!.push(l)
-      }
-      for (const entries of groups.values()) entries.sort((a, b) => a.display_name.localeCompare(b.display_name))
-      const allKeys = [...new Set([...FF_ORDER, ...groups.keys()])]
-      mediaSelect.innerHTML = allKeys
-        .filter(k => groups.has(k))
-        .map(k => {
-          const groupLabel = FORM_FACTOR_LABEL[k] ?? 'Other'
-          const opts = groups.get(k)!.map(l => `<option value="${esc2(l.id)}">${esc2(l.display_name)}</option>`).join('')
-          return `<optgroup label="${esc2(groupLabel)}">${opts}</optgroup>`
-        })
-        .join('')
+      mediaSelect.innerHTML = buildLabelOptionsHtml(labels)
       updateOk()
     })
 

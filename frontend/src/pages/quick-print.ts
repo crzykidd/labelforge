@@ -1,14 +1,6 @@
 import { getFonts, getLabels, getSettings, previewQuick, quickPrint, TOKEN_KEY } from '../api'
-import type { LabelEntry, QuickPrintRequest } from '../types'
-
-const FORM_FACTOR_LABEL: Record<number, string> = {
-  1: 'Die-cut',
-  2: 'Continuous',
-  3: 'Round',
-  4: 'P-touch Continuous',
-}
-
-const FF_ORDER = [2, 1, 3, 4]
+import type { QuickPrintRequest } from '../types'
+import { buildLabelOptionsHtml } from '../labels'
 
 function esc(s: string): string {
   return s
@@ -192,28 +184,7 @@ function renderForm(root: HTMLElement): void {
       .map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`)
       .join('')
 
-    // Group labels by form_factor
-    const groups = new Map<number, LabelEntry[]>()
-    for (const label of labels) {
-      const ff = label.form_factor
-      if (!groups.has(ff)) groups.set(ff, [])
-      groups.get(ff)!.push(label)
-    }
-    for (const entries of groups.values()) {
-      entries.sort((a, b) => a.display_name.localeCompare(b.display_name))
-    }
-    const allKeys = [...new Set([...FF_ORDER, ...groups.keys()])]
-    labelSelect.innerHTML = allKeys
-      .filter(k => groups.has(k))
-      .map(k => {
-        const groupLabel = FORM_FACTOR_LABEL[k] ?? 'Other'
-        const opts = groups
-          .get(k)!
-          .map(l => `<option value="${esc(l.id)}">${esc(l.display_name)}</option>`)
-          .join('')
-        return `<optgroup label="${esc(groupLabel)}">${opts}</optgroup>`
-      })
-      .join('')
+    labelSelect.innerHTML = buildLabelOptionsHtml(labels)
 
     // Restore form from settings; last_quick_print takes precedence over per-key defaults
     const lqp = (sett?.last_quick_print ?? null) as QuickPrintRequest | null
