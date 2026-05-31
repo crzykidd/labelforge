@@ -4,6 +4,36 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-31 — Printer status over network: ESC i S unreliable; implement raw-TCP + HTTP fallback
+
+**Decision**: The Printer Status feature will use a two-path `status_read()` function in `printer/client.py`:
+
+1. **Primary — raw TCP ESC i S**: Directly instantiate `BrotherQLBackendNetwork(f"tcp://{host}")` (bypassing `get_printer()`, which raises `NotImplementedError` for the network backend), override `read_timeout` from the default 10 ms to the configured `printer_status_timeout_ms` value, then call `get_status()`. Parse the 32-byte response via `brother_ql.reader.interpret_response()`. For DK tape color detection, read `data[24]` directly (the library only parses `tape_color` for TZe-category tapes, not DK).
+
+2. **Fallback — HTTP scrape**: If the TCP path returns empty bytes, fetch `http://{host}/general/status.html` (unauthenticated) and parse `dt`/`dd` pairs for "Device Status" (→ ready bool) and "Media Type" (→ string like `"62mm x 29mm"` → regex-extract width/length → look up in `ALL_LABELS`).
+
+3. **Graceful degrade**: If both paths fail, raise `StatusUnavailable`; callers log and proceed (per `printer-status.md` print-path spec).
+
+Media ID mapping for both paths: search `brother_ql.labels.ALL_LABELS` where `lbl.tape_size == (width_mm, length_mm)`. For continuous 62 mm (length = 0), mono `"62"` and color `"62red"` share the same `tape_size` — disambiguate via `data[24]` on the TCP path; report `color_capable: false` (unknown) on the HTTP path. The exact DK-22251 tape-color byte value needs hardware verification when a two-color roll is loaded.
+
+**Why**: A spike against the QL-820NWB (2026-05-31) showed:
+- `get_printer()` raises `NotImplementedError` for `backend="network"` (intentional library design; comment: "Not implemented due to lack of an available test device").
+- `send()` explicitly skips readback for the network backend: "The network backend doesn't support readback."
+- The library's CLI `discover` command skips `get_status()` for the network backend.
+- Live hardware test: TCP port 9100 connects, but ESC i S returns empty bytes regardless of timeout (10 ms, 500 ms, 2 s, 5 s all tested). Full raster init sequence (200 null bytes + ESC @ + ESC i a 01 + ESC i S) also returns empty.
+- The HTTP interface at `/general/status.html` responded without authentication and returned "READY" + "62mm x 29mm".
+
+`get_status()` is technically callable via direct backend instantiation (the function sends ESC i S and reads; it does not filter on the backend type), so the TCP path is kept as primary in case it works on different firmware versions or printer states. The 10 ms default `read_timeout` is the likely cause of spurious failures if the printer ever does respond.
+
+**Considered**:
+- HTTP-only: simpler, but abandons ESC i S even on printers/firmware where it works; provides no color-capability information.
+- Pure TCP with no HTTP fallback: leaves us with 503 on every status call against the current hardware.
+- Patching `get_printer()` via a fork: rejected — no fork policy without an ADR; bypass by direct instantiation is sufficient.
+
+**Would revisit if**: A firmware update makes ESC i S respond on the QL-820NWB (at which point the HTTP fallback can be dropped); or we test on a USB backend where `get_printer()` and `get_status()` work as intended.
+
+---
+
 ## 2026-05-31 — History UI: authed image loading via fetch+objectURL
 
 **Decision**: `/api/history/{id}/preview.png` requires a bearer token, so `<img src="...">` bare URLs 401. The history page fetches previews via `fetch()` with the `Authorization` header, creates an object URL via `URL.createObjectURL(blob)`, and sets that as `img.src`. Object URLs are revoked on page remount and on filter/pagination resets via a generation counter that skips stale async completions.

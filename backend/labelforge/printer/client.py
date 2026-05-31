@@ -1,17 +1,28 @@
 # Import paths verified against brother-ql-inventree 1.3:
-#   brother_ql.raster.BrotherQLRaster       — builds the instruction buffer
-#   brother_ql.conversion.convert           — PIL Image → raster bytes (returns qlr.data)
-#   brother_ql.backends.helpers.send        — transmits bytes to the printer
+#   brother_ql.raster.BrotherQLRaster               — builds the instruction buffer
+#   brother_ql.conversion.convert                   — PIL Image → raster bytes (returns qlr.data)
+#   brother_ql.backends.helpers.send                — transmits bytes to the printer
+#   brother_ql.backends.helpers.backend_factory     — returns {"backend_class": ..., ...}
+#   brother_ql.reader.interpret_response            — parses 32-byte status reply into dict
+#   brother_ql.labels.ALL_LABELS                    — list of Label objects; .tape_size, .identifier, .color
 #
 # Network backend expects printer_identifier in the form "tcp://host[:port]"
 # (port defaults to 9100 when omitted).  The send() helper also accepts
 # backend_identifier values: "network", "linux_kernel", "pyusb".
+#
+# get_printer() raises NotImplementedError for backend="network" (library design).
+# Bypass by instantiating BrotherQLBackendNetwork directly via backend_factory.
 
+import html.parser
 import logging
+import re
+import urllib.request
 
-from brother_ql.backends.helpers import send
+from brother_ql.backends.helpers import backend_factory, send
 from brother_ql.conversion import convert
+from brother_ql.labels import ALL_LABELS
 from brother_ql.raster import BrotherQLRaster
+from brother_ql.reader import interpret_response
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -37,6 +48,185 @@ def to_print_bitmap(image: Image.Image) -> Image.Image:
 
 class PrintError(Exception):
     pass
+
+
+class StatusUnavailable(Exception):
+    pass
+
+
+def _media_id_from_dims(width_mm: int, length_mm: int, tape_color_raw: int | None) -> str | None:
+    matches = [lbl for lbl in ALL_LABELS if lbl.tape_size == (width_mm, length_mm)]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0].identifier
+    # Multiple labels share the same tape_size (e.g. "62" and "62red" are both (62, 0)).
+    # TODO: verify DK-22251 tape_color_raw byte against hardware; default "62" until confirmed.
+    _ = tape_color_raw  # reserved for hardware-verified two-color detection
+    return "62"
+
+
+def _color_capable(media_id: str | None) -> bool:
+    if media_id is None:
+        return False
+    lbl = next((l for l in ALL_LABELS if l.identifier == media_id), None)
+    return bool(lbl and int(getattr(lbl, "color", 0) or 0))
+
+
+class _StatusPageParser(html.parser.HTMLParser):
+    """Extract dt/dd key-value pairs from the printer's status.html page."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.pairs: dict[str, str] = {}
+        self._in_dt = False
+        self._in_dd = False
+        self._cur_dt: str | None = None
+        self._buf: str = ""
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag == "dt":
+            self._in_dt = True
+            self._in_dd = False
+            self._buf = ""
+        elif tag == "dd":
+            self._in_dd = True
+            self._in_dt = False
+            self._buf = ""
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "dt":
+            self._cur_dt = self._buf.strip()
+            self._in_dt = False
+        elif tag == "dd":
+            if self._cur_dt:
+                self.pairs[self._cur_dt] = self._buf.strip()
+            self._cur_dt = None
+            self._in_dd = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_dt or self._in_dd:
+            self._buf += data
+
+
+def media_compatible(loaded_id: str, expected_id: str) -> bool:
+    """Return True when the loaded media can print the expected layout.
+
+    62red is a superset of 62 — allow when more color capability is loaded
+    than the template needs. The reverse (mono loaded, color expected) blocks
+    because the print would silently drop the red channel.
+    """
+    if loaded_id == expected_id:
+        return True
+    if loaded_id == "62red" and expected_id == "62":
+        return True
+    return False
+
+
+def status_read(host: str, backend: str, timeout_ms: int = 2000) -> dict:
+    """Query printer status over TCP (primary) or HTTP (fallback).
+
+    Returns:
+        {
+          "ready": bool,
+          "model": str | None,
+          "media_id": str | None,   # e.g. "62", "62x29", "62red"
+          "width_mm": int | None,
+          "length_mm": int | None,  # 0 for continuous
+          "color_capable": bool,
+          "errors": list[str],
+          "source": "tcp" | "http",
+        }
+    Raises StatusUnavailable if both paths fail or backend != "network".
+    """
+    if backend != "network":
+        raise StatusUnavailable(
+            f"Printer status check only supported for network backend (got '{backend}')"
+        )
+
+    timeout_s = timeout_ms / 1000
+    raw: bytes = b""
+
+    # Primary: raw TCP ESC i S (may return empty on some firmware — HTTP fallback handles it)
+    try:
+        be = backend_factory("network")
+        printer = None
+        try:
+            printer = be["backend_class"](f"tcp://{host}")
+            printer.read_timeout = timeout_s
+            printer.s.settimeout(timeout_s)
+            printer.write(b"\x1b\x69\x53")
+            raw = printer.read(32)
+        finally:
+            if printer is not None:
+                try:
+                    printer.s.close()
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.debug("TCP status path failed: %s", exc)
+
+    if len(raw) >= 32:
+        try:
+            parsed = interpret_response(raw)
+            width_mm = int(parsed.get("media_width", 0) or 0)
+            length_mm = int(parsed.get("media_length", 0) or 0)
+            tape_color_raw = raw[24]
+            media_id = _media_id_from_dims(width_mm, length_mm, tape_color_raw)
+            errors_list = [str(e) for e in (parsed.get("errors") or [])]
+            return {
+                "ready": not errors_list,
+                "model": str(parsed.get("model") or "") or None,
+                "media_id": media_id,
+                "width_mm": width_mm or None,
+                "length_mm": length_mm,
+                "color_capable": _color_capable(media_id),
+                "errors": errors_list,
+                "source": "tcp",
+            }
+        except Exception as exc:
+            logger.debug("TCP response parse failed: %s", exc)
+
+    # Fallback: HTTP status page (unauthenticated, no readback limitation)
+    try:
+        url = f"http://{host}/general/status.html"
+        with urllib.request.urlopen(url, timeout=timeout_s) as resp:
+            html_content = resp.read().decode("utf-8", errors="replace")
+
+        parser = _StatusPageParser()
+        parser.feed(html_content)
+
+        device_status = parser.pairs.get("Device Status", "")
+        media_type_str = parser.pairs.get("Media Type", "")
+        ready = "READY" in device_status.upper()
+
+        width_mm: int | None = None
+        length_mm: int | None = None
+        if media_type_str:
+            m = re.search(r"(\d+)mm\s*x\s*(\d+)mm", media_type_str, re.IGNORECASE)
+            if m:
+                width_mm = int(m.group(1))
+                length_mm = int(m.group(2))
+            else:
+                m2 = re.search(r"(\d+)mm", media_type_str, re.IGNORECASE)
+                if m2:
+                    width_mm = int(m2.group(1))
+                    length_mm = 0
+
+        media_id = _media_id_from_dims(width_mm, length_mm, None) if width_mm is not None else None
+        return {
+            "ready": ready,
+            "model": None,
+            "media_id": media_id,
+            "width_mm": width_mm,
+            "length_mm": length_mm,
+            "color_capable": _color_capable(media_id),
+            "errors": [],
+            "source": "http",
+        }
+    except Exception as exc:
+        logger.debug("HTTP status path failed: %s", exc)
+        raise StatusUnavailable(f"Printer did not respond: {exc}") from exc
 
 
 def print_image(

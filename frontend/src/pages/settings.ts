@@ -1,9 +1,16 @@
-import { getSettings, pruneHistory, putSettings } from '../api'
+import { getPrinterStatus, getSettings, pruneHistory, putSettings } from '../api'
 
 export function mountSettings(root: HTMLElement): void {
   root.innerHTML = `
     <div class="settings-page">
       <h2>Settings</h2>
+      <section class="settings-section">
+        <h3>Printer</h3>
+        <div class="setting-actions">
+          <button id="btn-test-printer">Test Printer</button>
+        </div>
+        <div id="printer-test-result" hidden></div>
+      </section>
       <section class="settings-section">
         <h3>History &amp; Retention</h3>
         <div id="retention-status" class="status-msg" hidden></div>
@@ -14,6 +21,49 @@ export function mountSettings(root: HTMLElement): void {
 
   const statusEl = root.querySelector<HTMLDivElement>('#retention-status')!
   const formEl = root.querySelector<HTMLDivElement>('#retention-form')!
+  const btnTestPrinter = root.querySelector<HTMLButtonElement>('#btn-test-printer')!
+  const printerResultEl = root.querySelector<HTMLDivElement>('#printer-test-result')!
+
+  btnTestPrinter.addEventListener('click', async () => {
+    btnTestPrinter.disabled = true
+    btnTestPrinter.textContent = 'Testing…'
+    printerResultEl.hidden = true
+    printerResultEl.className = ''
+    try {
+      const { ok, body } = await getPrinterStatus()
+      if (ok) {
+        const ready = body.ready as boolean
+        const model = body.model as string | null
+        const loaded = body.loaded_media as Record<string, unknown> | null
+        const errors = (body.errors as string[]) ?? []
+        const source = body.source as string | null
+        const readyText = ready ? 'Ready' : 'Not ready'
+        const mediaText = loaded ? (loaded.display_name as string) : 'No media'
+        const modelText = model ?? 'Unknown model'
+        const errText = errors.length ? `<div class="status-msg error">${errors.join(', ')}</div>` : ''
+        printerResultEl.innerHTML = `
+          <div class="printer-status-block">
+            <span class="printer-status-ready ${ready ? 'ok' : 'warn'}">${readyText}</span>
+            <span class="printer-status-model">${modelText}</span>
+            <span class="printer-status-media">${mediaText}</span>
+            ${errText}
+            <span class="printer-status-source">${source ?? ''}</span>
+          </div>`
+        printerResultEl.className = 'status-msg success'
+      } else {
+        const msg = (body.message as string) || `HTTP error`
+        printerResultEl.textContent = msg
+        printerResultEl.className = 'status-msg error'
+      }
+    } catch (err) {
+      printerResultEl.textContent = (err as Error).message
+      printerResultEl.className = 'status-msg error'
+    } finally {
+      printerResultEl.hidden = false
+      btnTestPrinter.disabled = false
+      btnTestPrinter.textContent = 'Test Printer'
+    }
+  })
 
   function showStatus(msg: string, kind: 'success' | 'error'): void {
     statusEl.textContent = msg

@@ -17,6 +17,7 @@ from labelforge.routes import fonts, health, labels
 from labelforge.routes import history as history_router
 from labelforge.routes import print as print_router
 from labelforge.routes import preview as preview_router
+from labelforge.routes import printer as printer_router
 from labelforge.routes import settings as settings_router
 from labelforge.routes import template_print as template_print_router
 from labelforge.routes import templates as templates_router
@@ -89,6 +90,7 @@ app.include_router(labels.router, prefix="/api")
 app.include_router(fonts.router, prefix="/api")
 app.include_router(print_router.router, prefix="/api")
 app.include_router(preview_router.router, prefix="/api")
+app.include_router(printer_router.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(templates_router.router, prefix="/api")
 app.include_router(template_print_router.router, prefix="/api")

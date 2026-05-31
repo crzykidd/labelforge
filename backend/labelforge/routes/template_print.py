@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
+from labelforge import settings_store
 from labelforge.config import settings
 from labelforge.history import insert_job_with_preview
 from labelforge.models import (
@@ -13,7 +14,7 @@ from labelforge.models import (
     BatchPrintResponse,
     PrintRequest,
 )
-from labelforge.printer.client import PrintError, print_image, to_print_bitmap
+from labelforge.printer.client import PrintError, StatusUnavailable, media_compatible, print_image, status_read, to_print_bitmap
 from labelforge.render.template import render_template
 from labelforge.render.text import RenderError
 from labelforge.routes.auth import require_auth
@@ -40,7 +41,7 @@ def _apply_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
 
 
 @router.post("/print/{name}")
-async def print_template(name: str, body: PrintRequest) -> dict:
+async def print_template(name: str, body: PrintRequest, override: bool = False) -> dict:
     tmpl = store.get_template(name)
     if tmpl is None:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
@@ -51,6 +52,42 @@ async def print_template(name: str, body: PrintRequest) -> dict:
         image = render_template(tmpl, values)
     except RenderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if settings_store.get("printer_status_check"):
+        timeout_ms = settings_store.get("printer_status_timeout_ms")
+        try:
+            status = status_read(
+                host=settings.printer_host,
+                backend=settings.printer_backend,
+                timeout_ms=timeout_ms,
+            )
+            if status["errors"]:
+                code = status["errors"][0].lower().replace(" ", "_")
+                raise HTTPException(status_code=409, detail={
+                    "error": "printer_error",
+                    "code": code,
+                    "message": f"Printer error: {', '.join(status['errors'])}",
+                    "raw": status,
+                })
+            if status["media_id"] is not None and not media_compatible(status["media_id"], tmpl.label_media):
+                if not override:
+                    raise HTTPException(status_code=409, detail={
+                        "error": "media_mismatch",
+                        "expected": tmpl.label_media,
+                        "loaded": status["media_id"],
+                        "override_allowed": True,
+                        "message": (
+                            f"Printer has {status['media_id']} loaded, "
+                            f"template expects {tmpl.label_media}. "
+                            "Pass override=true to print anyway."
+                        ),
+                    })
+                logger.warning(
+                    "Media mismatch (override): loaded=%s expected=%s",
+                    status["media_id"], tmpl.label_media,
+                )
+        except StatusUnavailable:
+            logger.warning("Printer status unavailable; proceeding without check")
 
     try:
         outcome = print_image(
@@ -99,7 +136,7 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
 
 
 @router.post("/print/{name}/batch", response_model=BatchPrintResponse)
-async def batch_print(name: str, body: BatchPrintRequest) -> BatchPrintResponse:
+async def batch_print(name: str, body: BatchPrintRequest, override: bool = False) -> BatchPrintResponse:
     count = len(body.labels)
     if count < 1:
         raise HTTPException(status_code=400, detail="Batch count must be >= 1")
@@ -109,6 +146,43 @@ async def batch_print(name: str, body: BatchPrintRequest) -> BatchPrintResponse:
     tmpl = store.get_template(name)
     if tmpl is None:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
+
+    # Status check once before the loop — avoids per-label overhead
+    if settings_store.get("printer_status_check"):
+        timeout_ms = settings_store.get("printer_status_timeout_ms")
+        try:
+            status = status_read(
+                host=settings.printer_host,
+                backend=settings.printer_backend,
+                timeout_ms=timeout_ms,
+            )
+            if status["errors"]:
+                code = status["errors"][0].lower().replace(" ", "_")
+                raise HTTPException(status_code=409, detail={
+                    "error": "printer_error",
+                    "code": code,
+                    "message": f"Printer error: {', '.join(status['errors'])}",
+                    "raw": status,
+                })
+            if status["media_id"] is not None and not media_compatible(status["media_id"], tmpl.label_media):
+                if not override:
+                    raise HTTPException(status_code=409, detail={
+                        "error": "media_mismatch",
+                        "expected": tmpl.label_media,
+                        "loaded": status["media_id"],
+                        "override_allowed": True,
+                        "message": (
+                            f"Printer has {status['media_id']} loaded, "
+                            f"template expects {tmpl.label_media}. "
+                            "Pass override=true to print anyway."
+                        ),
+                    })
+                logger.warning(
+                    "Media mismatch (override): loaded=%s expected=%s",
+                    status["media_id"], tmpl.label_media,
+                )
+        except StatusUnavailable:
+            logger.warning("Printer status unavailable; proceeding without check")
 
     batch_id = str(uuid.uuid4())
     jobs: list[BatchJobResult] = []

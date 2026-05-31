@@ -169,6 +169,14 @@ export function getSettings(): Promise<Record<string, unknown>> {
   return apiFetch<Record<string, unknown>>('/api/settings')
 }
 
+export async function getPrinterStatus(): Promise<{ ok: boolean; body: Record<string, unknown> }> {
+  const res = await fetch('/api/printer/status', {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  })
+  const body = await res.json() as Record<string, unknown>
+  return { ok: res.ok, body }
+}
+
 export function putSettings(partial: Record<string, unknown>): Promise<Record<string, unknown>> {
   return apiFetch<Record<string, unknown>>('/api/settings', {
     method: 'PUT',
