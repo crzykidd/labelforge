@@ -45,6 +45,8 @@ def _migrate_print_jobs(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE print_jobs ADD COLUMN field_values TEXT NULL")
     if "batch_id" not in existing:
         conn.execute("ALTER TABLE print_jobs ADD COLUMN batch_id TEXT NULL")
+    if "reprint_of" not in existing:
+        conn.execute("ALTER TABLE print_jobs ADD COLUMN reprint_of INTEGER NULL")
     conn.commit()
 
 

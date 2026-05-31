@@ -28,20 +28,20 @@ The user can answer:
 ```
 print_jobs
   id                   integer primary key
-  template_id          integer nullable references templates(id)
-  is_quick_print       boolean
-  field_values         text (json)               -- {"number": "047", ...}
-  quick_print_payload  text (json) nullable      -- snapshot for quick prints
+  template_id          text nullable              -- template name (TEXT), null for quick prints
+  payload_json         text                      -- original request JSON snapshot
+  field_values         text (json) nullable      -- {"number": "047", ...}
   label_media          text                      -- snapshot at print time
-  preview_png          blob                      -- the rendered bitmap
-  printer_response     text (json) nullable      -- captured status / error if relevant
-  pinned               boolean default false
-  created_at           timestamp
+  preview_path         text nullable             -- filename under ${DATA_DIR}/label-previews/
+  batch_id             text nullable
+  reprint_of           integer nullable          -- references print_jobs(id) logically
+  pinned               integer default 0
+  created_at           text                      -- ISO 8601, UTC
 ```
 
-`preview_png` stored inline as a BLOB. Size: for a typical 62×100 label at 300dpi, ~30-100KB. SQLite handles this fine; a million prints would be ~50GB. We're nowhere near that and retention prunes long before.
+**Note**: `template_id` stores the template *name* (TEXT), not a numeric id. `is_quick_print` is derived: `template_id IS NULL`.
 
-If preview size becomes a concern later, move to a file-on-disk strategy keyed by job_id. Not a v1 problem.
+Preview images are stored as PNG files under `${DATA_DIR}/label-previews/{id}.png` (file-on-disk, not a BLOB — see ADR 2026-05-31). `preview_path` stores the filename only; the preview route resolves the full path. A NULL or missing `preview_path` means the preview is unavailable — the route returns 404 and the frontend should render a placeholder.
 
 ## Reprint
 

@@ -109,3 +109,26 @@ class BatchPrintResponse(BaseModel):
     jobs: list[BatchJobResult]
     succeeded: int
     failed: int
+
+
+# ── History ───────────────────────────────────────────────────────────────────
+
+class HistoryItem(BaseModel):
+    id: int
+    template_id: str | None
+    is_quick_print: bool
+    field_values: dict | None
+    label_media: str
+    pinned: bool
+    created_at: str
+    reprint_of: int | None
+    batch_id: str | None
+    preview_url: str
+
+
+class HistoryDetail(HistoryItem):
+    payload_json: dict | None
+
+
+class PinRequest(BaseModel):
+    pinned: bool

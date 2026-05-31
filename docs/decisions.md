@@ -4,6 +4,22 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-31 — Print history: preview stored as file on disk, not inline BLOB
+
+**Decision**: Preview images for print history are stored as PNG files under `${DATA_DIR}/label-previews/{job_id}.png`. The `print_jobs.preview_path` column stores the filename (e.g. `"42.png"`); the history preview route resolves the full path at request time. Previews are written after INSERT (job_id is needed for the filename), so rows exist briefly with `preview_path = NULL`. If preview write fails, the row is kept with `preview_path = NULL` and the preview route returns 404 for that job.
+
+**Why the schema already chose this**: The live `print_jobs` schema already had a `preview_path TEXT NULL` column — not a `preview_png BLOB` column. `history.md` specified a BLOB; the live schema diverged (likely because the data-path contract already reserves `label-previews/` and keeping SQLite small is a long-standing goal). Aligning the implementation with the live schema avoids a destructive migration.
+
+**Why files over BLOBs in general**: Keeps the SQLite file small at scale; HTTP serving (FileResponse) is simpler for binary content; preview files can be examined or deleted directly without touching the DB. For a homelab with retention pruning the footprint is bounded.
+
+**Consequence**: `docs/features/history.md` data model updated to reflect `preview_path` (file ref) rather than `preview_png` (BLOB). A missing or deleted preview file returns 404 from the preview route; the frontend should render a placeholder rather than erroring.
+
+**History frontend deferred**: The `/history` page and retention-settings UI are Slice B — not built in this slice.
+
+**Revisit if**: preview files become inconvenient to manage (backup, migration) compared to keeping everything in one SQLite file — at that point a BLOB column is a viable alternative.
+
+---
+
 ## 2026-05-31 — Adopt four homelab-configs standards; flip commits to Conventional-Commits prefixes
 
 **Decision**: Adopt `code-checkin-and-pr @ v1.1.0`, upgrade `handoff-prompt-workflow` to `v1.5.0`, adopt `repo-sandbox-permissions @ v1.0.0` (repo-wide), and formalize `vexp-context-engine @ v2.1.0`. All four are pinned in the new root `standards.md`. As part of `code-checkin-and-pr`, commit messages now **require** Conventional-Commits prefixes (`feat:` / `fix:` / `chore:` / `docs:`).

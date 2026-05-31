@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import shutil
 from contextlib import asynccontextmanager
@@ -7,11 +8,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from labelforge import history as history_module
 from labelforge.catalog.loader import load_catalog
 from labelforge.config import settings
 from labelforge.db import init_db
 from labelforge.render.fonts import load_fonts
 from labelforge.routes import fonts, health, labels
+from labelforge.routes import history as history_router
 from labelforge.routes import print as print_router
 from labelforge.routes import preview as preview_router
 from labelforge.routes import settings as settings_router
@@ -50,8 +53,28 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     load_catalog(yml_path)
     load_fonts(data_dir / "fonts")
 
+    try:
+        history_module.prune_history()
+    except Exception:
+        logger.error("Startup retention pruning failed", exc_info=True)
+
+    async def _retention_loop() -> None:
+        while True:
+            await asyncio.sleep(6 * 3600)
+            try:
+                history_module.prune_history()
+            except Exception:
+                logger.error("Scheduled retention pruning failed", exc_info=True)
+
+    retention_task = asyncio.create_task(_retention_loop())
+
     yield
-    # Nothing to clean up on shutdown.
+
+    retention_task.cancel()
+    try:
+        await retention_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(
@@ -69,6 +92,7 @@ app.include_router(preview_router.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(templates_router.router, prefix="/api")
 app.include_router(template_print_router.router, prefix="/api")
+app.include_router(history_router.router, prefix="/api")
 
 _FRONTEND_DIST = Path("/app/frontend/dist")
 

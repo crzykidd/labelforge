@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from labelforge.catalog.loader import get_label
 from labelforge.config import settings
-from labelforge.db import get_connection
 from labelforge import settings_store
+from labelforge.history import insert_job_with_preview
 from labelforge.models import PrintJobResponse, QuickPrintRequest
 from labelforge.printer.client import PrintError, print_image
 from labelforge.render.text import RenderError, render_text
@@ -49,21 +49,19 @@ async def quick_print(request: QuickPrintRequest) -> PrintJobResponse:
     except PrintError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    db_path = settings.data_dir / "data" / "app.db"
-    conn = get_connection(db_path)
-    try:
-        cursor = conn.execute(
-            "INSERT INTO print_jobs (payload_json, label_media) VALUES (?, ?)",
-            (request.model_dump_json(), request.label_media),
-        )
-        conn.commit()
-        job_id = cursor.lastrowid
-    finally:
-        conn.close()
+    job_id = insert_job_with_preview(
+        image=image,
+        payload_json=request.model_dump_json(),
+        label_media=request.label_media,
+    )
 
     try:
         settings_store.set("last_quick_print", request.model_dump())
     except Exception:
         logger.warning("Failed to record last_quick_print", exc_info=True)
 
-    return PrintJobResponse(job_id=job_id, status=outcome)
+    return PrintJobResponse(
+        job_id=job_id,
+        status=outcome,
+        preview_url=f"/api/history/{job_id}/preview.png",
+    )

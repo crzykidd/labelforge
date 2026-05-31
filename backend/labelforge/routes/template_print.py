@@ -1,5 +1,4 @@
 import io
-import json
 import logging
 import uuid
 
@@ -7,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from labelforge.config import settings
-from labelforge.db import get_connection
+from labelforge.history import insert_job_with_preview
 from labelforge.models import (
     BatchJobResult,
     BatchPrintRequest,
@@ -25,10 +24,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_auth)])
 
 
-def _db_path():
-    return settings.data_dir / "data" / "app.db"
-
-
 def _apply_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
     """Return values dict with defaults filled in; raise HTTPException for missing required."""
     result = dict(values)
@@ -42,33 +37,6 @@ def _apply_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
                     detail=f"Missing required field: '{field.name}'",
                 )
     return result
-
-
-def _insert_job(
-    template_name: str,
-    label_media: str,
-    field_values: dict,
-    request_json: str,
-    batch_id: str | None = None,
-) -> int:
-    conn = get_connection(_db_path())
-    try:
-        cursor = conn.execute(
-            """INSERT INTO print_jobs
-               (template_id, payload_json, label_media, field_values, batch_id)
-               VALUES (?, ?, ?, ?, ?)""",
-            (
-                template_name,
-                request_json,
-                label_media,
-                json.dumps(field_values),
-                batch_id,
-            ),
-        )
-        conn.commit()
-        return cursor.lastrowid
-    finally:
-        conn.close()
 
 
 @router.post("/print/{name}")
@@ -95,9 +63,14 @@ async def print_template(name: str, body: PrintRequest) -> dict:
     except PrintError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    job_id = _insert_job(name, tmpl.label_media, values, body.model_dump_json())
+    job_id = insert_job_with_preview(
+        image=image,
+        payload_json=body.model_dump_json(),
+        label_media=tmpl.label_media,
+        template_name=name,
+        field_values=values,
+    )
 
-    # preview_url points at the history preview route, which lands in a later slice.
     return {
         "job_id": job_id,
         "status": outcome,
@@ -153,9 +126,12 @@ async def batch_print(name: str, body: BatchPrintRequest) -> BatchPrintResponse:
                 backend=settings.printer_backend,
                 host=settings.printer_host,
             )
-            job_id = _insert_job(
-                name, tmpl.label_media, values,
-                BatchPrintRequest(labels=[label_values]).model_dump_json(),
+            job_id = insert_job_with_preview(
+                image=image,
+                payload_json=BatchPrintRequest(labels=[label_values]).model_dump_json(),
+                label_media=tmpl.label_media,
+                template_name=name,
+                field_values=values,
                 batch_id=batch_id,
             )
             jobs.append(BatchJobResult(job_id=job_id, status=outcome))
