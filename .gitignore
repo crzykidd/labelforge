@@ -49,7 +49,9 @@ data-dev/
 *.sqlite
 *.sqlite3
 
-# vexp (VS Code extension daemon — all runtime state, config regenerable)
+# vexp (standalone systemd-user daemon — all runtime state is per-host and regenerable;
+# manifest.json intentionally NOT tracked, per the vexp-context-engine standard's
+# "each host owns its index" shape). The .vexpignore at the repo root IS tracked.
 .vexp/
 vexp.toml
 
@@ -57,10 +59,12 @@ vexp.toml
 *.log
 logs/
 
-# claude
-.claude/
+# claude — ignore the dir but track shared artifacts (settings.json, the hooks/ dir).
+# .claude/CLAUDE.md is vexp's per-host auto-generated file: left untracked (the verbatim
+# vexp snippet lives in the tracked root CLAUDE.md instead). settings.local.json stays ignored.
+.claude/*
 !.claude/settings.json
-!.claude/CLAUDE.md
+!.claude/hooks/
 
 # Test artifacts
 .coverage

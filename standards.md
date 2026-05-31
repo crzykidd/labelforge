@@ -1,0 +1,14 @@
+# Standards implemented
+
+This project implements the following [standards](https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards)
+from the crzynet `homelab-configs` repo. Each row pins the **version** that this project
+has actually wired up. This file is the in-repo source of truth for "what does this
+codebase conform to" — `CLAUDE.md` points here and the per-session operational rules from
+snippet-bearing standards are pasted verbatim into `CLAUDE.md`.
+
+| Standard | Version | Adopted | Notes |
+|---|---|---|---|
+| [code-checkin-and-pr](https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/code-checkin-and-pr/README.md) | 1.1.0 | 2026-05-31 | Full adoption. CI (`ci.yml`) covers backend lint (ruff/mypy/pytest), structured-config validation, `docker compose config`, and PR-only image build; publish matrix (`build-and-push.yml`) + retention (`cleanup-images.yml`) already in place. **Migration check N/A** — no migration system (raw SQLite via `backend/labelforge/db.py`). Commit-prefix convention flipped to Conventional-Commits per ADR 2026-05-31. CLAUDE-snippet pasted verbatim into `CLAUDE.md`. |
+| [handoff-prompt-workflow](https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/handoff-prompt-workflow/README.md) | 1.5.0 | 2026-05-31 | Upgraded from v1.0.0. Origin project for this standard. `prompts/` is the live queue; completed prompts archived under `prompts/done/`; `prompts/TEMPLATE.md` added; frontmatter gained `model:`; working-tree check + single-commit-with-ask + launch-command form reflected in `CLAUDE.md`. |
+| [repo-sandbox-permissions](https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/repo-sandbox-permissions/README.md) | 1.0.0 | 2026-05-31 | scope: **repo-wide** (`.claude/settings.json`), 2026-05-31. `allowedDomains` = localhost + pypi/files.pythonhosted + registry.npmjs (Python + Node stack); `allowWrite` = `/tmp/**`, `~/.cache/**` (covers uv/ruff/mypy), `~/.npm/**`. `bubblewrap` + `socat` installed on this host. **Restart Claude Code** to activate (`sandbox.enabled` is read at startup). |
+| [vexp-context-engine](https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/vexp-context-engine/README.md) | 2.1.0 | 2026-05-31 | Shape B — `.vexp/manifest.json` intentionally not tracked (each host owns its index). Guard hook `.claude/hooks/vexp-guard.sh` now tracked; vexp's auto-generated `.claude/CLAUDE.md` untracked (verbatim snippet lives in `CLAUDE.md`); `.vexpignore` added. Verify (2026-05-31): MCP `index_status` healthy — repo indexed (486 nodes / 448 edges, 0 stale); LLM `Operational: true`. **GPU offload NOT enabled** (CPU backend only) although `/usr/lib/wsl/lib/libcuda.so.1` is present and a GPU appears installed — missing `libggml-cuda.so` is host-side drift for the Ansible vexp role to fix; CPU fallback remains conformant. |

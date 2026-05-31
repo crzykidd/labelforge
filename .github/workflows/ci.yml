@@ -114,3 +114,48 @@ jobs:
           load: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - name: Validate tracked YAML / JSON / TOML config
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess, sys, tomllib
+          import yaml
+          files = subprocess.check_output(
+              ["git", "ls-files", "*.yml", "*.yaml", "*.json", "*.toml"],
+              text=True).split()
+          errors = []
+          for f in files:
+              p, data = pathlib.Path(f), pathlib.Path(f).read_bytes()
+              try:
+                  if p.suffix in (".yml", ".yaml"):
+                      list(yaml.safe_load_all(data))
+                  elif p.suffix == ".json":
+                      json.loads(data)
+                  elif p.suffix == ".toml":
+                      tomllib.loads(data.decode())
+              except Exception as e:
+                  errors.append(f"{f}: {e}")
+          for e in errors:
+              print(f"::error::{e}")
+          if errors:
+              sys.exit(1)
+          print(f"OK: {len(files)} config files parse cleanly")
+          PY
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate compose files
+        run: |
+          for f in compose.yml compose.dev.yml; do
+            [ -f "$f" ] && docker compose -f "$f" config --quiet && echo "OK $f"
+          done

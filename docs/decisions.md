@@ -4,6 +4,18 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-31 — Adopt four homelab-configs standards; flip commits to Conventional-Commits prefixes
+
+**Decision**: Adopt `code-checkin-and-pr @ v1.1.0`, upgrade `handoff-prompt-workflow` to `v1.5.0`, adopt `repo-sandbox-permissions @ v1.0.0` (repo-wide), and formalize `vexp-context-engine @ v2.1.0`. All four are pinned in the new root `standards.md`. As part of `code-checkin-and-pr`, commit messages now **require** Conventional-Commits prefixes (`feat:` / `fix:` / `chore:` / `docs:`).
+
+**Why**: The standards' adoption was incomplete and undocumented — only `handoff-prompt-workflow @ 1.0.0` was in the registry, `standards.md` didn't exist, and vexp was wired with drift (guard hook untracked, stale custom snippet). `standards.md` + verbatim CLAUDE-snippets make conformance auditable in-repo.
+
+**The reversal**: `CLAUDE.md` previously said *"No conventional-commits prefixes."* This directly contradicted `code-checkin-and-pr`, which mandates them. We chose to flip the convention (adopt prefixes) rather than record a permanent deviation, so the standard is implemented cleanly. The "No co-author tags" rule is unchanged — it matches the standard.
+
+**Considered**: (a) Keep no-prefix commits and document a partial-adoption deviation in `standards.md` Notes — rejected; a deviation on the standard's most visible rule undercuts the point of adopting it. (b) Add an Alembic migration system to satisfy CI check #3 — rejected as out of scope; the app uses raw SQLite, so the migration check is marked **N/A** in `standards.md`.
+
+**Revisit if**: the project gains a migration system (wire CI check #3 then), or the GPU offload for vexp's local LLM is provisioned on this host (update the `vexp-context-engine` Notes row from CPU-only).
+
 ## 2026-05-26 — Printer↔label compatibility is library-derived, computed at catalog load; `printer_requirements` deprecated
 
 **Decision**: A label's printability on the configured printer is computed at catalog load from primitive `brother_ql` fields, not declared in `labels.yml`. Each catalog entry gains `restricted_to_models` (`Label.restricted_to_models`), `color` (`Label.color`), a computed `supported: bool`, and `incompatible_reason: str | None`. The rule:

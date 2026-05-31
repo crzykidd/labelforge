@@ -1,6 +1,9 @@
 {
   "permissions": {
     "allow": [
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)",
       "Bash(uname -a && hostname && cat /etc/os-release 2>/dev/null | head -5 && echo \"---\" && cat /proc/version 2>/dev/null)",
       "Read(//usr/lib/**)",
       "Read(//proc/**)",
@@ -34,6 +37,27 @@
       "Bash(docker compose *)",
       "Bash(docker *)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowLocalBinding": true,
+      "allowedDomains": [
+        "localhost",
+        "127.0.0.1",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "registry.npmjs.org"
+      ]
+    },
+    "filesystem": {
+      "allowWrite": [
+        "/tmp/**",
+        "~/.cache/**",
+        "~/.npm/**"
+      ]
+    }
   },
   "hooks": {
     "PreToolUse": [
