@@ -12,6 +12,20 @@ __pycache__/
 .venv/
 venv/
 env/
+# uv is not this project's toolchain (Dockerfile uses pip + hatchling); lockfile is a local artifact
+uv.lock
+
+# Sandbox-mounted host dotfiles (not project files)
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.idea
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
 
 # Build artifacts
 build/
