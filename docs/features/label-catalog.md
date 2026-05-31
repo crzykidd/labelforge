@@ -144,6 +144,16 @@ Reload on `SIGHUP` or via an admin endpoint (`POST /api/admin/reload-catalog`). 
 - Color-capable labels show a small red/black indicator
 - Media the configured printer can't print (`supported = false`, see "Printer compatibility") stays visible in its group but is rendered as a **disabled, greyed `<option>`** with a `— unavailable` marker and a `title` tooltip carrying the `incompatible_reason`. The browser won't let a user pick a disabled option; selectors also guard programmatic default/restored selections, falling back to the first supported entry.
 
+### Loaded-media filter
+
+Every label-media selector exposes a **Show all / Loaded in printer** mode toggle (implemented as `mountLabelMediaSelect` in `frontend/src/labels.ts`, shared by all selectors). **Show all** (default) lists the complete catalog as described above. **Loaded in printer** calls `GET /api/printer/status` once on first use and narrows options to entries whose `tape_size` matches the loaded roll's `width_mm` and `length_mm` — this naturally groups the mono and two-color variants of a roll (e.g. `62` and `62red` both have `tape_size [62, 0]`) and excludes die-cuts of the same nominal width (`62x29` has `tape_size [62, 29]`).
+
+Edge cases in Loaded mode:
+- Printer unreachable (503) → notice "Couldn't reach printer — showing all"; toggle reverts to Show all.
+- Printer connected but no media reported → notice "Printer reports no media loaded"; toggle reverts to Show all.
+- Loaded media not found in catalog → notice "Loaded media not in catalog — showing all"; full list is shown with the toggle in Loaded position.
+- Printer status is fetched once per control mount and cached — the control does not poll.
+
 ## Defaults shipped in repo
 
 The repo ships a `labels.yml` covering the common DK-* media that match the QL-820NWB's supported list:

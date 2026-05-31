@@ -100,6 +100,21 @@ export interface HistoryDetail extends HistoryItem {
   payload_json: Record<string, unknown>;
 }
 
+export interface LoadedMedia {
+  id: string;
+  display_name: string;
+  width_mm: number;
+  length_mm: number;
+  color_capable: boolean;
+}
+
+export interface PrinterStatus {
+  ready: boolean;
+  model: string;
+  loaded_media: LoadedMedia | null;
+  errors: string[];
+}
+
 export interface ReprintResponse {
   job_id: number;
   status: string;

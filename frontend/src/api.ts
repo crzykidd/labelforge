@@ -1,4 +1,4 @@
-import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, QuickPrintRequest, ReprintResponse, Template, TemplateCreate } from './types'
+import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate } from './types'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -169,11 +169,11 @@ export function getSettings(): Promise<Record<string, unknown>> {
   return apiFetch<Record<string, unknown>>('/api/settings')
 }
 
-export async function getPrinterStatus(): Promise<{ ok: boolean; body: Record<string, unknown> }> {
+export async function getPrinterStatus(): Promise<{ ok: boolean; body: PrinterStatus & Record<string, unknown> }> {
   const res = await fetch('/api/printer/status', {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
-  const body = await res.json() as Record<string, unknown>
+  const body = await res.json() as PrinterStatus & Record<string, unknown>
   return { ok: res.ok, body }
 }
 

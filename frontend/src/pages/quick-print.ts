@@ -1,6 +1,6 @@
 import { getFonts, getLabels, getSettings, previewQuick, quickPrint, TOKEN_KEY } from '../api'
 import type { QuickPrintRequest } from '../types'
-import { buildLabelOptionsHtml, firstSupportedId } from '../labels'
+import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
 
 function esc(s: string): string {
   return s
@@ -63,8 +63,8 @@ function renderForm(root: HTMLElement): void {
         </div>
 
         <div>
-          <label for="label-media">Label media</label>
-          <select id="label-media"><option value="">Loading…</option></select>
+          <label>Label media</label>
+          <div id="label-media-container"></div>
         </div>
 
         <div>
@@ -107,7 +107,8 @@ function renderForm(root: HTMLElement): void {
   const textarea = root.querySelector<HTMLTextAreaElement>('#text')!
   const fontSelect = root.querySelector<HTMLSelectElement>('#font')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
-  const labelSelect = root.querySelector<HTMLSelectElement>('#label-media')!
+  const labelMediaContainer = root.querySelector<HTMLDivElement>('#label-media-container')!
+  let labelMediaHandle: LabelMediaSelectHandle | null = null
   const boldCheck = root.querySelector<HTMLInputElement>('#bold')!
   const italicCheck = root.querySelector<HTMLInputElement>('#italic')!
   const btnPreview = root.querySelector<HTMLButtonElement>('#btn-preview')!
@@ -146,7 +147,7 @@ function renderForm(root: HTMLElement): void {
       font_size: parseInt(fontSizeInput.value, 10),
       alignment,
       orientation,
-      label_media: labelSelect.value,
+      label_media: labelMediaHandle?.getValue() ?? '',
       bold: boldCheck.checked,
       italic: italicCheck.checked,
     }
@@ -184,14 +185,13 @@ function renderForm(root: HTMLElement): void {
       .map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`)
       .join('')
 
-    labelSelect.innerHTML = buildLabelOptionsHtml(labels)
-
     // Restore form from settings; last_quick_print takes precedence over per-key defaults
     const lqp = (sett?.last_quick_print ?? null) as QuickPrintRequest | null
+    let preferMedia: string
     if (lqp) {
       fontSelect.value = lqp.font ?? String(sett?.default_font ?? 'DejaVuSans')
       fontSizeInput.value = String(lqp.font_size ?? sett?.default_font_size ?? 48)
-      labelSelect.value = String(lqp.label_media ?? sett?.default_label_media ?? '62')
+      preferMedia = String(lqp.label_media ?? sett?.default_label_media ?? '62')
       boldCheck.checked = lqp.bold ?? false
       italicCheck.checked = lqp.italic ?? false
       const aRadio = form.querySelector<HTMLInputElement>(
@@ -205,24 +205,22 @@ function renderForm(root: HTMLElement): void {
     } else {
       const defFont = String(sett?.default_font ?? 'DejaVuSans')
       const defSize = String(sett?.default_font_size ?? 48)
-      const defMedia = String(sett?.default_label_media ?? '62')
       const defOrientation = String(sett?.default_orientation ?? 'standard')
+      preferMedia = String(sett?.default_label_media ?? '62')
       fontSelect.value = defFont
       fontSizeInput.value = defSize
-      labelSelect.value = defMedia
       const oRadio = form.querySelector<HTMLInputElement>(
         `input[name="orientation"][value="${defOrientation}"]`
       )
       if (oRadio) oRadio.checked = true
     }
 
-    // The chosen default/restored media may be unsupported by the configured
-    // printer (its <option> is disabled). Fall back to the first supported id.
-    const chosen = labels.find(l => l.id === labelSelect.value)
-    if (!chosen || !chosen.supported) {
-      const fallback = firstSupportedId(labels)
-      if (fallback) labelSelect.value = fallback
-    }
+    labelMediaHandle = mountLabelMediaSelect({
+      container: labelMediaContainer,
+      labels,
+      initialValue: preferMedia,
+      onChange: () => {},
+    })
   }).catch((err: Error) => {
     showStatus(`Failed to load form data: ${err.message}`, 'error')
   })

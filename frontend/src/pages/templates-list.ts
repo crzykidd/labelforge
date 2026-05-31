@@ -1,7 +1,7 @@
 import { deleteTemplate, listTemplates } from '../api'
 import type { Template } from '../types'
 import { navigate } from '../router'
-import { buildLabelOptionsHtml, firstSupportedId } from '../labels'
+import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
 
 function esc(s: string): string {
   return s
@@ -130,10 +130,8 @@ function showNewTemplateModal(onCreated: () => void): void {
           <input id="modal-name" type="text" placeholder="my-template" autocomplete="off" />
           <span class="field-error" id="name-error" hidden></span>
         </label>
-        <label>
-          Label media
-          <select id="modal-media"><option value="">Loading…</option></select>
-        </label>
+        <label>Label media</label>
+        <div id="modal-media-container"></div>
         <div class="modal-actions">
           <button id="modal-cancel">Cancel</button>
           <button id="modal-ok" class="btn-primary" disabled>Create</button>
@@ -143,10 +141,11 @@ function showNewTemplateModal(onCreated: () => void): void {
     document.body.appendChild(overlay)
 
     const nameInput = overlay.querySelector<HTMLInputElement>('#modal-name')!
-    const mediaSelect = overlay.querySelector<HTMLSelectElement>('#modal-media')!
+    const mediaContainer = overlay.querySelector<HTMLDivElement>('#modal-media-container')!
     const cancelBtn = overlay.querySelector<HTMLButtonElement>('#modal-cancel')!
     const okBtn = overlay.querySelector<HTMLButtonElement>('#modal-ok')!
     const nameError = overlay.querySelector<HTMLSpanElement>('#name-error')!
+    let mediaHandle: LabelMediaSelectHandle | null = null
 
     const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
 
@@ -159,20 +158,17 @@ function showNewTemplateModal(onCreated: () => void): void {
     }
 
     function updateOk(): void {
-      okBtn.disabled = !nameInput.value.trim() || !mediaSelect.value
+      okBtn.disabled = !nameInput.value.trim() || !mediaHandle?.getValue()
     }
 
     nameInput.addEventListener('input', () => { validate(); updateOk() })
-    mediaSelect.addEventListener('change', updateOk)
 
     getLabels().then(labels => {
-      mediaSelect.innerHTML = buildLabelOptionsHtml(labels)
-      // Don't let the select default to a disabled (unsupported) option.
-      const chosen = labels.find(l => l.id === mediaSelect.value)
-      if (!chosen || !chosen.supported) {
-        const fallback = firstSupportedId(labels)
-        if (fallback) mediaSelect.value = fallback
-      }
+      mediaHandle = mountLabelMediaSelect({
+        container: mediaContainer,
+        labels,
+        onChange: () => updateOk(),
+      })
       updateOk()
     })
 
@@ -182,7 +178,7 @@ function showNewTemplateModal(onCreated: () => void): void {
     okBtn.addEventListener('click', () => {
       if (!validate()) return
       const name = nameInput.value.trim()
-      const media = mediaSelect.value
+      const media = mediaHandle?.getValue() ?? ''
       overlay.remove()
       // Navigate to editor — template created on first Save
       navigate(`/templates/${name}?new=1&media=${encodeURIComponent(media)}`)

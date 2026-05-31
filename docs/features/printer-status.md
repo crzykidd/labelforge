@@ -123,6 +123,7 @@ HTTP/1.1 503 Service Unavailable
 - Settings page has a **Test printer** button that calls `GET /api/printer/status` and renders the result inline
 - Print form shows the currently-loaded media as a chip near the print button, polled lazily on form open (not every keystroke)
 - A media mismatch in the print response shows a modal: "Printer has X loaded, template expects Y. [Cancel] [Print anyway]"
+- Label-media selectors include a **Loaded in printer** filter mode (see [label-catalog.md](label-catalog.md#loaded-media-filter)) that queries this endpoint to narrow the dropdown to the mounted roll's matching catalog entries.
 
 ## Edge cases
 
