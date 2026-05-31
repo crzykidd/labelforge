@@ -1,4 +1,4 @@
-import type { BatchPrintResponse, FontInfo, LabelEntry, PrintJobResponse, QuickPrintRequest, Template, TemplateCreate } from './types'
+import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, QuickPrintRequest, ReprintResponse, Template, TemplateCreate } from './types'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -23,6 +23,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     } catch { /* use status fallback */ }
     throw new Error(detail)
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
@@ -119,6 +120,49 @@ export function batchPrint(name: string, labels: Record<string, string>[]): Prom
     method: 'POST',
     body: JSON.stringify({ labels }),
   })
+}
+
+export function listHistory(params: Record<string, string>): Promise<HistoryItem[]> {
+  const qs = new URLSearchParams(params).toString()
+  return apiFetch<HistoryItem[]>(`/api/history${qs ? '?' + qs : ''}`)
+}
+
+export function getHistory(id: number): Promise<HistoryDetail> {
+  return apiFetch<HistoryDetail>(`/api/history/${id}`)
+}
+
+export async function fetchHistoryPreview(id: number): Promise<Blob> {
+  const res = await fetch(`/api/history/${id}/preview.png`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  })
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const body = await res.json() as { detail?: unknown }
+      if (body.detail) detail = String(body.detail)
+    } catch { /* use status fallback */ }
+    throw new Error(detail)
+  }
+  return res.blob()
+}
+
+export function reprintHistory(id: number): Promise<ReprintResponse> {
+  return apiFetch<ReprintResponse>(`/api/history/${id}/reprint`, { method: 'POST' })
+}
+
+export function pinHistory(id: number, pinned: boolean): Promise<HistoryItem> {
+  return apiFetch<HistoryItem>(`/api/history/${id}/pin`, {
+    method: 'POST',
+    body: JSON.stringify({ pinned }),
+  })
+}
+
+export function deleteHistory(id: number): Promise<void> {
+  return apiFetch<void>(`/api/history/${id}`, { method: 'DELETE' })
+}
+
+export function pruneHistory(): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>('/api/admin/prune-history', { method: 'POST' })
 }
 
 export function getSettings(): Promise<Record<string, unknown>> {

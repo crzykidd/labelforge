@@ -82,3 +82,26 @@ export interface TemplateCreate {
   label_media: string;
   canvas_json: Record<string, unknown>;
 }
+
+export interface HistoryItem {
+  id: number;
+  template_id: string | null;
+  is_quick_print: boolean;
+  field_values: Record<string, string> | null;
+  label_media: string;
+  pinned: boolean;
+  created_at: string;
+  reprint_of: number | null;
+  batch_id: string | null;
+  preview_url: string | null;
+}
+
+export interface HistoryDetail extends HistoryItem {
+  payload_json: Record<string, unknown>;
+}
+
+export interface ReprintResponse {
+  job_id: number;
+  status: string;
+  reprint_of: number;
+}

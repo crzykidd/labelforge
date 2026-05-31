@@ -3,6 +3,8 @@ import { mountQuickPrint } from './pages/quick-print'
 import { mountTemplates } from './pages/templates'
 import { mountTemplateEditor } from './pages/template-editor'
 import { mountTemplateRecall } from './pages/template-recall'
+import { mountHistory } from './pages/history'
+import { mountSettings } from './pages/settings'
 import { initRouter, register, registerPrefix } from './router'
 
 register('/', mountQuickPrint)
@@ -15,4 +17,6 @@ registerPrefix('/templates/', (root) => {
     mountTemplateEditor(root)
   }
 })
+register('/history', mountHistory)
+register('/settings', mountSettings)
 initRouter()

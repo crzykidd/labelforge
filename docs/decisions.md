@@ -4,6 +4,28 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-31 — History UI: authed image loading via fetch+objectURL
+
+**Decision**: `/api/history/{id}/preview.png` requires a bearer token, so `<img src="...">` bare URLs 401. The history page fetches previews via `fetch()` with the `Authorization` header, creates an object URL via `URL.createObjectURL(blob)`, and sets that as `img.src`. Object URLs are revoked on page remount and on filter/pagination resets via a generation counter that skips stale async completions.
+
+**Why**: Matches the existing pattern used by `previewQuick` and `previewTemplate` in `api.ts`. Keeps the token out of query strings (which appear in server logs and browser history).
+
+**Considered**: Embedding tokens in query strings (`?token=...`) — rejected (leaks credential). Server-side session cookies — out of scope (auth is a single bearer token).
+
+**Revisit if**: The session adopts cookie-based auth, at which point `<img src>` works without a fetch wrapper.
+
+---
+
+## 2026-05-31 — History UI: "Load more" pagination over prev/next
+
+**Decision**: The `/history` page uses a "Load more" button (appending to the list) rather than prev/next page navigation.
+
+**Why**: Simpler DOM management; no need to track current page number or re-render the full list on page change. Works well with the "most recent first" order where users typically care about the top of the list.
+
+**Revisit if**: The history list grows large enough that scrolling becomes painful, at which point a fixed-size window with prev/next would be preferable.
+
+---
+
 ## 2026-05-31 — Print history: preview stored as file on disk, not inline BLOB
 
 **Decision**: Preview images for print history are stored as PNG files under `${DATA_DIR}/label-previews/{job_id}.png`. The `print_jobs.preview_path` column stores the filename (e.g. `"42.png"`); the history preview route resolves the full path at request time. Previews are written after INSERT (job_id is needed for the filename), so rows exist briefly with `preview_path = NULL`. If preview write fails, the row is kept with `preview_path = NULL` and the preview route returns 404 for that job.
