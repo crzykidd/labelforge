@@ -31,15 +31,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Check for pyproject.toml
+        id: check
+        run: |
+          if [ -f pyproject.toml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::notice::pyproject.toml not present, skipping Python checks"
+          fi
       - uses: actions/setup-python@v6
+        if: steps.check.outputs.exists == 'true'
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install -e .[dev]
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: mypy backend
-      - run: pytest -q
+      - if: steps.check.outputs.exists == 'true'
+        run: pip install -e .[dev]
+      - if: steps.check.outputs.exists == 'true'
+        run: ruff check .
+      - if: steps.check.outputs.exists == 'true'
+        run: ruff format --check .
+      - if: steps.check.outputs.exists == 'true'
+        run: mypy backend
+      - if: steps.check.outputs.exists == 'true'
+        run: pytest -q
 
   frontend:
     needs: detect
@@ -50,15 +65,29 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v6
+      - name: Check for frontend/package.json
+        id: check
+        run: |
+          if [ -f package.json ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::notice::frontend/package.json not present, skipping frontend checks"
+          fi
       - uses: actions/setup-node@v6
+        if: steps.check.outputs.exists == 'true'
         with:
           node-version: lts/*
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run lint --if-present
-      - run: npx tsc --noEmit
-      - run: npm run build
+      - if: steps.check.outputs.exists == 'true'
+        run: npm ci
+      - if: steps.check.outputs.exists == 'true'
+        run: npm run lint --if-present
+      - if: steps.check.outputs.exists == 'true'
+        run: npx tsc --noEmit
+      - if: steps.check.outputs.exists == 'true'
+        run: npm run build
 
   docker:
     needs: detect
@@ -66,11 +95,67 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Check for Dockerfile
+        id: check
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::notice::Dockerfile not present, skipping Docker build"
+          fi
       - uses: docker/setup-buildx-action@v4
+        if: steps.check.outputs.exists == 'true'
       - uses: docker/build-push-action@v6
+        if: steps.check.outputs.exists == 'true'
         with:
           context: .
           push: false
           load: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - name: Validate tracked YAML / JSON / TOML config
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess, sys, tomllib
+          import yaml
+          files = subprocess.check_output(
+              ["git", "ls-files", "*.yml", "*.yaml", "*.json", "*.toml"],
+              text=True).split()
+          errors = []
+          for f in files:
+              p, data = pathlib.Path(f), pathlib.Path(f).read_bytes()
+              try:
+                  if p.suffix in (".yml", ".yaml"):
+                      list(yaml.safe_load_all(data))
+                  elif p.suffix == ".json":
+                      json.loads(data)
+                  elif p.suffix == ".toml":
+                      tomllib.loads(data.decode())
+              except Exception as e:
+                  errors.append(f"{f}: {e}")
+          for e in errors:
+              print(f"::error::{e}")
+          if errors:
+              sys.exit(1)
+          print(f"OK: {len(files)} config files parse cleanly")
+          PY
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate compose files
+        run: |
+          for f in compose.yml compose.dev.yml; do
+            [ -f "$f" ] && docker compose -f "$f" config --quiet && echo "OK $f"
+          done

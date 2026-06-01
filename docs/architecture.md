@@ -22,10 +22,12 @@
 
 ### Storage
 
-- **SQLite** at `/var/docker/labelforge/data/app.db` — templates, history, settings, API tokens
-- **`labels.yml`** at `/var/docker/labelforge/labels.yml` — user-editable label catalog metadata
-- **Fonts** at `/var/docker/labelforge/fonts/` — `.ttf` / `.otf` files, drop-in
-- **Label preview images** (optional) at `/var/docker/labelforge/label-previews/` — referenced from `labels.yml`
+- **SQLite** at `$DATA_DIR/data/app.db` — templates, history, settings, API tokens
+- **`labels.yml`** at `$DATA_DIR/labels.yml` — user-editable label catalog metadata
+- **Fonts** at `$DATA_DIR/fonts/` — `.ttf` / `.otf` files, drop-in
+- **Label preview images** (optional) at `$DATA_DIR/label-previews/` — referenced from `labels.yml`
+
+$DATA_DIR defaults to `/data` inside the container; back it with a named volume or bind mount as you prefer.
 
 ### Why these choices
 
@@ -44,7 +46,7 @@ labelforge/
 ├── CLAUDE.md
 ├── .gitignore
 ├── .gitattributes
-├── compose.yml                   # production-shaped, used by Dockhand
+├── compose.yml                   # single-service stack; bring your own proxy
 ├── compose.dev.yml               # local dev: bind mounts, no Traefik labels
 ├── Dockerfile                    # multi-stage: frontend build → python runtime
 ├── pyproject.toml                # backend deps + tool config
@@ -123,16 +125,14 @@ merge: only identifiers in the intersection are user-facing.
 
 ## Deployment
 
-- Single Compose stack deployed via Dockhand on `docker10`
-- Networks: `traefik` (LAN routing) and `dockflare` (Cloudflare Tunnel to `labels.crzynet.com`)
-- Data volume: `/var/docker/labelforge/` host path bind-mounted
-- Image source: built locally on a CI host, pushed to Gitea registry, optionally mirrored to Docker Hub
-- Env-driven config: printer host/port, API token, default label media, retention defaults
-- No build step at deploy time — image is pre-built
+- Single Docker image built from the included `Dockerfile` (multi-stage: frontend build → python runtime). No build step at deploy time once the image is built.
+- Runs as one container serving plain HTTP on port `8000`. Put it behind whatever reverse proxy or tunnel you use; proxy wiring is deployment-specific and intentionally not baked into the app.
+- Persistent data lives under `$DATA_DIR` (default `/data`); back it with a named volume or a host bind mount. See `compose.yml` for a standalone example and `compose.dev.yml` for local hot-reload dev.
+- Env-driven config: printer host/port, API token, default label media, data dir, log level. See `.env.example`.
 
 ## Out of scope for v1
 
-- Reverse-proxy hardening beyond what Traefik defaults give
+- Reverse-proxy hardening (proxy choice is left to the operator)
 - Database migrations beyond initial schema creation (manually managed for v1)
 - Health-check endpoint beyond what Traefik needs
 - Prometheus metrics endpoint (can add later if useful)

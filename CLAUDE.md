@@ -8,6 +8,10 @@ Context for AI coding sessions in this repo. Read this before doing anything.
 
 Owner: crzykidd. Personal homelab project, public open source. Single-user app — no multi-user features.
 
+## Standards
+
+This project implements shared engineering standards from the crzynet `homelab-configs` repo. **Read [`standards.md`](standards.md) at the repo root on session start** whenever the work could touch branching, commits, PRs, handoff prompts, the sandbox, or codebase search — it pins which standards and versions this repo conforms to. The hard per-session operational rules from those standards are pasted verbatim at the end of this file (Code check-in, Context search).
+
 ## Source of truth
 
 The design is in `docs/`. Do not invent features not described there. If a request expands scope, push back and ask whether the PRD should change first.
@@ -28,7 +32,7 @@ When working on a task, load the relevant feature doc(s) plus `architecture.md` 
 - **Config**: PyYAML for the label catalog
 - **Frontend**: Vite + TypeScript, vanilla (no React/Vue/Svelte), Fabric.js for the canvas
 - **Deployment**: single Docker container, multi-stage build (frontend → static assets → served by FastAPI)
-- **Container image**: published to Gitea registry (`gitea.crzynet.com`) and Docker Hub
+- **Container image**: built from the included `Dockerfile`; publish to whatever registry you use.
 
 ## Non-negotiables
 
@@ -37,8 +41,7 @@ When working on a task, load the relevant feature doc(s) plus `architecture.md` 
 - **No SaaS dependencies.** Self-hosted only. No cloud functions, no hosted databases, no third-party APIs that aren't user-controllable.
 - **No Next.js, no SSR frameworks.** Frontend is a static SPA served from the FastAPI container.
 - **No alternative printer libraries** without an ADR. We picked `brother-ql-inventree` after evaluation.
-- **Container data path**: `/var/docker/labelforge/` on the host. SQLite at `data/app.db`, label catalog at `labels.yml`, fonts at `fonts/`, optional label preview images at `label-previews/`.
-- **External hostname**: `labels.crzynet.com` (Cloudflare Tunnel via Dockflare). Internal: `labels.home.arpa` (Traefik on LAN).
+- **Data path**: the app reads/writes everything under `$DATA_DIR` (default `/data` in the container): SQLite at `$DATA_DIR/data/app.db`, label catalog at `$DATA_DIR/labels.yml`, fonts at `$DATA_DIR/fonts/`, optional preview images at `$DATA_DIR/label-previews/`. How that path is backed (named volume, bind mount) is the operator's choice.
 
 ## Working style
 
@@ -54,11 +57,39 @@ From the session prompt that owns this project:
 - Don't write a 50-line README before there's code
 - Don't propose features not in the PRD
 
+## Session workflow
+
+Every task follows: **plan → decide → execute → document**.
+
+1. **Plan first.** Before writing code, outline what will change and why. For small fixes the plan can be verbal in-session. For larger features, produce a handoff prompt (see below).
+2. **Decide: current session or handoff.** If the plan is scoped and the current session has context, do it here. If it's a large feature slice or a fresh context would be cleaner, write a handoff prompt for a new session.
+3. **Handoff prompts live in `prompts/`** (checked into git), per the `handoff-prompt-workflow` standard pinned in [`standards.md`](standards.md). The top-level `prompts/` dir is the **live queue** — pending work only. Start new prompts from `prompts/TEMPLATE.md`. Frontmatter:
+   ```yaml
+   ---
+   name: YYYY-MM-DD-short-description
+   status: pending          # pending | completed | failed
+   created: YYYY-MM-DD
+   model:                   # opus = research/planning, sonnet = coding
+   completed:               # filled when done
+   result:                  # one-line summary of outcome
+   ---
+   ```
+   Before making edits, run `git status --porcelain` and cross-reference the files the plan touches; if any overlap with uncommitted work, list them and ask before touching. The **last instruction** in every handoff prompt: update its own frontmatter (status / completed / result), then `git mv` it into `prompts/done/` (success) or `prompts/failed/` (failure) — created lazily on first use. Record non-obvious decisions (approach changed, alternative rejected, workaround needed) in `docs/decisions.md` as an ADR entry.
+4. **To run a handoff prompt** — the moment you create one, hand the user this exact command (file-path form, never inlined `cat`):
+   ```
+   claude --model <model> "Read prompts/<file>.md and execute it as your task."
+   ```
+   `<model>` matches the prompt's `model:` field (opus = research/planning, sonnet = coding; omit to use the default). Run from the repo root so the relative path resolves.
+5. **Changelog entry required.** Every change — feature, fix, refactor — gets a short entry in `CHANGELOG.md` under `## [Unreleased]`. Write it for release notes (concise, user-facing language).
+6. **All dev work on `dev`** unless explicitly told otherwise.
+7. **Commit, don't push.** Sessions commit their work with a descriptive message. The owner pushes.
+8. **Planning prompts for large features.** The owner will ask for a planning session prompt when scoping a new feature block. That prompt gets handed to a fresh session to execute.
+
 ## Repo conventions
 
 - Line endings: LF only. `.gitattributes` enforces this. If `git diff --stat` shows all files modified, run `git config core.autocrlf input && git checkout -- .`
-- Branches: `main` is deployable. Feature work in `feature/<name>` branches.
-- Commits: imperative present tense ("Add template recall endpoint" not "Added"). No conventional-commits prefixes.
+- Branches: `main` is protected — the ONLY way in is a pull request, gated by CodeQL and other checks; never push to `main` directly. `dev` is the working branch (solo work commits straight to `dev`). Use `feature/<name>` branches when more than one person is working; merge those to `dev`, then PR `dev` → `main` for a release.
+- Commits: imperative present tense with a Conventional-Commits prefix — `feat:` (user-facing feature), `fix:` (bug fix), `chore:` (config/tooling/deps), `docs:` (docs only). E.g. `feat: add template recall endpoint`. No co-author tags. See the **Code check-in (operational rules)** section below for the full rule set.
 - Compose stack lives at the repo root as `compose.yml`. Dev compose at `compose.dev.yml`.
 
 ## Things to never do
@@ -71,3 +102,77 @@ From the session prompt that owns this project:
 - Don't suggest hosted/SaaS replacements for any component
 - Don't write giant explainer comments in code — code should be readable; comments only for non-obvious *why*
 - Don't generate `package.json` / `pyproject.toml` / `Dockerfile` until the relevant slice has been scoped
+
+<!--
+Source: standards/code-checkin-and-pr @ v1.1.0 (crzynet/homelab-configs).
+Paste the section below verbatim into the adopting project's CLAUDE.md.
+The full standard (publishing matrix, retention, CI check definitions) lives at:
+https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/code-checkin-and-pr/README.md
+-->
+
+## Code check-in (operational rules)
+
+This project adopts the `code-checkin-and-pr` standard. The full why-and-how lives at
+the source above; the rules below are the per-session do/don'ts a coding agent must
+honor by default:
+
+- **Never push directly to `main`.** `main` is protected. All changes land via a pull
+  request from `dev` → `main`, and only when every required check is green.
+- **Day-to-day work happens on `dev`** (or a short-lived branch off `dev`). Push to
+  `dev` freely.
+- **Commit message prefixes are required** — Conventional-Commits style:
+  - `feat:` — new user-facing feature
+  - `fix:` — bug fix
+  - `chore:` — config, tooling, dependencies, maintenance
+  - `docs:` — documentation-only changes
+- **Do not add `Co-authored-by:` trailers** unless the user explicitly asks.
+- **Doc updates ship in the same commit as the code they describe** — never as a
+  follow-up commit.
+- **Never bypass hooks** (no `--no-verify`, `--no-gpg-sign`, etc.) unless the user
+  explicitly asks. If a hook fails, fix the underlying issue.
+- **Stable releases are tagged from `main` only.** Don't tag from `dev`.
+
+If you're unsure whether an action would violate one of the above, stop and ask before
+acting.
+
+<!--
+Source: standards/vexp-context-engine @ v2.1.0 (crzynet/homelab-configs).
+Paste the section below verbatim into the adopting project's CLAUDE.md.
+The full standard (scope, the two pushes, the manifest-not-tracked shape,
+adoption + gate + verification procedure) lives at:
+https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/vexp-context-engine/README.md
+-->
+
+## Context search (operational rules)
+
+This project adopts the `vexp-context-engine` standard. The full why-and-how lives at the
+source above; the rules below are the per-session do/don'ts a coding agent must honor by
+default:
+
+- **Call `run_pipeline` FIRST for any code task** — bug fixes, features, refactors,
+  debugging, "how does X work", "where is Y". It runs context search + impact analysis +
+  memory recall in one call and returns ranked, compressed context.
+- **Do NOT `grep`, `glob`, or `cat` to explore the codebase.** vexp returns pre-indexed,
+  graph-ranked context that is more relevant and cheaper than manual searching. A
+  `PreToolUse` guard hook blocks `Grep`/`Glob` while the vexp daemon is healthy; if the
+  daemon is down it allows the fallback.
+- **Prefer `get_skeleton` over `Read` to inspect files** (minimal/standard/detailed —
+  70–90% fewer tokens). Use `Read` only when you need exact raw content to edit a specific
+  line.
+- **Don't chain vexp calls or fan out `Explore` agents to free-search.** One
+  `run_pipeline` replaces capsule + impact + memory; if a subagent needs context, run
+  `run_pipeline` first and pass the result into the agent's prompt.
+- **The vexp daemon runs as a standalone `systemd`-user service — NOT the VS Code
+  extension.** The supervisor is `vexp.service` (`ExecStart=vexp serve`), `enabled` + linger,
+  auto-restarting; it starts/adopts the per-repo daemon on demand. Managing it with
+  `systemctl --user … vexp.service` or `vexp daemon-cmd start|stop|status|logs` is the
+  expected control path, not forbidden. Do **not** run vexp from the VS Code extension
+  (deprecated here — older bundled core, contends for the socket/port).
+- **Start/manage the daemon in the host process namespace (un-sandboxed).** A daemon
+  spawned inside a sandboxed shell gets a throwaway PID namespace + socket the host-side
+  MCP can't reach, and dies when that shell exits. If `index_status` reports "Cannot
+  connect to daemon," run `vexp daemon-cmd start` un-sandboxed and wait for "Socket ready"
+  (first start loads the local LLM, so allow >12s).
+
+If you're unsure whether an action would violate one of the above, stop and ask before
+acting.

@@ -1,0 +1,16 @@
+# .vexpignore — paths excluded from vexp's code index/ranking (gitignore syntax).
+# These files STAY in git; they're just kept out of run_pipeline's ranked context so
+# source code isn't crowded out by process/handoff prose. Tune per project.
+#
+# vexp's built-in excludes already cover: node_modules, .git, dist, .next, target,
+# __pycache__, .vexp. The SecurityFilter already drops .env / credentials. Only add
+# things that ARE committed source-tree files but make poor ranked context.
+
+# Completed/failed handoff prompts — historical, never useful as live code context.
+prompts/done/
+prompts/failed/
+
+# Other common candidates (uncomment per project):
+# standards.md
+# CHANGELOG.md
+# docs/**/*.md        # only if spec/decision docs are crowding out code in results

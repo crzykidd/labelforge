@@ -1,0 +1,29 @@
+name: labelforge-dev
+
+services:
+  labelforge:
+    build: .
+    image: labelforge:dev
+    restart: "no"
+    env_file: .env
+    environment:
+      LOG_LEVEL: DEBUG
+    volumes:
+      # Bind-mount source for hot-reload.  The editable pip install inside the
+      # image points to /app/backend/labelforge/, so this overlay takes effect
+      # immediately without rebuilding.
+      - ./backend:/app/backend
+      # Dev data directory — kept separate from any production volume.
+      - ./data:/data
+    ports:
+      - "8001:8000"
+    command:
+      - uvicorn
+      - labelforge.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/backend
