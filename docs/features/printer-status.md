@@ -70,7 +70,11 @@ The library returns raw bytes from the printer's status protocol. The library's 
 
 We need a mapping function: `(media_type, media_width_mm, media_length_mm) → library_identifier` (e.g. `"62"` or `"62x100"`). This logic exists in the library or close to it; if not, it's a thin wrapper we own.
 
-Color capability of the loaded media (whether it's DK-22251 red-capable or DK-22205 mono): the printer reports tape type and the library should distinguish. If it doesn't expose this directly, we read the raw status bytes — there's a specific tape-color byte.
+**Tape color is not detectable.** Verified against Brother's *Raster Command Reference QL-800/810W/820NWB*: the 32-byte status response has no color field (bytes 24–31 are reserved `00h`), and the printer's `status.html` doesn't show it either. So `62` (mono, DK-22205) and `62red` (two-color, DK-22251) are indistinguishable from a status read — both are 62mm continuous, `tape_size (62, 0)`. We default an ambiguous (62, 0) read to `"62"` and rely on the user selecting `62red` manually; the pre-print check treats same-dimension rolls as compatible so it doesn't block the choice. See `docs/decisions.md` (2026-05-31, two-color DK rolls). To print on a two-color roll, `print_image()` passes `red=True` + an RGB image so the job declares two-color media; black-only text leaves the red plane empty.
+
+## Diagnostics
+
+Set `LOG_LEVEL=DEBUG` to log the raw `ESC i S` status response as hex (`TCP status raw (N bytes): …` in `status_read`). Useful for inspecting media width/type/length bytes and error flags on unfamiliar firmware. If `N < 32`, the printer isn't returning TCP status and the HTTP `status.html` fallback is used instead.
 
 ## Error reporting
 

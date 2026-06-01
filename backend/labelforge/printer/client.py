@@ -61,8 +61,11 @@ def _media_id_from_dims(width_mm: int, length_mm: int, tape_color_raw: int | Non
     if len(matches) == 1:
         return matches[0].identifier
     # Multiple labels share the same tape_size (e.g. "62" and "62red" are both (62, 0)).
-    # TODO: verify DK-22251 tape_color_raw byte against hardware; default "62" until confirmed.
-    _ = tape_color_raw  # reserved for hardware-verified two-color detection
+    # Tape color is NOT recoverable: Brother's status spec leaves bytes 24-31 reserved
+    # (00h) and exposes no color field, so tape_color_raw is meaningless here. We default
+    # to mono "62"; the user selects "62red" manually and media_compatible() treats
+    # same-dimension rolls as compatible. See docs/decisions.md (2026-05-31, two-color DK).
+    _ = tape_color_raw  # always 00h per spec — kept for signature stability
     return "62"
 
 
@@ -112,13 +115,17 @@ class _StatusPageParser(html.parser.HTMLParser):
 def media_compatible(loaded_id: str, expected_id: str) -> bool:
     """Return True when the loaded media can print the expected layout.
 
-    62red is a superset of 62 — allow when more color capability is loaded
-    than the template needs. The reverse (mono loaded, color expected) blocks
-    because the print would silently drop the red channel.
+    Color-variant rolls of identical physical size (e.g. "62" and "62red", both
+    62mm continuous) are indistinguishable from the status read's dimensions
+    alone — the printer doesn't reliably report tape color over TCP/HTTP — so we
+    don't block on the color guess. The printer itself is the final authority on
+    a true media mismatch. Differing physical sizes (e.g. 62 vs 29) still block.
     """
     if loaded_id == expected_id:
         return True
-    if loaded_id == "62red" and expected_id == "62":
+    loaded = next((lbl for lbl in ALL_LABELS if lbl.identifier == loaded_id), None)
+    expected = next((lbl for lbl in ALL_LABELS if lbl.identifier == expected_id), None)
+    if loaded is not None and expected is not None and loaded.tape_size == expected.tape_size:
         return True
     return False
 
@@ -166,6 +173,10 @@ def status_read(host: str, backend: str, timeout_ms: int = 2000) -> dict:
     except Exception as exc:
         logger.debug("TCP status path failed: %s", exc)
 
+    # Diagnostic: dumps the raw ESC i S status response as hex. Only emitted when
+    # LOG_LEVEL=DEBUG. Handy for inspecting undocumented bytes (e.g. probing
+    # whether a byte encodes tape color); see docs/features/printer-status.md.
+    logger.debug("TCP status raw (%d bytes): %s", len(raw), raw.hex())
     if len(raw) >= 32:
         try:
             parsed = interpret_response(raw)
@@ -247,11 +258,18 @@ def print_image(
     """
     try:
         qlr = BrotherQLRaster(model)
+        # Two-color media (e.g. "62red" / DK-2251) must be printed with red=True
+        # even for black-only text: the job has to declare two-color media or the
+        # printer rejects it as "wrong roll: check the print data". convert() reads
+        # the red plane from an RGB image, so promote L→RGB; a black-on-white image
+        # simply leaves the red plane empty.
+        red = _color_capable(label_media)
+        img = image.convert("RGB") if red else image
         # rotate=0: keep the rendered image's width (696px for 62mm) as the
         # print-head width. rotate='auto' (the library default) can flip a
         # wide continuous image into a geometry the printer reads as the wrong
         # roll type. The renderer already produces the correct orientation.
-        instructions = convert(qlr, [image], label_media, cut=True, rotate="0", threshold=PRINT_THRESHOLD)
+        instructions = convert(qlr, [img], label_media, cut=True, rotate="0", threshold=PRINT_THRESHOLD, red=red)
         identifier = f"tcp://{host}" if backend == "network" else host
         result = send(
             instructions=instructions,

@@ -19,7 +19,15 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     let detail = `HTTP ${res.status}`
     try {
       const body = await res.json() as { detail?: unknown }
-      if (body.detail) detail = String(body.detail)
+      const d = body.detail
+      if (typeof d === 'string') {
+        detail = d
+      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
+        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
+        detail = (d as { message: string }).message
+      } else if (d != null) {
+        detail = JSON.stringify(d)
+      }
     } catch { /* use status fallback */ }
     throw new Error(detail)
   }
@@ -55,7 +63,15 @@ export async function previewQuick(req: QuickPrintRequest): Promise<Blob> {
     let detail = `HTTP ${res.status}`
     try {
       const body = await res.json() as { detail?: unknown }
-      if (body.detail) detail = String(body.detail)
+      const d = body.detail
+      if (typeof d === 'string') {
+        detail = d
+      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
+        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
+        detail = (d as { message: string }).message
+      } else if (d != null) {
+        detail = JSON.stringify(d)
+      }
     } catch { /* use status fallback */ }
     throw new Error(detail)
   }
@@ -101,7 +117,15 @@ export async function previewTemplate(name: string, fields: Record<string, strin
     let detail = `HTTP ${res.status}`
     try {
       const body = await res.json() as { detail?: unknown }
-      if (body.detail) detail = String(body.detail)
+      const d = body.detail
+      if (typeof d === 'string') {
+        detail = d
+      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
+        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
+        detail = (d as { message: string }).message
+      } else if (d != null) {
+        detail = JSON.stringify(d)
+      }
     } catch { /* use status fallback */ }
     throw new Error(detail)
   }
@@ -139,7 +163,15 @@ export async function fetchHistoryPreview(id: number): Promise<Blob> {
     let detail = `HTTP ${res.status}`
     try {
       const body = await res.json() as { detail?: unknown }
-      if (body.detail) detail = String(body.detail)
+      const d = body.detail
+      if (typeof d === 'string') {
+        detail = d
+      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
+        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
+        detail = (d as { message: string }).message
+      } else if (d != null) {
+        detail = JSON.stringify(d)
+      }
     } catch { /* use status fallback */ }
     throw new Error(detail)
   }

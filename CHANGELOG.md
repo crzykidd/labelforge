@@ -8,6 +8,12 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 - **Adopted four crzynet engineering standards**, pinned in a new root `standards.md`: `code-checkin-and-pr @ 1.1.0` (commit messages now use Conventional-Commits prefixes `feat:`/`fix:`/`chore:`/`docs:`; CI gained structured-config and `docker compose config` validation jobs), `handoff-prompt-workflow @ 1.5.0` (completed handoff prompts now archived under `prompts/done/`; `prompts/TEMPLATE.md` added), `repo-sandbox-permissions @ 1.0.0` (repo-wide sandbox in `.claude/settings.json` — auto-approves in-repo work, gates out-of-repo writes and network), and `vexp-context-engine @ 2.1.0` (guard hook now tracked, `.vexpignore` added). Developer/process-facing only — no runtime behavior change.
 
+### Fixed
+
+- **Two-color rolls now print** — printing to a two-color roll (DK-2251, 62mm black/red continuous, id `62red`) was rejected by the printer as "wrong roll: check the print data" because the job declared mono media. The print path now passes `red=True` and an RGB image to the rasterizer for two-color media, so the job declares the correct media type. Black-only text prints fine on these rolls (the red plane is left empty).
+- **Pre-print media check no longer blocks same-size color variants** — the printer doesn't reliably report tape color, so the status read can't tell `62` from `62red` (both 62mm continuous) and was wrongly rejecting `62red` prints with a 409. The check now treats rolls of identical physical dimensions as compatible; mismatched sizes (e.g. 62 vs 29) still block.
+- **API error messages no longer show `[object Object]`** — the frontend now surfaces the human-readable `message` from structured `409` errors (media mismatch / printer error) instead of stringifying the whole object.
+
 ### Known Issues
 
 - QR and barcode template elements render in preview but print as a solid black block (1-bit threshold crushes fine detail). These elements are gated to raise a clear error until fixed. Text, lines, and rectangles print correctly.

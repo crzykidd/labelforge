@@ -4,6 +4,22 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-05-31 — Two-color DK rolls: print with `red=True`; tape color is not detectable from status
+
+**Decision**:
+- `print_image()` passes `red=True` and an RGB image to `brother_ql.convert()` whenever the selected media is a two-color label (e.g. `62red` / DK-2251), even for black-only content. Without it the job declares mono media and the printer rejects it on the LCD as "Wrong roll: check the print data".
+- The pre-print `media_compatible()` check treats rolls of identical physical dimensions (`tape_size`) as compatible rather than blocking on a guessed color. Differing sizes (e.g. 62 vs 29) still block.
+
+**Why**: The QL-800/810W/820NWB status protocol does **not** report tape/media color. Verified against Brother's official *Raster Command Reference QL-800/810W/820NWB*: the 32-byte `ESC i S` response carries media width (byte 10), media type = continuous/die-cut (byte 11), and media length (byte 17) only; bytes 12–14, 16, 23 and **24–31 are reserved/fixed `00h`**. The strings "tape color", "text color", "media color" do not appear in the document. The printer enforces the correct DK roll at print time by sensing the physical roll, but never surfaces color in status. So `62` and `62red` (both 62mm continuous, `tape_size (62, 0)`) are indistinguishable from a status read — the earlier plan to read `data[24]` for color (see the ESC i S ADR below) is not viable; that byte is always `00h`.
+
+**Considered**: (a) read `data[24]` for color — rejected, reserved `00h` per spec; (b) scrape the printer's `status.html` — rejected, it doesn't show color either; (c) key off the DK part number — we don't pass DK numbers to the library and can't read the loaded roll's part number.
+
+**Consequence**: The user picks `62` vs `62red` manually; the status panel labels a 62mm continuous roll generically. The "Loaded in printer" filter offers both same-size variants. A `red=True` job prints black-only fine (red plane left empty).
+
+**Would revisit if**: a future firmware/model exposes media color in the status response, or the library gains reliable DK color reading.
+
+---
+
 ## 2026-05-31 — Printer status over network: ESC i S unreliable; implement raw-TCP + HTTP fallback
 
 **Decision**: The Printer Status feature will use a two-path `status_read()` function in `printer/client.py`:
