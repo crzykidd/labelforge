@@ -13,8 +13,9 @@ def detect_fields(canvas_json: dict) -> list[str]:
     seen: dict[str, None] = {}  # ordered set via dict
     for obj in canvas_json.get("objects", []):
         raw: str | None = None
-        t = obj.get("type", "")
-        if t in ("i-text", "text", "textbox"):
+        # Fabric v6 emits PascalCase type names (IText); v5 used i-text. Normalize.
+        t = obj.get("type", "").lower().replace("-", "")
+        if t in ("itext", "text", "textbox"):
             raw = obj.get("labelforge_raw_content") or obj.get("text", "")
         elif obj.get("labelforge_qr_payload") is not None:
             raw = obj["labelforge_qr_payload"]

@@ -5,6 +5,16 @@ export const CUSTOM_PROPS = ['labelforge_raw_content'] as const
 // Register the custom prop so canvas.toJSON() includes it on every object automatically.
 FabricObject.customProperties.push('labelforge_raw_content')
 
+/**
+ * True for any Fabric text object. Fabric v6 reports `type` as the PascalCase
+ * class name ('IText', 'Textbox'); v5 used lowercase/hyphenated ('i-text').
+ * Normalize so both serializations match.
+ */
+export function isTextType(type: string | undefined): boolean {
+  const t = (type ?? '').toLowerCase().replace(/-/g, '')
+  return t === 'itext' || t === 'text' || t === 'textbox'
+}
+
 /** Create a Fabric Canvas sized to label pixels, displayed scaled to fit the container. */
 export function initCanvas(
   el: HTMLCanvasElement,
@@ -78,7 +88,7 @@ export async function loadCanvasJSON(
   await canvas.loadFromJSON(json)
   // Re-attach raw content sync to each loaded text object
   canvas.getObjects().forEach(obj => {
-    if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+    if (isTextType(obj.type)) {
       const t = obj as IText
       t.on('changed', () => {
         t.set('labelforge_raw_content', t.text ?? '')

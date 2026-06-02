@@ -196,6 +196,9 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
 
     for obj in objects:
         obj_type = obj.get("type", "")
+        # Fabric v6 serializes `type` as the PascalCase class name (IText, Line,
+        # Rect, Image); v5 used lowercase/hyphenated (i-text). Normalize both.
+        norm_type = obj_type.lower().replace("-", "")
         left = int(obj.get("left", 0))
         top = int(obj.get("top", 0))
         angle = float(obj.get("angle", 0))
@@ -203,11 +206,11 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
         box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
 
         try:
-            if obj_type in ("i-text", "text", "textbox"):
+            if norm_type in ("itext", "text", "textbox"):
                 sub = _render_text_element(obj, values, box_w, box_h)
                 _paste_onto(canvas, sub, left, top, angle)
 
-            elif obj_type == "image":
+            elif norm_type == "image":
                 if obj.get("labelforge_qr_payload") is not None:
                     raise RenderError(
                         "QR elements are not yet supported for printing"
@@ -221,7 +224,7 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
                 else:
                     raise RenderError("Image elements not yet supported")
 
-            elif obj_type == "line":
+            elif norm_type == "line":
                 # x1,y1,x2,y2 are offsets from the element's left,top origin.
                 x1 = left + int(obj.get("x1", 0))
                 y1 = top + int(obj.get("y1", 0))
@@ -229,7 +232,7 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
                 y2 = top + int(obj.get("y2", box_h))
                 draw.line([(x1, y1), (x2, y2)], fill=0, width=max(1, int(obj.get("strokeWidth", 1))))
 
-            elif obj_type in ("rect", "Rect"):
+            elif norm_type == "rect":
                 fill_v = _canvas_color_to_l(obj.get("fill"))
                 sw = max(1, int(obj.get("strokeWidth", 1)))
                 sub = Image.new("L", (box_w, box_h), 255)

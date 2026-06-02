@@ -6,6 +6,7 @@ import {
   deleteSelected,
   getCanvasJSON,
   initCanvas,
+  isTextType,
   loadCanvasJSON,
 } from '../editor/canvas'
 import type { Canvas } from 'fabric'
@@ -111,7 +112,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
     if (!fabricCanvas) return
     type TextProps = { fontFamily?: string; fontSize?: number; type?: string }
     const obj = fabricCanvas.getActiveObject() as unknown as TextProps | null
-    if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
+    if (obj && isTextType(obj.type)) {
       if (obj.fontFamily) fontSelect.value = obj.fontFamily
       if (obj.fontSize) fontSizeInput.value = String(Math.round(obj.fontSize))
     }
@@ -120,7 +121,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   fontSelect.addEventListener('change', () => {
     if (!fabricCanvas) return
     const obj = fabricCanvas.getActiveObject()
-    if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
+    if (obj && isTextType(obj.type)) {
       obj.set('fontFamily', fontSelect.value)
       fabricCanvas.renderAll()
     }
@@ -131,7 +132,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
     const sz = parseInt(fontSizeInput.value, 10)
     if (!isNaN(sz) && sz >= 6) {
       const obj = fabricCanvas.getActiveObject()
-      if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
+      if (obj && isTextType(obj.type)) {
         obj.set('fontSize', sz)
         fabricCanvas.renderAll()
       }
