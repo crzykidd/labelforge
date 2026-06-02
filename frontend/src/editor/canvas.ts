@@ -2,6 +2,13 @@ import { Canvas, FabricObject, IText } from 'fabric'
 
 export const CUSTOM_PROPS = ['labelforge_raw_content'] as const
 
+// Continuous media report a printable length of 0 (endless roll). The editor
+// still needs a finite working canvas, so continuous templates open at this
+// initial length (≈34mm at 300dpi). Print length is derived from content
+// server-side, so this is only the starting editing area.
+// See docs/features/templates.md.
+export const DEFAULT_CONTINUOUS_LENGTH_DOTS = 400
+
 // Register the custom prop so canvas.toJSON() includes it on every object automatically.
 FabricObject.customProperties.push('labelforge_raw_content')
 

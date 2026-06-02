@@ -2,6 +2,7 @@ import { createTemplate, getFonts, getLabels, getTemplate, previewTemplate, upda
 import { navigate } from '../router'
 import type { LabelEntry } from '../types'
 import {
+  DEFAULT_CONTINUOUS_LENGTH_DOTS,
   addTextElement,
   deleteSelected,
   getCanvasJSON,
@@ -97,7 +98,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   async function initEditor(label: LabelEntry): Promise<void> {
     labelMedia = label.id
-    const [w, h] = label.dots_printable
+    const [w, rawH] = label.dots_printable
+    // Continuous media report length 0; open at a default working length so the
+    // editor canvas isn't zero-height (print length is content-driven server-side).
+    const h = rawH > 0 ? rawH : DEFAULT_CONTINUOUS_LENGTH_DOTS
     const canvasEl = root.querySelector<HTMLCanvasElement>('#fabric-canvas')!
     const { canvas } = initCanvas(canvasEl, w, h, getContainerWidth())
     fabricCanvas = canvas
