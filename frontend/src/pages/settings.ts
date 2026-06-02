@@ -6,6 +6,7 @@ export function mountSettings(root: HTMLElement): void {
       <h2>Settings</h2>
       <section class="settings-section">
         <h3>Printer</h3>
+        <div id="printer-settings"><p>Loading…</p></div>
         <div class="setting-actions">
           <button id="btn-test-printer">Test Printer</button>
         </div>
@@ -23,6 +24,7 @@ export function mountSettings(root: HTMLElement): void {
   const formEl = root.querySelector<HTMLDivElement>('#retention-form')!
   const btnTestPrinter = root.querySelector<HTMLButtonElement>('#btn-test-printer')!
   const printerResultEl = root.querySelector<HTMLDivElement>('#printer-test-result')!
+  const printerSettingsEl = root.querySelector<HTMLDivElement>('#printer-settings')!
 
   btnTestPrinter.addEventListener('click', async () => {
     btnTestPrinter.disabled = true
@@ -153,7 +155,53 @@ export function mountSettings(root: HTMLElement): void {
     })
   }
 
+  function renderPrinterSettings(settings: Record<string, unknown>): void {
+    const checkEnabled = settings.printer_status_check !== false
+    const timeout = (settings.printer_status_timeout_ms as number) ?? 2000
+
+    printerSettingsEl.innerHTML = `
+      <label class="setting-row">
+        <input type="checkbox" id="status-check-enabled" ${checkEnabled ? 'checked' : ''} />
+        <span class="setting-row-label">Status check enabled</span>
+        <span class="setting-hint">query the printer before each print</span>
+      </label>
+      <div class="setting-row">
+        <span class="setting-row-label">Status timeout</span>
+        <input type="number" id="status-timeout" min="100" max="60000" step="100" value="${timeout}" />
+        <span class="setting-hint">ms to wait for a status response</span>
+      </div>
+      <div class="setting-actions">
+        <button id="btn-save-printer" class="btn-primary">Save</button>
+      </div>
+      <div id="printer-save-status" class="status-msg" hidden></div>
+    `
+
+    const checkbox = printerSettingsEl.querySelector<HTMLInputElement>('#status-check-enabled')!
+    const timeoutInput = printerSettingsEl.querySelector<HTMLInputElement>('#status-timeout')!
+    const btnSavePrinter = printerSettingsEl.querySelector<HTMLButtonElement>('#btn-save-printer')!
+    const printerSaveStatus = printerSettingsEl.querySelector<HTMLDivElement>('#printer-save-status')!
+
+    btnSavePrinter.addEventListener('click', async () => {
+      btnSavePrinter.disabled = true
+      printerSaveStatus.hidden = true
+      try {
+        await putSettings({
+          printer_status_check: checkbox.checked,
+          printer_status_timeout_ms: parseInt(timeoutInput.value, 10) || 2000,
+        })
+        printerSaveStatus.textContent = 'Printer settings saved.'
+        printerSaveStatus.className = 'status-msg success'
+      } catch (err) {
+        printerSaveStatus.textContent = (err as Error).message
+        printerSaveStatus.className = 'status-msg error'
+      } finally {
+        printerSaveStatus.hidden = false
+        btnSavePrinter.disabled = false
+      }
+    })
+  }
+
   getSettings()
-    .then(s => renderForm(s))
+    .then(s => { renderForm(s); renderPrinterSettings(s) })
     .catch(err => showStatus((err as Error).message, 'error'))
 }
