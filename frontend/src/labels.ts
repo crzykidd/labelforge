@@ -103,6 +103,7 @@ export function mountLabelMediaSelect(opts: {
       <button type="button" class="media-filter-btn active" data-mode="all">Show all</button>
       <button type="button" class="media-filter-btn" data-mode="loaded">Loaded in printer</button>
     </div>
+    <p class="media-filter-colornote" hidden>The printer doesn't report tape color, so "Loaded in printer" can't tell a two-color roll (e.g. <code>62red</code>) from its mono equivalent — both same-size variants are shown. Pick the one that matches your roll.</p>
     <select class="media-filter-select"></select>
     <p class="media-filter-notice" hidden></p>
   `
@@ -110,6 +111,7 @@ export function mountLabelMediaSelect(opts: {
   const toggleBtns = container.querySelectorAll<HTMLButtonElement>('.media-filter-btn')
   const sel = container.querySelector<HTMLSelectElement>('.media-filter-select')!
   const notice = container.querySelector<HTMLParagraphElement>('.media-filter-notice')!
+  const colorNote = container.querySelector<HTMLParagraphElement>('.media-filter-colornote')!
 
   let mode: 'all' | 'loaded' = 'all'
   let cachedStatus: { ok: boolean; body: PrinterStatus & Record<string, unknown> } | null = null
@@ -148,6 +150,7 @@ export function mountLabelMediaSelect(opts: {
         setToggle('all')
         populate(labels)
         notice.hidden = true
+        colorNote.hidden = true
         onChange(sel.value)
         return
       }
@@ -167,6 +170,7 @@ export function mountLabelMediaSelect(opts: {
       if (!cachedStatus.ok) {
         notice.textContent = "Couldn't reach printer — showing all"
         notice.hidden = false
+        colorNote.hidden = true
         return  // stay in Show-all mode
       }
 
@@ -174,6 +178,7 @@ export function mountLabelMediaSelect(opts: {
       if (!loaded) {
         notice.textContent = 'Printer reports no media loaded'
         notice.hidden = false
+        colorNote.hidden = true
         return  // stay in Show-all mode
       }
 
@@ -184,9 +189,12 @@ export function mountLabelMediaSelect(opts: {
         populate(labels)
         notice.textContent = 'Loaded media not in catalog — showing all'
         notice.hidden = false
+        colorNote.hidden = true
       } else {
         populate(filtered)
         notice.hidden = true
+        // Only relevant when same-size mono/two-color variants are both shown.
+        colorNote.hidden = filtered.length <= 1
       }
       onChange(sel.value)
     })
