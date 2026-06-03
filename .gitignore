@@ -63,22 +63,19 @@ data-dev/
 *.sqlite
 *.sqlite3
 
-# vexp (standalone systemd-user daemon — all runtime state is per-host and regenerable;
-# manifest.json intentionally NOT tracked, per the vexp-context-engine standard's
-# "each host owns its index" shape). The .vexpignore at the repo root IS tracked.
+# Leftover vexp index dir — vexp is de-adopted (see standards.md), but its host
+# daemon keeps regenerating .vexp/ until host teardown lands in the ansible repo.
+# Ignored only to prevent accidentally committing regenerated index state.
 .vexp/
-vexp.toml
 
 # Logs
 *.log
 logs/
 
-# claude — ignore the dir but track shared artifacts (settings.json, the hooks/ dir).
-# .claude/CLAUDE.md is vexp's per-host auto-generated file: left untracked (the verbatim
-# vexp snippet lives in the tracked root CLAUDE.md instead). settings.local.json stays ignored.
+# claude — ignore the dir but track the shared settings.json. Any per-host
+# auto-generated .claude/CLAUDE.md and settings.local.json stay ignored.
 .claude/*
 !.claude/settings.json
-!.claude/hooks/
 
 # Test artifacts
 .coverage

@@ -7,10 +7,6 @@
       "Bash(uname -a && hostname && cat /etc/os-release 2>/dev/null | head -5 && echo \"---\" && cat /proc/version 2>/dev/null)",
       "Read(//usr/lib/**)",
       "Read(//proc/**)",
-      "mcp__vexp__index_status",
-      "mcp__vexp__run_pipeline",
-      "mcp__vexp__get_skeleton",
-      "mcp__vexp__expand_vexp_ref",
       "Bash(git rm *)",
       "Bash(git add *)",
       "Bash(git commit *)",
@@ -58,19 +54,5 @@
         "~/.npm/**"
       ]
     }
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Grep|Glob|Regex",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/vexp-guard.sh",
-            "timeout": 3000
-          }
-        ]
-      }
-    ]
   }
 }

@@ -4,6 +4,20 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-02 — De-adopt vexp-context-engine (sunset)
+
+**Decision**: Removed the `vexp-context-engine` standard from this repo, following its v3.0.0 sunset (vexp retired homelab-wide — it didn't pay for its host-provisioning + guard-hook + per-session-rule tax). De-wired the repo per the v3.0.0 removal guide: deleted the guard hook + `.vexpignore`, the `mcp__vexp__*` allow entries and `PreToolUse` block in `.claude/settings.json`, the "Context search" section in `CLAUDE.md`, the vexp `.gitignore` block, and the on-disk `.vexp/` / auto-generated `.claude/CLAUDE.md`. `standards.md` row flipped to sunset.
+
+**Why**: The upstream standard is deprecated and instructs existing adopters to remove it. Coding agents return to normal `grep`/`glob`/`Read`.
+
+**Considered**: Keep vexp running locally despite the sunset (rejected — it's unmaintained, and the guard hook actively fights the agent's normal tools).
+
+**Would revisit if**: a maintained graph-RAG context engine is re-introduced homelab-wide.
+
+**Note**: Host-level teardown (uninstalling the vexp daemon/CLI on this WSL box) belongs to the `ansible` repo, not this app repo.
+
+---
+
 ## 2026-06-02 — App-level auth is optional (`DISABLE_AUTH`), default-on; proxy can own auth
 
 **Decision**: App-level Bearer auth becomes opt-out via a `DISABLE_AUTH` env flag. Default is unchanged and secure: auth on, and the app refuses to start without `API_TOKEN`. When `DISABLE_AUTH=true`, the `require_auth` dependency short-circuits (every `/api/*` route is open) and `GET /api/health` reports `auth_required: false` so the SPA skips its token gate. The intended deployment for the disabled mode is behind a reverse proxy (Traefik forward-auth / basic-auth) that authenticates instead.

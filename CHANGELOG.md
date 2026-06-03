@@ -6,6 +6,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Changed
 
+- **De-adopted the `vexp-context-engine` standard** (now sunset at v3.0.0 — vexp retired homelab-wide). Removed all repo wiring: the `.claude/hooks/vexp-guard.sh` guard hook and `.vexpignore`, the `mcp__vexp__*` permission entries and `PreToolUse` hook in `.claude/settings.json`, the "Context search" operational-rules section in `CLAUDE.md`, and the vexp `.gitignore` block. Coding sessions use normal `grep`/`glob`/`Read` again. Developer/process-facing only — no runtime change.
 - **Adopted four crzynet engineering standards**, pinned in a new root `standards.md`: `code-checkin-and-pr @ 1.1.0` (commit messages now use Conventional-Commits prefixes `feat:`/`fix:`/`chore:`/`docs:`; CI gained structured-config and `docker compose config` validation jobs), `handoff-prompt-workflow @ 1.5.0` (completed handoff prompts now archived under `prompts/done/`; `prompts/TEMPLATE.md` added), `repo-sandbox-permissions @ 1.0.0` (repo-wide sandbox in `.claude/settings.json` — auto-approves in-repo work, gates out-of-repo writes and network), and `vexp-context-engine @ 2.1.0` (guard hook now tracked, `.vexpignore` added). Developer/process-facing only — no runtime behavior change.
 
 ### Added
