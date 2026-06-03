@@ -37,7 +37,7 @@ When working on a task, load the relevant feature doc(s) plus `architecture.md` 
 ## Non-negotiables
 
 - **License is GPL-3.0.** Cannot be relaxed (the printer library is GPL-3.0).
-- **No SSO** (Authentik, Authelia, etc.). Auth is a single shared secret from `.env`. Do not propose SSO under any circumstances.
+- **No SSO** (Authentik, Authelia, etc.). Auth is a single shared secret from `.env`. Do not propose SSO under any circumstances. App-level auth can be disabled with `DISABLE_AUTH=true` (default-off, for deployments fronted by a reverse proxy that handles auth — see ADR 2026-06-02); that is *not* SSO and does not relax this rule. Still no multi-user / accounts.
 - **No SaaS dependencies.** Self-hosted only. No cloud functions, no hosted databases, no third-party APIs that aren't user-controllable.
 - **No Next.js, no SSR frameworks.** Frontend is a static SPA served from the FastAPI container.
 - **No alternative printer libraries** without an ADR. We picked `brother-ql-inventree` after evaluation.

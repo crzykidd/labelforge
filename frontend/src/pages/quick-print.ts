@@ -1,4 +1,4 @@
-import { getFonts, getLabels, getSettings, previewQuick, quickPrint, TOKEN_KEY } from '../api'
+import { getFonts, getLabels, getSettings, isAuthRequired, previewQuick, quickPrint, TOKEN_KEY } from '../api'
 import type { QuickPrintRequest } from '../types'
 import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
 
@@ -11,7 +11,7 @@ function esc(s: string): string {
 }
 
 export function mountQuickPrint(root: HTMLElement): void {
-  if (!localStorage.getItem(TOKEN_KEY)) {
+  if (isAuthRequired() && !localStorage.getItem(TOKEN_KEY)) {
     renderTokenGate(root)
   } else {
     renderForm(root)

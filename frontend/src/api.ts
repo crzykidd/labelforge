@@ -6,6 +6,25 @@ function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? ''
 }
 
+// Whether the backend enforces app-level auth. Resolved once at startup from
+// /api/health (unauthenticated). Defaults to true so we fail closed if the
+// probe fails. See initAuthMode().
+let authRequired = true
+
+export function isAuthRequired(): boolean {
+  return authRequired
+}
+
+export async function initAuthMode(): Promise<void> {
+  try {
+    const res = await fetch('/api/health')
+    const body = await res.json() as { auth_required?: boolean }
+    authRequired = body.auth_required !== false
+  } catch {
+    authRequired = true  // fail closed
+  }
+}
+
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     ...options,

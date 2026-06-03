@@ -8,6 +8,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 - **Adopted four crzynet engineering standards**, pinned in a new root `standards.md`: `code-checkin-and-pr @ 1.1.0` (commit messages now use Conventional-Commits prefixes `feat:`/`fix:`/`chore:`/`docs:`; CI gained structured-config and `docker compose config` validation jobs), `handoff-prompt-workflow @ 1.5.0` (completed handoff prompts now archived under `prompts/done/`; `prompts/TEMPLATE.md` added), `repo-sandbox-permissions @ 1.0.0` (repo-wide sandbox in `.claude/settings.json` — auto-approves in-repo work, gates out-of-repo writes and network), and `vexp-context-engine @ 2.1.0` (guard hook now tracked, `.vexpignore` added). Developer/process-facing only — no runtime behavior change.
 
+### Added
+
+- **Optional app-level auth (`DISABLE_AUTH`)** — set `DISABLE_AUTH=true` to run with no Bearer-token auth, for deployments fronted by a reverse proxy (e.g. Traefik) that handles authentication. Default is unchanged and secure: auth on, and the app refuses to start without `API_TOKEN`. When disabled, every `/api/*` route is open, `GET /api/health` reports `auth_required: false`, and the web UI skips its token-entry gate. See ADR 2026-06-02.
+
 ### Fixed
 
 - **Continuous-media templates are now editable** — opening the canvas editor on a continuous roll (e.g. `62`, `62red`) produced a zero-height canvas, because continuous media report a printable length of `0` (endless roll) and the editor used that directly. Elements added to it were invisible (and saved at `top=0`), which looked like "Add Text does nothing." Continuous templates now open at a default working length (~34mm); print length is still derived from content server-side, per the templates design doc. Requires a container image rebuild.

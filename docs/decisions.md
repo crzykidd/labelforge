@@ -4,6 +4,23 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-02 — App-level auth is optional (`DISABLE_AUTH`), default-on; proxy can own auth
+
+**Decision**: App-level Bearer auth becomes opt-out via a `DISABLE_AUTH` env flag. Default is unchanged and secure: auth on, and the app refuses to start without `API_TOKEN`. When `DISABLE_AUTH=true`, the `require_auth` dependency short-circuits (every `/api/*` route is open) and `GET /api/health` reports `auth_required: false` so the SPA skips its token gate. The intended deployment for the disabled mode is behind a reverse proxy (Traefik forward-auth / basic-auth) that authenticates instead.
+
+This amends **2026-05-19 — Auth** (the env token stays the default mechanism; it's now skippable, not removed). Multi-user accounts were considered and rejected again — single-user remains a hard non-goal.
+
+**Why**: Owner runs this behind Traefik and prefers to authenticate at the edge rather than maintain a second secret in the app. Per-app token auth is friction when the proxy already gates the route.
+
+**Considered**:
+- User accounts / login (rejected — multi-user is a hard non-goal; `CLAUDE.md`).
+- Rip auth out entirely (rejected — not reversible without a revert; an unconfigured instance would be silently open). The flag keeps default-secure behavior and is a one-line env change.
+- Silently treat an empty `API_TOKEN` as "no auth" (rejected — too easy to ship an accidentally-open instance; disabling auth must be explicit).
+
+**Would revisit if**: we later want per-integration tokens (see 2026-05-19) or the proxy-auth assumption stops holding (e.g. exposing the app directly).
+
+---
+
 ## 2026-05-31 — Two-color DK rolls: print with `red=True`; tape color is not detectable from status
 
 **Decision**:
