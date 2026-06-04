@@ -4,6 +4,19 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Save As in template editor** — toolbar now has a **Save As** button that saves the current canvas first, then opens a modal for a new template slug and label media (pre-filled with the current media). Clones the template via `POST /api/templates/{name}/duplicate` and opens the editor on the copy. This is the documented way to re-use a design on different media; the existing template's media is never mutated. The current media is also shown as a read-only badge next to the template name. Requires a container image rebuild.
+- **Full two-color (red) text in templates** — templates on two-color media (`62red` / DK-2251) can now use red text in addition to black. A **Black / Red** toggle appears in the editor toolbar only when the loaded label is two-color (hidden for mono media). Selecting an element and changing the toggle updates its Fabric `fill` to `#000000` or `#ff0000`; new text elements inherit the current selection. The server renderer now emits an RGB image for two-color media, compositing each text element's `fill` as the ink color (red → red plane, black → black plane); lines honor `stroke`, rects honor `fill` and `stroke`. The preview PNG for two-color templates now returns a color image rather than thresholded mono, so the preview reflects actual print output. Printing is unchanged (the print path already promoted L→RGB and passed `red=True` for two-color media). Requires a container image rebuild.
+
+### Fixed
+
+- **Template editor canvas aspect on continuous rolls** — opening the editor on a continuous roll (e.g. `62`, `62red`) showed a landscape canvas (696 × 400px for 62mm) because the initial working height was set to 400 dots (~34mm). This made the canvas visually wider than tall, which reads as wrong for a label roll. The default working height is now 1000 dots (~84mm), which gives a portrait display (418 × 600px scaled) for the 62mm roll. Print length is still content-driven server-side. Requires a container image rebuild.
+
+### Known Issues
+
+- QR and barcode template elements render in preview but print as a solid black block (1-bit threshold crushes fine detail). These elements are gated to raise a clear error until fixed. Text, lines, and rectangles print correctly, including in red on two-color media.
+
 ### Changed
 
 - **De-adopted the `vexp-context-engine` standard** (now sunset at v3.0.0 — vexp retired homelab-wide). Removed all repo wiring: the `.claude/hooks/vexp-guard.sh` guard hook and `.vexpignore`, the `mcp__vexp__*` permission entries and `PreToolUse` hook in `.claude/settings.json`, the "Context search" operational-rules section in `CLAUDE.md`, and the vexp `.gitignore` block. Coding sessions use normal `grep`/`glob`/`Read` again. Developer/process-facing only — no runtime change.

@@ -4,6 +4,36 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-03 — Two-color template rendering (supersedes "later slice" note)
+
+**Decision**: `render_template` now supports two-color (black + red) media. When `label.color == 1` (e.g. `62red` / DK-2251) the renderer returns a mode-`RGB` image instead of mode-`L`: black pixels are `(0,0,0)`, red pixels are `(255,0,0)`, paper is `(255,255,255)`. The print path in `printer/client.py` already promoted `L→RGB` and passed `red=True` for two-color media (2026-05-31 ADR) — it consumes the RGB image correctly without change. Text color comes from the Fabric element's `fill` property (`#000000` / `#ff0000`); lines use `stroke`; rects use `fill`/`stroke`. The template-preview PNG also returns RGB (color-accurate) instead of the threshold-crushed mono.
+
+The "Two-color (62red) rendering is a later slice; always renders mono" docstring note is superseded by this implementation.
+
+**Why**: Two-color DK rolls are a first-class media in the catalog and the most useful differentiated feature of those rolls. The print path infrastructure was already in place; only the renderer and frontend controls were missing. QR/barcode elements remain mono (raised as `RenderError`) — a separate fix is needed for those.
+
+**Considered**:
+- Separate `render_template_color()` function — rejected; branching on `label.color` inside the existing function keeps the call-site unchanged.
+- Always return RGB — rejected; doubles memory for mono jobs and changes the mono threshold behavior.
+
+**Would revisit if**: QR/barcode color rendering is implemented (extend the two-color path to those element types).
+
+---
+
+## 2026-06-03 — Template media retargeting: Save As only; live media switch is not in scope
+
+**Decision**: A template is locked to its label media. The editor toolbar exposes a **Save As** button that clones the template to a new name and optionally a new media via `POST /api/templates/{name}/duplicate`. No dropdown or control that mutates the open template's `label_media` exists in the editor. The current media is shown as a read-only badge next to the template name.
+
+**Why**: Mutating a template's media in the editor would silently invalidate all saved element positions (they're in print-DPI pixel coordinates sized for the original media). Save As makes the user explicitly create a new template and adjust the layout, preventing silent corruption. This matches the design in `docs/features/templates.md` ("A template is locked to its label media").
+
+**Considered**:
+- A live media-switch dropdown in the editor that rescales element positions — rejected; position rescaling is lossy (different aspect ratios, different DPIs across form factors) and the complexity is not justified for a single-user homelab tool.
+- Auto-redirect to a new template on media change (same as Save As, just triggered differently) — rejected; the explicit Save As click makes the copy intent clear and avoids accidental renames.
+
+**Would revisit if**: a "reflow to new media" feature is scoped in a PRD change with explicit rescaling rules.
+
+---
+
 ## 2026-06-02 — De-adopt vexp-context-engine (sunset)
 
 **Decision**: Removed the `vexp-context-engine` standard from this repo, following its v3.0.0 sunset (vexp retired homelab-wide — it didn't pay for its host-provisioning + guard-hook + per-session-rule tax). De-wired the repo per the v3.0.0 removal guide: deleted the guard hook + `.vexpignore`, the `mcp__vexp__*` allow entries and `PreToolUse` block in `.claude/settings.json`, the "Context search" section in `CLAUDE.md`, the vexp `.gitignore` block, and the on-disk `.vexp/` / auto-generated `.claude/CLAUDE.md`. `standards.md` row flipped to sunset.

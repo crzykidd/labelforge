@@ -1,4 +1,4 @@
-import { createTemplate, getFonts, getLabels, getTemplate, previewTemplate, updateTemplate } from '../api'
+import { createTemplate, duplicateTemplate, getFonts, getLabels, getTemplate, previewTemplate, updateTemplate } from '../api'
 import { navigate } from '../router'
 import type { LabelEntry } from '../types'
 import {
@@ -10,6 +10,8 @@ import {
   isTextType,
   loadCanvasJSON,
 } from '../editor/canvas'
+import { mountLabelMediaSelect } from '../labels'
+import type { LabelMediaSelectHandle } from '../labels'
 import type { Canvas } from 'fabric'
 
 function esc(s: string): string {
@@ -43,6 +45,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <button id="btn-back">← Back</button>
         <span class="toolbar-sep"></span>
         <span class="editor-title" id="editor-title">${esc(name)}</span>
+        <code class="editor-media-badge" id="editor-media">${esc(isNew ? newMedia : '')}</code>
         <span class="toolbar-sep"></span>
         <button id="btn-add-text">Add Text</button>
         <button id="btn-delete">Delete</button>
@@ -51,7 +54,13 @@ export function mountTemplateEditor(root: HTMLElement): void {
           <option value="">Loading fonts…</option>
         </select>
         <input id="font-size" type="number" min="6" max="400" value="48" title="Font size" style="width:60px" />
+        <span class="toolbar-sep" id="sep-color" hidden></span>
+        <select id="text-color" title="Text color" hidden>
+          <option value="#000000">Black</option>
+          <option value="#ff0000">Red</option>
+        </select>
         <span class="toolbar-sep"></span>
+        <button id="btn-save-as">Save As</button>
         <button id="btn-preview">Preview</button>
         <button id="btn-save" class="btn-primary">Save</button>
       </div>
@@ -71,9 +80,13 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const btnAddText = root.querySelector<HTMLButtonElement>('#btn-add-text')!
   const btnDelete = root.querySelector<HTMLButtonElement>('#btn-delete')!
   const btnSave = root.querySelector<HTMLButtonElement>('#btn-save')!
+  const btnSaveAs = root.querySelector<HTMLButtonElement>('#btn-save-as')!
   const btnPreview = root.querySelector<HTMLButtonElement>('#btn-preview')!
   const fontSelect = root.querySelector<HTMLSelectElement>('#font-select')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
+  const textColorSelect = root.querySelector<HTMLSelectElement>('#text-color')!
+  const colorSep = root.querySelector<HTMLSpanElement>('#sep-color')!
+  const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
   const statusEl = root.querySelector<HTMLDivElement>('#editor-status')!
   const canvasWrap = root.querySelector<HTMLDivElement>('#canvas-wrap')!
   const previewArea = root.querySelector<HTMLDivElement>('#preview-area')!
@@ -81,9 +94,11 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   let fabricCanvas: Canvas | null = null
   let labelMedia: string = newMedia
+  let labelColorCapable = false
   let existsOnServer = !isNew
   let defaultFont = 'DejaVuSans'
   let previewObjectUrl: string | null = null
+  let cachedLabels: LabelEntry[] = []
 
   function showStatus(msg: string, kind: 'success' | 'error' | ''): void {
     if (!msg) { statusEl.hidden = true; return }
@@ -98,6 +113,9 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   async function initEditor(label: LabelEntry): Promise<void> {
     labelMedia = label.id
+    labelColorCapable = label.color === 1
+    mediaBadge.textContent = label.id
+
     const [w, rawH] = label.dots_printable
     // Continuous media report length 0; open at a default working length so the
     // editor canvas isn't zero-height (print length is content-driven server-side).
@@ -105,6 +123,12 @@ export function mountTemplateEditor(root: HTMLElement): void {
     const canvasEl = root.querySelector<HTMLCanvasElement>('#fabric-canvas')!
     const { canvas } = initCanvas(canvasEl, w, h, getContainerWidth())
     fabricCanvas = canvas
+
+    // Show color control only for two-color media (e.g. 62red / DK-2251)
+    if (labelColorCapable) {
+      colorSep.hidden = false
+      textColorSelect.hidden = false
+    }
 
     // Track selection to drive font controls
     canvas.on('selection:created', updateFontControls)
@@ -114,11 +138,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   function updateFontControls(): void {
     if (!fabricCanvas) return
-    type TextProps = { fontFamily?: string; fontSize?: number; type?: string }
+    type TextProps = { fontFamily?: string; fontSize?: number; fill?: string; type?: string }
     const obj = fabricCanvas.getActiveObject() as unknown as TextProps | null
     if (obj && isTextType(obj.type)) {
       if (obj.fontFamily) fontSelect.value = obj.fontFamily
       if (obj.fontSize) fontSizeInput.value = String(Math.round(obj.fontSize))
+      if (labelColorCapable && obj.fill) {
+        const f = (obj.fill as string).toLowerCase()
+        textColorSelect.value = (f === '#ff0000' || f === 'red') ? '#ff0000' : '#000000'
+      }
     }
   }
 
@@ -143,6 +171,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
     }
   })
 
+  textColorSelect.addEventListener('change', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (obj && isTextType(obj.type)) {
+      obj.set('fill', textColorSelect.value)
+      fabricCanvas.renderAll()
+    }
+  })
+
   btnBack.addEventListener('click', () => {
     document.getElementById('app')?.classList.remove('editor-mode')
     navigate('/templates')
@@ -150,7 +187,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   btnAddText.addEventListener('click', () => {
     if (!fabricCanvas) return
-    addTextElement(fabricCanvas, fontSelect.value || defaultFont)
+    const fill = labelColorCapable ? textColorSelect.value : '#000000'
+    addTextElement(fabricCanvas, fontSelect.value || defaultFont, fill)
   })
 
   btnDelete.addEventListener('click', () => {
@@ -159,6 +197,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
   })
 
   btnSave.addEventListener('click', () => void doSave())
+
+  btnSaveAs.addEventListener('click', () => void doSaveAs())
 
   btnPreview.addEventListener('click', () => void doPreview())
 
@@ -185,6 +225,14 @@ export function mountTemplateEditor(root: HTMLElement): void {
     } finally {
       btnSave.disabled = false
     }
+  }
+
+  async function doSaveAs(): Promise<void> {
+    // Save current state first so the clone copies the latest canvas
+    await doSave()
+    // Only proceed if we're saved on the server
+    if (!existsOnServer) return
+    showSaveAsModal(name, labelMedia, cachedLabels)
   }
 
   async function doPreview(): Promise<void> {
@@ -219,6 +267,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   // Bootstrap: load label catalog + fonts, then either load existing template or init blank
   Promise.all([getLabels(), getFonts()]).then(async ([labels, fonts]) => {
+    cachedLabels = labels
+
     // Populate font selector
     defaultFont = fonts[0]?.name ?? 'DejaVuSans'
     fontSelect.innerHTML = fonts
@@ -251,4 +301,82 @@ export function mountTemplateEditor(root: HTMLElement): void {
   }).catch((err: Error) => {
     showStatus(`Failed to load: ${err.message}`, 'error')
   })
+}
+
+function showSaveAsModal(sourceName: string, currentMedia: string, allLabels: LabelEntry[]): void {
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay'
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>Save As</h3>
+      <div class="modal-status" id="sa-status" hidden></div>
+      <label>
+        New name (slug)
+        <input id="sa-name" type="text" placeholder="my-template-copy" autocomplete="off" />
+        <span class="field-error" id="sa-name-error" hidden></span>
+      </label>
+      <label>Label media</label>
+      <div id="sa-media-container"></div>
+      <div class="modal-actions">
+        <button id="sa-cancel">Cancel</button>
+        <button id="sa-ok" class="btn-primary" disabled>Save As</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(overlay)
+
+  const nameInput = overlay.querySelector<HTMLInputElement>('#sa-name')!
+  const mediaContainer = overlay.querySelector<HTMLDivElement>('#sa-media-container')!
+  const cancelBtn = overlay.querySelector<HTMLButtonElement>('#sa-cancel')!
+  const okBtn = overlay.querySelector<HTMLButtonElement>('#sa-ok')!
+  const nameError = overlay.querySelector<HTMLSpanElement>('#sa-name-error')!
+  const statusEl = overlay.querySelector<HTMLDivElement>('#sa-status')!
+  let mediaHandle: LabelMediaSelectHandle | null = null
+
+  const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
+
+  function validate(): boolean {
+    const v = nameInput.value.trim()
+    if (!v) { nameError.textContent = 'Name is required'; nameError.hidden = false; return false }
+    if (!SLUG_RE.test(v)) { nameError.textContent = 'Use lowercase letters, numbers, hyphens only'; nameError.hidden = false; return false }
+    nameError.hidden = true
+    return true
+  }
+
+  function updateOk(): void {
+    okBtn.disabled = !nameInput.value.trim() || !mediaHandle?.getValue()
+  }
+
+  nameInput.addEventListener('input', () => { validate(); updateOk() })
+
+  mediaHandle = mountLabelMediaSelect({
+    container: mediaContainer,
+    labels: allLabels,
+    initialValue: currentMedia,
+    onChange: () => updateOk(),
+  })
+  updateOk()
+
+  cancelBtn.addEventListener('click', () => overlay.remove())
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+
+  okBtn.addEventListener('click', () => {
+    if (!validate()) return
+    const newName = nameInput.value.trim()
+    const newMedia = mediaHandle?.getValue() ?? ''
+    okBtn.disabled = true
+
+    duplicateTemplate(sourceName, { name: newName, label_media: newMedia })
+      .then(() => {
+        overlay.remove()
+        navigate(`/templates/${newName}`)
+      })
+      .catch((err: Error) => {
+        statusEl.textContent = err.message
+        statusEl.hidden = false
+        okBtn.disabled = false
+      })
+  })
+
+  nameInput.focus()
 }

@@ -123,6 +123,13 @@ export function deleteTemplate(name: string): Promise<void> {
   return apiFetch<void>(`/api/templates/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
 
+export function duplicateTemplate(source: string, body: { name: string; label_media: string }): Promise<Template> {
+  return apiFetch<Template>(`/api/templates/${encodeURIComponent(source)}/duplicate`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function previewTemplate(name: string, fields: Record<string, string>): Promise<Blob> {
   const res = await fetch(`/api/preview/${encodeURIComponent(name)}`, {
     method: 'POST',

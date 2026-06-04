@@ -92,6 +92,22 @@ For continuous media (62mm endless), the canvas has a fixed width and a user-set
 
 Top: undo, redo, zoom, fit, save, save-as, preview, print
 
+The current label media is shown as a read-only badge next to the template name so
+the user can see what they are editing without opening any menu.
+
+**Save As** opens a modal for entering a new slug name and picking a label media
+(pre-filled with the current media). It saves the current canvas first, then calls
+`POST /api/templates/{name}/duplicate`. On success, the editor navigates to the new
+template. This is the only sanctioned way to retarget a design to different media —
+the current template's media is never mutated in the editor.
+
+**Text color** — a Black / Red toggle appears in the toolbar **only when the loaded
+label is two-color** (`label.color === 1`, e.g. `62red` / DK-2251). For mono media
+the control is hidden and all text is always black. When visible, changing the
+control sets the active text element's `fill` property; new text elements default to
+the currently-selected color. The server renderer honors the `fill` value and
+composites red or black ink onto the print image.
+
 Left: element type palette (text, QR, barcode, image, line, rect)
 
 Right: properties panel for selected element + global panels (fields, label info)

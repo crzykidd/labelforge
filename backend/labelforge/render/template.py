@@ -36,6 +36,23 @@ def _canvas_color_to_l(color: str | None) -> int | None:
     return 0
 
 
+def _canvas_color_to_rgb(color: str | None) -> tuple[int, int, int] | None:
+    """Map a CSS color to an RGB tuple for two-color rendering.
+
+    Returns None for transparent/no-fill, (255,0,0) for red, (0,0,0) for black
+    (the only two ink colors on a two-color DK roll). White is treated as the
+    paper color (opaque white — use None for transparent backgrounds instead).
+    """
+    if not color or color.lower().strip() in ("transparent", "rgba(0,0,0,0)", "none"):
+        return None
+    lc = color.lower().strip()
+    if lc in ("#fff", "#ffffff", "white", "rgb(255,255,255)"):
+        return (255, 255, 255)
+    if lc in ("#ff0000", "#f00", "red", "rgb(255,0,0)"):
+        return (255, 0, 0)
+    return (0, 0, 0)
+
+
 def _resolve_font_path(family: str, weight: str | None, style: str | None) -> str | None:
     """Return the best matching font file path, falling back to base family on miss."""
     bold = bool(weight and str(weight).lower() in ("bold", "700", "800", "900"))
@@ -67,9 +84,20 @@ def _resolve_font_path(family: str, weight: str | None, style: str | None) -> st
 
 
 def _paste_onto(
-    canvas: Image.Image, sub: Image.Image, left: int, top: int, angle: float
+    canvas: Image.Image,
+    sub: Image.Image,
+    left: int,
+    top: int,
+    angle: float,
+    rgb: tuple[int, int, int] | None = None,
 ) -> None:
-    """Paste sub-image onto canvas; invert-mask whites out, rotate around element centre."""
+    """Paste sub-image (mode-L coverage mask) onto canvas.
+
+    sub must be mode-L: 0 = ink (opaque), 255 = paper (transparent).
+    rgb: when set, composites a solid RGB patch through the coverage mask onto
+    an RGB canvas — used for coloured text/shapes on two-color media. When None,
+    pastes the grayscale sub directly (mono path).
+    """
     if abs(angle) > 0.01:
         # Preserve centre point across expand-rotation.
         cx = left + sub.width // 2
@@ -80,7 +108,10 @@ def _paste_onto(
     # Dark pixels (value≈0) → mask 255 (opaque); white (255) → mask 0 (skip).
     # Preserves antialiasing in intermediate greys.
     mask = sub.point(lambda p: 255 - p)
-    canvas.paste(sub, (left, top), mask=mask)
+    if rgb is not None:
+        canvas.paste(Image.new("RGB", sub.size, rgb), (left, top), mask=mask)
+    else:
+        canvas.paste(sub, (left, top), mask=mask)
 
 
 def _render_text_element(
@@ -170,8 +201,11 @@ def _render_barcode_element(
 def render_template(template: Template, values: dict[str, str]) -> Image.Image:
     """Rasterize *template* with *values* substituted for placeholders.
 
-    Returns a mode='L' PIL Image (0=black, 255=white) sized for the print head.
-    Two-color (62red) rendering is a later slice; always renders mono.
+    Returns a PIL Image sized for the print head. Mode is 'L' (0=black, 255=white)
+    for mono media. For two-color media (label.color == 1, e.g. 62red / DK-2251)
+    mode is 'RGB': black pixels are (0,0,0), red pixels are (255,0,0), paper is
+    (255,255,255). The print path promotes L→RGB and passes red=True for two-color
+    media; an RGB image here means red pixels land on the red print plane.
     """
     label = get_label(template.label_media)
     if label is None:
@@ -180,6 +214,7 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
     canvas_w = label.dots_printable[0]
     objects = template.canvas_json.get("objects", [])
     is_continuous = label.form_factor in _CONTINUOUS_FORM_FACTORS
+    two_color = label.color == 1
 
     if is_continuous:
         bottommost = 0
@@ -191,7 +226,10 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
     else:
         canvas_h = label.dots_printable[1]
 
-    canvas = Image.new("L", (canvas_w, canvas_h), 255)
+    if two_color:
+        canvas: Image.Image = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
+    else:
+        canvas = Image.new("L", (canvas_w, canvas_h), 255)
     draw = ImageDraw.Draw(canvas)
 
     for obj in objects:
@@ -208,7 +246,11 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
         try:
             if norm_type in ("itext", "text", "textbox"):
                 sub = _render_text_element(obj, values, box_w, box_h)
-                _paste_onto(canvas, sub, left, top, angle)
+                if two_color:
+                    rgb = _canvas_color_to_rgb(obj.get("fill")) or (0, 0, 0)
+                    _paste_onto(canvas, sub, left, top, angle, rgb=rgb)
+                else:
+                    _paste_onto(canvas, sub, left, top, angle)
 
             elif norm_type == "image":
                 if obj.get("labelforge_qr_payload") is not None:
@@ -225,20 +267,39 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
                     raise RenderError("Image elements not yet supported")
 
             elif norm_type == "line":
-                # x1,y1,x2,y2 are offsets from the element's left,top origin.
                 x1 = left + int(obj.get("x1", 0))
                 y1 = top + int(obj.get("y1", 0))
                 x2 = left + int(obj.get("x2", box_w))
                 y2 = top + int(obj.get("y2", box_h))
-                draw.line([(x1, y1), (x2, y2)], fill=0, width=max(1, int(obj.get("strokeWidth", 1))))
+                stroke_color: tuple[int, int, int] | int
+                if two_color:
+                    stroke_color = _canvas_color_to_rgb(obj.get("stroke") or "#000000") or (0, 0, 0)
+                else:
+                    stroke_color = 0
+                draw.line([(x1, y1), (x2, y2)], fill=stroke_color, width=max(1, int(obj.get("strokeWidth", 1))))
 
             elif norm_type == "rect":
-                fill_v = _canvas_color_to_l(obj.get("fill"))
                 sw = max(1, int(obj.get("strokeWidth", 1)))
-                sub = Image.new("L", (box_w, box_h), 255)
-                sub_draw = ImageDraw.Draw(sub)
-                sub_draw.rectangle([0, 0, box_w - 1, box_h - 1], fill=fill_v, outline=0, width=sw)
-                _paste_onto(canvas, sub, left, top, angle)
+                if two_color:
+                    fill_rgb = _canvas_color_to_rgb(obj.get("fill"))
+                    outline_rgb = _canvas_color_to_rgb(obj.get("stroke") or "#000000") or (0, 0, 0)
+                    # Draw fill and outline as separate L masks so each can carry its own
+                    # color and rotation is handled by _paste_onto.
+                    if fill_rgb is not None:
+                        fill_sub = Image.new("L", (box_w, box_h), 255)
+                        fill_sub_draw = ImageDraw.Draw(fill_sub)
+                        fill_sub_draw.rectangle([sw, sw, box_w - 1 - sw, box_h - 1 - sw], fill=0)
+                        _paste_onto(canvas, fill_sub, left, top, angle, rgb=fill_rgb)
+                    outline_sub = Image.new("L", (box_w, box_h), 255)
+                    outline_sub_draw = ImageDraw.Draw(outline_sub)
+                    outline_sub_draw.rectangle([0, 0, box_w - 1, box_h - 1], outline=0, width=sw)
+                    _paste_onto(canvas, outline_sub, left, top, angle, rgb=outline_rgb)
+                else:
+                    fill_v = _canvas_color_to_l(obj.get("fill"))
+                    sub = Image.new("L", (box_w, box_h), 255)
+                    sub_draw = ImageDraw.Draw(sub)
+                    sub_draw.rectangle([0, 0, box_w - 1, box_h - 1], fill=fill_v, outline=0, width=sw)
+                    _paste_onto(canvas, sub, left, top, angle)
 
             else:
                 logger.debug("Skipping unhandled element type %r", obj_type)

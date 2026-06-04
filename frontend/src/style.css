@@ -299,6 +299,14 @@ button:disabled {
   margin-right: 0.5rem;
 }
 
+.editor-media-badge {
+  font-size: 0.75rem;
+  background: #eef2f8;
+  color: #3a5a8a;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+}
+
 .editor-canvas-wrap {
   overflow: auto;
   background: #e0e0e0;

@@ -131,7 +131,10 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     buf = io.BytesIO()
-    to_print_bitmap(image).save(buf, format="PNG")
+    # Two-color templates render as RGB; preserve color in the preview PNG.
+    # Mono templates apply the print threshold so preview == print.
+    preview = image if image.mode == "RGB" else to_print_bitmap(image)
+    preview.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
 
 
