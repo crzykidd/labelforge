@@ -40,6 +40,20 @@ def _apply_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
     return result
 
 
+def _apply_sample_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
+    """Return values dict with caller-supplied values first, then defaults, then field name as sample.
+
+    Never raises — every field gets a value, so preview always renders.
+    """
+    result = dict(values)
+    for field in template_fields:
+        if field.name not in result:
+            # Use stored default if set; otherwise show the field name itself so
+            # {type} renders as the literal text "type" — makes variables visible in preview.
+            result[field.name] = field.default if field.default is not None else field.name
+    return result
+
+
 @router.post("/print/{name}")
 async def print_template(name: str, body: PrintRequest, override: bool = False) -> dict:
     tmpl = store.get_template(name)
@@ -123,7 +137,8 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
     if tmpl is None:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
 
-    values = _apply_defaults(tmpl.field_schema, body.fields)
+    # Preview is a layout check — fill missing fields with samples rather than failing.
+    values = _apply_sample_defaults(tmpl.field_schema, body.fields)
 
     try:
         image = render_template(tmpl, values)
