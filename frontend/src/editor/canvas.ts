@@ -4,10 +4,13 @@ export const CUSTOM_PROPS = ['labelforge_raw_content'] as const
 
 // Continuous media report a printable length of 0 (endless roll). The editor
 // still needs a finite working canvas, so continuous templates open at this
-// initial length (≈34mm at 300dpi). Print length is derived from content
+// initial length (≈84mm at 300dpi). Print length is derived from content
 // server-side, so this is only the starting editing area.
+// 1000 dots keeps the initial canvas portrait for the 62mm roll (696px wide):
+// scale = min(1, 600/1000=0.6) → 418×600 display, not the landscape 696×400
+// that 400 dots produced.
 // See docs/features/templates.md.
-export const DEFAULT_CONTINUOUS_LENGTH_DOTS = 400
+export const DEFAULT_CONTINUOUS_LENGTH_DOTS = 1000
 
 // Register the custom prop so canvas.toJSON() includes it on every object automatically.
 FabricObject.customProperties.push('labelforge_raw_content')
@@ -50,7 +53,7 @@ export function initCanvas(
   return { canvas, scale }
 }
 
-export function addTextElement(canvas: Canvas, defaultFont: string): void {
+export function addTextElement(canvas: Canvas, defaultFont: string, fill = '#000000'): void {
   const vp = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0]
   const scale = vp[0]
   const canvasVirtualW = (canvas.width ?? 400) / scale
@@ -61,7 +64,7 @@ export function addTextElement(canvas: Canvas, defaultFont: string): void {
     top: Math.round(canvasVirtualH * 0.05),
     fontFamily: defaultFont,
     fontSize: 48,
-    fill: '#000000',
+    fill,
   })
   text.set('labelforge_raw_content', 'Text')
 
