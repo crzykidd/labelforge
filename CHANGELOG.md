@@ -6,6 +6,14 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Added
 
+- **Text-color control always visible in template editor** — the Black / Red color dropdown in the toolbar is now visible for all templates, not just two-color media. On mono media the Red option is present but disabled, with a tooltip explaining it requires a two-color label (e.g. 62red); on two-color media Red is selectable as before. Hovering over the Add Text button now also shows a tooltip noting `{fieldname}` placeholder syntax. Requires a container image rebuild.
+
+### Fixed
+
+- **Template preview no longer fails when the template has variable fields** — clicking Preview in the editor on a template containing `{fieldname}` placeholders previously returned "Missing required field" because the preview route used the same strict field-validation as the print route. The preview route now fills missing fields with their stored default (if any) or the field name itself as a sample value, so `{type}` renders as the literal text `type`. Passing real field values from the recall UI still works and takes precedence. Requires a container image rebuild.
+
+### Added
+
 - **Save As in template editor** — toolbar now has a **Save As** button that saves the current canvas first, then opens a modal for a new template slug and label media (pre-filled with the current media). Clones the template via `POST /api/templates/{name}/duplicate` and opens the editor on the copy. This is the documented way to re-use a design on different media; the existing template's media is never mutated. The current media is also shown as a read-only badge next to the template name. Requires a container image rebuild.
 - **Full two-color (red) text in templates** — templates on two-color media (`62red` / DK-2251) can now use red text in addition to black. A **Black / Red** toggle appears in the editor toolbar only when the loaded label is two-color (hidden for mono media). Selecting an element and changing the toggle updates its Fabric `fill` to `#000000` or `#ff0000`; new text elements inherit the current selection. The server renderer now emits an RGB image for two-color media, compositing each text element's `fill` as the ink color (red → red plane, black → black plane); lines honor `stroke`, rects honor `fill` and `stroke`. The preview PNG for two-color templates now returns a color image rather than thresholded mono, so the preview reflects actual print output. Printing is unchanged (the print path already promoted L→RGB and passed `red=True` for two-color media). Requires a container image rebuild.
 

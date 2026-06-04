@@ -1,10 +1,10 @@
 ---
 name: 2026-06-03-template-preview-and-media-edit
-status: pending          # pending | completed | failed
+status: completed
 created: 2026-06-03
 model: sonnet            # coding slice
-completed:               # filled when the work is done
-result:                  # one-line summary of the outcome
+completed: 2026-06-03
+result: preview route now fills missing fields with sample values; color control always visible with Red disabled on mono
 ---
 
 # Task: Fix editor Preview with variables and surface the color control

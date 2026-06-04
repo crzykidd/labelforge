@@ -47,15 +47,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <span class="editor-title" id="editor-title">${esc(name)}</span>
         <code class="editor-media-badge" id="editor-media">${esc(isNew ? newMedia : '')}</code>
         <span class="toolbar-sep"></span>
-        <button id="btn-add-text">Add Text</button>
+        <button id="btn-add-text" title="Add a text element. Use {fieldname} placeholders (single braces) for variable fields.">Add Text</button>
         <button id="btn-delete">Delete</button>
         <span class="toolbar-sep"></span>
         <select id="font-select" title="Font family" style="max-width:160px">
           <option value="">Loading fonts…</option>
         </select>
         <input id="font-size" type="number" min="6" max="400" value="48" title="Font size" style="width:60px" />
-        <span class="toolbar-sep" id="sep-color" hidden></span>
-        <select id="text-color" title="Text color" hidden>
+        <span class="toolbar-sep" id="sep-color"></span>
+        <select id="text-color" title="Text color">
           <option value="#000000">Black</option>
           <option value="#ff0000">Red</option>
         </select>
@@ -85,7 +85,6 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const fontSelect = root.querySelector<HTMLSelectElement>('#font-select')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
   const textColorSelect = root.querySelector<HTMLSelectElement>('#text-color')!
-  const colorSep = root.querySelector<HTMLSpanElement>('#sep-color')!
   const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
   const statusEl = root.querySelector<HTMLDivElement>('#editor-status')!
   const canvasWrap = root.querySelector<HTMLDivElement>('#canvas-wrap')!
@@ -124,11 +123,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
     const { canvas } = initCanvas(canvasEl, w, h, getContainerWidth())
     fabricCanvas = canvas
 
-    // Show color control only for two-color media (e.g. 62red / DK-2251)
-    if (labelColorCapable) {
-      colorSep.hidden = false
-      textColorSelect.hidden = false
-    }
+    // Red option enabled only for two-color media; always visible so users know it exists.
+    const redOpt = textColorSelect.querySelector<HTMLOptionElement>('option[value="#ff0000"]')!
+    redOpt.disabled = !labelColorCapable
+    if (!labelColorCapable) redOpt.title = 'Requires a two-color label (e.g. 62red)'
 
     // Track selection to drive font controls
     canvas.on('selection:created', updateFontControls)
@@ -143,9 +141,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
     if (obj && isTextType(obj.type)) {
       if (obj.fontFamily) fontSelect.value = obj.fontFamily
       if (obj.fontSize) fontSizeInput.value = String(Math.round(obj.fontSize))
-      if (labelColorCapable && obj.fill) {
+      if (obj.fill) {
         const f = (obj.fill as string).toLowerCase()
-        textColorSelect.value = (f === '#ff0000' || f === 'red') ? '#ff0000' : '#000000'
+        const wantRed = (f === '#ff0000' || f === 'red') && labelColorCapable
+        textColorSelect.value = wantRed ? '#ff0000' : '#000000'
       }
     }
   }
@@ -187,7 +186,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   btnAddText.addEventListener('click', () => {
     if (!fabricCanvas) return
-    const fill = labelColorCapable ? textColorSelect.value : '#000000'
+    const fill = textColorSelect.value  // Red is disabled on mono media; always safe to read
     addTextElement(fabricCanvas, fontSelect.value || defaultFont, fill)
   })
 
