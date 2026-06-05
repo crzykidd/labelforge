@@ -1,5 +1,6 @@
 import io
 import logging
+import math
 
 import barcode as _barcode_lib
 import qrcode
@@ -135,9 +136,16 @@ def _render_text_element(
     if align not in ("left", "center", "right"):
         align = "left"
 
-    sub = Image.new("L", (max(box_w, 1), max(box_h, 1)), 255)
+    # Measure actual PIL text extent — browser font metrics in Fabric differ from PIL's.
+    scratch = Image.new("L", (1, 1))
+    bbox = ImageDraw.Draw(scratch).multiline_textbbox((0, 0), text, font=pil_font, align=align, spacing=4)
+    real_w = max(box_w, math.ceil(bbox[2]))
+    real_h = math.ceil(bbox[3]) + 4  # +4px descender margin
+
+    sub = Image.new("L", (max(real_w, 1), max(real_h, 1)), 255)
     draw = ImageDraw.Draw(sub)
-    draw.multiline_text((0, 0), text, font=pil_font, fill=0, align=align)
+    # Cancel any positive ascender gap so ink starts at y=0, not shifted down.
+    draw.multiline_text((0, -bbox[1]), text, font=pil_font, fill=0, align=align, spacing=4)
     return sub
 
 
@@ -216,11 +224,26 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
     is_continuous = label.form_factor in _CONTINUOUS_FORM_FACTORS
     two_color = label.color == 1
 
+    # Pre-render text elements once so PIL-measured extents inform continuous canvas height.
+    text_subs: dict[int, Image.Image] = {}
+    for i, obj in enumerate(objects):
+        norm_type = obj.get("type", "").lower().replace("-", "")
+        if norm_type in ("itext", "text", "textbox"):
+            box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
+            box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
+            try:
+                text_subs[i] = _render_text_element(obj, values, box_w, box_h)
+            except RenderError:
+                raise
+            except Exception as exc:
+                raise RenderError(f"Failed to render element 'text': {exc}") from exc
+
     if is_continuous:
         bottommost = 0
-        for obj in objects:
+        for i, obj in enumerate(objects):
             t = int(obj.get("top", 0))
-            h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
+            # Text: use PIL-measured height; other elements: Fabric height is reliable.
+            h = text_subs[i].height if i in text_subs else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
             bottommost = max(bottommost, t + h)
         canvas_h = max(bottommost + _PADDING, 1)
     else:
@@ -232,7 +255,7 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
         canvas = Image.new("L", (canvas_w, canvas_h), 255)
     draw = ImageDraw.Draw(canvas)
 
-    for obj in objects:
+    for i, obj in enumerate(objects):
         obj_type = obj.get("type", "")
         # Fabric v6 serializes `type` as the PascalCase class name (IText, Line,
         # Rect, Image); v5 used lowercase/hyphenated (i-text). Normalize both.
@@ -245,7 +268,7 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
 
         try:
             if norm_type in ("itext", "text", "textbox"):
-                sub = _render_text_element(obj, values, box_w, box_h)
+                sub = text_subs[i]  # pre-rendered above
                 if two_color:
                     rgb = _canvas_color_to_rgb(obj.get("fill")) or (0, 0, 0)
                     _paste_onto(canvas, sub, left, top, angle, rgb=rgb)
