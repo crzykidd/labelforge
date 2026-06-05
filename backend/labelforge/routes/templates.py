@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from labelforge.catalog.loader import get_label
+from labelforge.history import get_latest_field_values
 from labelforge.models import Template, TemplateCreate, TemplateUpdate
 from labelforge.routes.auth import require_auth
 from labelforge.templates import store
@@ -72,6 +73,18 @@ async def update_template(name: str, data: TemplateUpdate) -> Template:
 async def delete_template(name: str) -> None:
     if not store.soft_delete(name):
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
+
+
+class _LastValuesResponse(BaseModel):
+    values: dict | None = None
+    printed_at: str | None = None
+
+
+@router.get("/templates/{name}/last-values", response_model=_LastValuesResponse)
+async def get_template_last_values(name: str) -> _LastValuesResponse:
+    _load_or_404(name)
+    values, printed_at = get_latest_field_values(name)
+    return _LastValuesResponse(values=values, printed_at=printed_at)
 
 
 class _DuplicateRequest(BaseModel):

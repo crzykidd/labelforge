@@ -83,6 +83,11 @@ export interface TemplateCreate {
   canvas_json: Record<string, unknown>;
 }
 
+export interface TemplateLastValues {
+  values: Record<string, string> | null;
+  printed_at: string | null;
+}
+
 export interface HistoryItem {
   id: number;
   template_id: string | null;

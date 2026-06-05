@@ -19,8 +19,8 @@ Defaults live in code; the DB only stores overrides. Reading a setting that has 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `retention_mode` | enum | `forever` | `forever` / `last_n` / `last_days` |
-| `retention_count` | int | `500` | When mode = `last_n`, keep this many unpinned rows |
-| `retention_days` | int | `90` | When mode = `last_days`, keep unpinned rows newer than N days |
+| `retention_count` | int | `500` | When mode = `last_n`, keep this many unpinned rows (the most recent print per template is always kept regardless) |
+| `retention_days` | int | `90` | When mode = `last_days`, keep unpinned rows newer than N days (the most recent print per template is always kept regardless) |
 | `default_label_media` | string | `"62"` | Pre-selected in quick-print and new-template flows |
 | `default_font` | string | `"DejaVuSans"` | Pre-selected in quick-print |
 | `default_font_size` | int | `48` | Pre-selected in quick-print |

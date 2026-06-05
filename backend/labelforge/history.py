@@ -68,6 +68,24 @@ def _save_preview(job_id: int, image: Image.Image) -> None:
         logger.warning("Failed to save preview for job %d", job_id, exc_info=True)
 
 
+def get_latest_field_values(template_name: str) -> tuple[dict | None, str | None]:
+    """Return (field_values, created_at) for the newest print of template_name, or (None, None)."""
+    db_path = settings.data_dir / "data" / "app.db"
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            """SELECT field_values, created_at FROM print_jobs
+               WHERE template_id = ? AND field_values IS NOT NULL
+               ORDER BY created_at DESC, id DESC LIMIT 1""",
+            (template_name,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None, None
+    return json.loads(row["field_values"]), row["created_at"]
+
+
 def prune_history() -> None:
     try:
         mode = settings_store.get("retention_mode")
@@ -79,24 +97,32 @@ def prune_history() -> None:
         try:
             total = conn.execute("SELECT COUNT(*) FROM print_jobs").fetchone()[0]
 
+            # Newest job per template is always kept so recall pre-fill survives pruning.
+            _keep_latest = (
+                "id NOT IN (SELECT MAX(id) FROM print_jobs"
+                " WHERE template_id IS NOT NULL GROUP BY template_id)"
+            )
+
             if mode == "last_n":
                 count = settings_store.get("retention_count")
                 rows = conn.execute(
-                    """SELECT id, preview_path FROM print_jobs
+                    f"""SELECT id, preview_path FROM print_jobs
                        WHERE pinned = 0
                        AND id NOT IN (
                            SELECT id FROM print_jobs WHERE pinned = 0
                            ORDER BY created_at DESC, id DESC
                            LIMIT ?
-                       )""",
+                       )
+                       AND {_keep_latest}""",  # noqa: S608
                     (count,),
                 ).fetchall()
             elif mode == "last_days":
                 days = settings_store.get("retention_days")
                 rows = conn.execute(
-                    """SELECT id, preview_path FROM print_jobs
+                    f"""SELECT id, preview_path FROM print_jobs
                        WHERE pinned = 0
-                       AND created_at < datetime('now', ?)""",
+                       AND created_at < datetime('now', ?)
+                       AND {_keep_latest}""",  # noqa: S608
                     (f"-{days} days",),
                 ).fetchall()
             else:

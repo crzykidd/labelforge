@@ -1,6 +1,10 @@
-import { batchPrint, getTemplate, previewTemplate, printTemplate } from '../api'
-import type { FieldSpec, Template } from '../types'
+import { batchPrint, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
+import type { FieldSpec, Template, TemplateLastValues } from '../types'
 import { navigate } from '../router'
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
 
 function esc(s: string): string {
   return s
@@ -32,8 +36,11 @@ export function mountTemplateRecall(root: HTMLElement): void {
   const name = nameFromPath()
   root.innerHTML = `<div class="template-recall"><p>Loading…</p></div>`
 
-  getTemplate(name)
-    .then(tpl => renderRecall(root, tpl))
+  Promise.all([
+    getTemplate(name),
+    getLastValues(name).catch(() => ({ values: null, printed_at: null } satisfies TemplateLastValues)),
+  ])
+    .then(([tpl, lastVals]) => renderRecall(root, tpl, lastVals))
     .catch((err: Error) => {
       root.innerHTML = `
         <div class="template-recall">
@@ -48,7 +55,7 @@ export function mountTemplateRecall(root: HTMLElement): void {
     })
 }
 
-function renderRecall(root: HTMLElement, tpl: Template): void {
+function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastValues): void {
   const fields = tpl.field_schema ?? []
   const hasFields = fields.length > 0
   const incrementFields = fields.filter(f => f.increment)
@@ -79,6 +86,7 @@ function renderRecall(root: HTMLElement, tpl: Template): void {
         ` : ''}
 
         <div class="actions">
+          ${hasFields ? `<button type="button" id="btn-load-prev"${lastVals.values ? '' : ' disabled'}>Load previous values${lastVals.printed_at ? ` (${fmtDate(lastVals.printed_at)})` : ''}</button>` : ''}
           <button type="button" id="btn-preview">Preview</button>
           <button type="submit" id="btn-print">Print</button>
         </div>
@@ -93,6 +101,7 @@ function renderRecall(root: HTMLElement, tpl: Template): void {
   const form = root.querySelector<HTMLFormElement>('#recall-form')!
   const btnPreview = root.querySelector<HTMLButtonElement>('#btn-preview')!
   const btnPrint = root.querySelector<HTMLButtonElement>('#btn-print')!
+  const btnLoadPrev = root.querySelector<HTMLButtonElement>('#btn-load-prev')
   const statusMsg = root.querySelector<HTMLDivElement>('#status-msg')!
   const previewArea = root.querySelector<HTMLDivElement>('#preview-area')!
   const previewImg = root.querySelector<HTMLImageElement>('#preview-img')!
@@ -182,6 +191,18 @@ function renderRecall(root: HTMLElement, tpl: Template): void {
   }
 
   btnPreview.addEventListener('click', runPreview)
+
+  btnLoadPrev?.addEventListener('click', () => {
+    const vals = lastVals.values
+    if (!vals) return
+    for (const f of fields) {
+      if (!(f.name in vals)) continue
+      const el = form.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${CSS.escape(f.name)}"]`)
+      if (el) el.value = vals[f.name]
+    }
+    updateButtons()
+    if (!previewArea.hidden) runPreview()
+  })
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault()

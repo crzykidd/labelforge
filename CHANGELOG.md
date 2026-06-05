@@ -6,9 +6,13 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Added
 
+- **Load previous values on template recall** — the recall form now has a **Load previous values** button (only for templates with variable fields). Clicking it fills the form with the field values from the last time this template was printed, so you can make quick adjustments without re-typing. The button is disabled when the template has no print history. The most recent print job for each template is now also protected from retention pruning, so these values survive cleanup. Requires a container image rebuild.
+
 - **Text-color control always visible in template editor** — the Black / Red color dropdown in the toolbar is now visible for all templates, not just two-color media. On mono media the Red option is present but disabled, with a tooltip explaining it requires a two-color label (e.g. 62red); on two-color media Red is selectable as before. Hovering over the Add Text button now also shows a tooltip noting `{fieldname}` placeholder syntax. Requires a container image rebuild.
 
 ### Fixed
+
+- **Continuous templates now extend to fit large text** — previewing or printing a continuous-roll template (e.g. 62mm endless) where the last text element uses a large font no longer cuts off the bottom of that text. Previously the render trusted the editor's browser-measured font height, which is shorter than what Pillow actually draws at the same point size; the canvas was too short and the last line was clipped. The renderer now measures rasterized text height with Pillow before sizing the canvas. Die-cut template rendering is unchanged.
 
 - **Template preview no longer fails when the template has variable fields** — clicking Preview in the editor on a template containing `{fieldname}` placeholders previously returned "Missing required field" because the preview route used the same strict field-validation as the print route. The preview route now fills missing fields with their stored default (if any) or the field name itself as a sample value, so `{type}` renders as the literal text `type`. Passing real field values from the recall UI still works and takes precedence. Requires a container image rebuild.
 

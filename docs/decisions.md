@@ -4,6 +4,34 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-04 — Template recall pre-fill uses print history; retention preserves latest job per template
+
+**Decision**: The "Load previous values" button on the recall form reads `field_values` from the newest `print_jobs` row for that template. No new table or column was needed — `field_values` was already stored at print time. `GET /api/templates/{name}/last-values` returns `{values, printed_at}`.
+
+Retention pruning (`prune_history`) now always exempts the highest `id` per `template_id` from deletion in both `last_n` and `last_days` modes (quick-print rows have `template_id = NULL` and are not protected). This is bounded by template count (single-user, small) and does not meaningfully undermine the configured N.
+
+**Why**: The data was already there; the feature is a query and a button. Protecting the latest job per template avoids a surprising edge case where `last_n = 1` + a burst of quick prints silently erases recall pre-fill.
+
+**Would revisit if**: A dedicated "last values" column is needed (e.g. to survive template deletion); at that point a migration to copy the latest values would be appropriate.
+
+---
+
+## 2026-06-04 — Continuous label length measured from Pillow-rasterized text, not Fabric metrics
+
+**Decision**: For continuous-roll templates, `render_template` computes canvas height from PIL-measured text extents, not from Fabric's serialized `height`. Text elements are pre-rendered to PIL sub-images before the canvas is created; the sub-image's `.height` (measured with `multiline_textbbox`) drives `bottommost` for the continuous canvas sizing. Non-text elements (line, rect) still use `height * scaleY` from Fabric — those are reliable.
+
+`_render_text_element` also sizes its sub-image from the same PIL measurement (not `box_h` from Fabric), so text is never clipped inside its own element box regardless of media type. The draw origin is shifted by `-bbox[1]` to cancel any positive ascender gap, keeping the ink flush with the top of the sub-image without affecting the paste position (which is still taken from Fabric's `top`).
+
+**Why**: Fabric measures text with the browser's font engine; PIL measures with FreeType directly. The two disagree — PIL renders taller at the same `fontSize`, with the gap widening as font size grows. For continuous media, trusting Fabric's `height` produced a canvas too short to contain the last line. The root cause was the two-renderer divergence described in the 2026-05-20 server-side rendering ADR: "Divergence shows up as 'preview/print doesn't match the editor.'" This fix makes the server renderer authoritative for its own geometry.
+
+**Considered**:
+- Correct only the canvas height, leave sub-image sized by Fabric `box_h` — rejected; text still clips inside its element box for die-cut media.
+- Add a per-element measurement pass separate from the render pass — rejected; pre-rendering text elements once and reusing the sub-image is cleaner and avoids double font loads.
+
+**Would revisit if**: Fabric's font metrics are made to match PIL (e.g. by using the same font rendering engine server-side), at which point the browser measurement could be trusted for canvas sizing again.
+
+---
+
 ## 2026-06-03 — Two-color template rendering (supersedes "later slice" note)
 
 **Decision**: `render_template` now supports two-color (black + red) media. When `label.color == 1` (e.g. `62red` / DK-2251) the renderer returns a mode-`RGB` image instead of mode-`L`: black pixels are `(0,0,0)`, red pixels are `(255,0,0)`, paper is `(255,255,255)`. The print path in `printer/client.py` already promoted `L→RGB` and passed `red=True` for two-color media (2026-05-31 ADR) — it consumes the RGB image correctly without change. Text color comes from the Fabric element's `fill` property (`#000000` / `#ff0000`); lines use `stroke`; rects use `fill`/`stroke`. The template-preview PNG also returns RGB (color-accurate) instead of the threshold-crushed mono.

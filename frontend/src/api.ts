@@ -1,4 +1,4 @@
-import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate } from './types'
+import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate, TemplateLastValues } from './types'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -128,6 +128,10 @@ export function duplicateTemplate(source: string, body: { name: string; label_me
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+export function getLastValues(name: string): Promise<TemplateLastValues> {
+  return apiFetch<TemplateLastValues>(`/api/templates/${encodeURIComponent(name)}/last-values`)
 }
 
 export async function previewTemplate(name: string, fields: Record<string, string>): Promise<Blob> {

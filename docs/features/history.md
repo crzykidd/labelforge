@@ -75,7 +75,7 @@ User-configurable via Settings ([`settings.md`](settings.md)). Two modes, choose
 - **Keep N days**: retain unpinned rows newer than N days, prune older
 - **Keep forever**: no pruning (default until the user configures otherwise)
 
-Pinned rows are never pruned regardless of mode.
+Pinned rows are never pruned regardless of mode. Additionally, the most recent print job for each template is always kept regardless of mode — this backs the "Load previous values" recall pre-fill feature.
 
 ### Pruning execution
 
