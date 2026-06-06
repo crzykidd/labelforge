@@ -14,7 +14,7 @@ authors = [{ name = "crzykidd" }]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
+    "pydantic>=2.13.4",
     "pydantic-settings>=2.6",
     "pyyaml>=6.0",
     "pillow>=10.4",
