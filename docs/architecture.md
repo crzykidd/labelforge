@@ -22,7 +22,7 @@
 
 ### Storage
 
-- **SQLite** at `$DATA_DIR/data/app.db` — templates, history, settings, API tokens
+- **SQLite** at `$DATA_DIR/data/app.db` — templates, history, settings (auth is a single shared secret from the environment, not stored here)
 - **`labels.yml`** at `$DATA_DIR/labels.yml` — user-editable label catalog metadata
 - **Fonts** at `$DATA_DIR/fonts/` — `.ttf` / `.otf` files, drop-in
 - **Label preview images** (optional) at `$DATA_DIR/label-previews/` — referenced from `labels.yml`
@@ -46,8 +46,8 @@ labelforge/
 ├── CLAUDE.md
 ├── .gitignore
 ├── .gitattributes
-├── compose.yml                   # single-service stack; bring your own proxy
-├── compose.dev.yml               # local dev: bind mounts, no Traefik labels
+├── docker-compose.yml            # single-service stack; bring your own proxy
+├── docker-compose.dev.yml        # local dev: bind mounts, no Traefik labels
 ├── Dockerfile                    # multi-stage: frontend build → python runtime
 ├── pyproject.toml                # backend deps + tool config
 ├── docs/
@@ -127,7 +127,7 @@ merge: only identifiers in the intersection are user-facing.
 
 - Single Docker image built from the included `Dockerfile` (multi-stage: frontend build → python runtime). No build step at deploy time once the image is built.
 - Runs as one container serving plain HTTP on port `8000`. Put it behind whatever reverse proxy or tunnel you use; proxy wiring is deployment-specific and intentionally not baked into the app.
-- Persistent data lives under `$DATA_DIR` (default `/data`); back it with a named volume or a host bind mount. See `compose.yml` for a standalone example and `compose.dev.yml` for local hot-reload dev.
+- Persistent data lives under `$DATA_DIR` (default `/data`); back it with a named volume or a host bind mount. See `docker-compose.yml` for a standalone example and `docker-compose.dev.yml` for local hot-reload dev.
 - Env-driven config: printer host/port, API token, default label media, data dir, log level. See `.env.example`.
 
 ## Out of scope for v1

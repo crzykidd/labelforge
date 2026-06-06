@@ -36,6 +36,14 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Changed
 
+- **Docs reconciled with shipped features** — the README's "What it does" was rewritten to
+  cover everything now implemented (two-color printing, printer-status/loaded-media detection,
+  the label catalog, settings/retention, print-time media override, batch printing, and
+  `DISABLE_AUTH`), and gained a "Running it" section with a configuration table. The PRD's
+  in-scope list now includes two shipped features it omitted (one-off media override at recall;
+  two-color red text in templates), and `architecture.md` was corrected to reference the real
+  compose filenames (`docker-compose.yml` / `docker-compose.dev.yml`). Docs-only.
+
 - **Template list actions are now compact icon buttons** — the per-row Print / Edit / Delete
   buttons were full-size text buttons that, together with a verbose timestamp, overflowed the
   card. They're now small icon buttons (with tooltips and accessible labels), the Updated
