@@ -17,6 +17,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
   by CodeQL `py/empty-except` (shutdown-task cancellation, best-effort printer-socket close,
   malformed stored-payload fallback); the socket-close handler now logs at debug instead of
   silently swallowing. No behaviour change.
+- **No exception detail in the printer-status error response (CWE-209)** — `GET /api/printer/status`
+  returned the raw exception text in its 503 body when status was unavailable, which CodeQL
+  flagged as information exposure. It now logs the exception server-side and returns a generic
+  "Printer status is currently unavailable." message.
 
 ### Added
 

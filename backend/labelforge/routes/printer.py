@@ -23,10 +23,14 @@ async def get_printer_status() -> dict | JSONResponse:
             backend=settings.printer_backend,
             timeout_ms=timeout_ms,
         )
-    except StatusUnavailable as exc:
+    except StatusUnavailable:
+        logger.exception("Printer status unavailable")
         return JSONResponse(
             status_code=503,
-            content={"error": "status_unavailable", "message": str(exc)},
+            content={
+                "error": "status_unavailable",
+                "message": "Printer status is currently unavailable.",
+            },
         )
 
     media_id = status["media_id"]
