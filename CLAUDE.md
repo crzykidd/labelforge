@@ -10,7 +10,7 @@ Owner: crzykidd. Personal homelab project, public open source. Single-user app â
 
 ## Build Status
 
-- **Last shipped:** â€” (no release yet)
+- **Last shipped:** v0.1.0 (first release)
 - **Target for next release:** TBD
 
 ## Standards

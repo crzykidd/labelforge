@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-06-06
+
 ### Added
 
 - **Friendly template names** — when creating a template, type a human-readable name (e.g.

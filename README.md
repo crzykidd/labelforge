@@ -2,13 +2,21 @@
 
 Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.
 
-**Status**: Pre-release. All v1 features are working and the app is packaged as a single Docker image; no release has been tagged yet.
+**Status**: First release (v0.1.0) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.0.1
+**Version:** 0.1.0
 
 ## What's New
 
-_No releases tagged yet. See [`CHANGELOG.md`](CHANGELOG.md) for the running list of changes._
+### v0.1.0 (2026-06-06)
+
+First release. The full v1 feature set is here: quick-print, a Fabric.js canvas
+template editor with variable `{placeholder}` fields, template recall with batch/increment
+printing, two-color (black + red) printing on DK-2251, print history (reprint, pin, delete,
+configurable retention), a hybrid `labels.yml` catalog with friendly names and Brother DK part
+numbers, printer-status detection with a media-mismatch override, one-off media override at
+recall, a settings UI, and a full Bearer-token HTTP API (every template callable for homelab
+integrations). See [`CHANGELOG.md`](CHANGELOG.md) for the complete list.
 
 ## What it does
 
