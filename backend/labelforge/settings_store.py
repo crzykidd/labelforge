@@ -57,9 +57,7 @@ def validate(key: str, value: Any) -> None:
     elif not isinstance(value, vtype):
         raise ValueError(f"Setting '{key}' expects {vtype.__name__}, got {type(value).__name__}")
     if "enum" in entry and value not in entry["enum"]:
-        raise ValueError(
-            f"Setting '{key}' must be one of {sorted(entry['enum'])}, got {value!r}"
-        )
+        raise ValueError(f"Setting '{key}' must be one of {sorted(entry['enum'])}, got {value!r}")
 
 
 def get_all() -> dict[str, Any]:

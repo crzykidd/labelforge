@@ -1,4 +1,3 @@
-
 from fastapi import Header, HTTPException
 
 from labelforge.config import settings

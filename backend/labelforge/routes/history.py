@@ -100,9 +100,7 @@ async def get_history(job_id: int) -> HistoryDetail:
 async def history_preview(job_id: int) -> Response:
     conn = get_connection(_db_path())
     try:
-        row = conn.execute(
-            "SELECT preview_path FROM print_jobs WHERE id = ?", (job_id,)
-        ).fetchone()
+        row = conn.execute("SELECT preview_path FROM print_jobs WHERE id = ?", (job_id,)).fetchone()
     finally:
         conn.close()
     if row is None:
@@ -216,9 +214,7 @@ async def _reprint_quick(job_id: int, row) -> dict:
 async def pin_history(job_id: int, body: PinRequest) -> HistoryItem:
     conn = get_connection(_db_path())
     try:
-        if not conn.execute(
-            "SELECT 1 FROM print_jobs WHERE id = ?", (job_id,)
-        ).fetchone():
+        if not conn.execute("SELECT 1 FROM print_jobs WHERE id = ?", (job_id,)).fetchone():
             raise HTTPException(status_code=404, detail=f"Print job {job_id} not found")
         conn.execute(
             "UPDATE print_jobs SET pinned = ? WHERE id = ?",
@@ -235,9 +231,7 @@ async def pin_history(job_id: int, body: PinRequest) -> HistoryItem:
 async def delete_history(job_id: int) -> None:
     conn = get_connection(_db_path())
     try:
-        row = conn.execute(
-            "SELECT preview_path FROM print_jobs WHERE id = ?", (job_id,)
-        ).fetchone()
+        row = conn.execute("SELECT preview_path FROM print_jobs WHERE id = ?", (job_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail=f"Print job {job_id} not found")
         conn.execute("DELETE FROM print_jobs WHERE id = ?", (job_id,))

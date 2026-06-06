@@ -1,7 +1,7 @@
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 
 from labelforge.config import settings
 from labelforge.db import get_connection
@@ -15,7 +15,7 @@ def _db_path():
 
 
 def _now_utc() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _row_to_template(row: sqlite3.Row) -> Template:
@@ -92,9 +92,7 @@ def create_template(data: TemplateCreate) -> Template:
             ),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT * FROM templates WHERE name = ?", (data.name,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM templates WHERE name = ?", (data.name,)).fetchone()
         return _row_to_template(row)
     finally:
         conn.close()
@@ -179,9 +177,7 @@ def duplicate(name: str, new_name: str, new_label_media: str) -> Template:
             ),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT * FROM templates WHERE name = ?", (new_name,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM templates WHERE name = ?", (new_name,)).fetchone()
         return _row_to_template(row)
     finally:
         conn.close()

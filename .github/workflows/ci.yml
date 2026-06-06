@@ -156,6 +156,10 @@ jobs:
       - uses: actions/checkout@v6
       - name: Validate compose files
         run: |
-          for f in compose.yml compose.dev.yml; do
-            [ -f "$f" ] && docker compose -f "$f" config --quiet && echo "OK $f"
+          for f in docker-compose.yml docker-compose.dev.yml; do
+            if [ -f "$f" ]; then
+              docker compose -f "$f" config --quiet && echo "OK $f"
+            else
+              echo "skip $f (not present)"
+            fi
           done

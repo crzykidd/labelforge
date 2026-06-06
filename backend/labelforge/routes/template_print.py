@@ -14,7 +14,14 @@ from labelforge.models import (
     BatchPrintResponse,
     PrintRequest,
 )
-from labelforge.printer.client import PrintError, StatusUnavailable, media_compatible, print_image, status_read, to_print_bitmap
+from labelforge.printer.client import (
+    PrintError,
+    StatusUnavailable,
+    media_compatible,
+    print_image,
+    status_read,
+    to_print_bitmap,
+)
 from labelforge.render.template import render_template
 from labelforge.render.text import RenderError
 from labelforge.routes.auth import require_auth
@@ -41,7 +48,8 @@ def _apply_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
 
 
 def _apply_sample_defaults(template_fields, values: dict[str, str]) -> dict[str, str]:
-    """Return values dict with caller-supplied values first, then defaults, then field name as sample.
+    """Return values dict with caller-supplied values first, then defaults,
+    then field name as sample.
 
     Never raises — every field gets a value, so preview always renders.
     """
@@ -77,28 +85,36 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
             )
             if status["errors"]:
                 code = status["errors"][0].lower().replace(" ", "_")
-                raise HTTPException(status_code=409, detail={
-                    "error": "printer_error",
-                    "code": code,
-                    "message": f"Printer error: {', '.join(status['errors'])}",
-                    "raw": status,
-                })
-            if status["media_id"] is not None and not media_compatible(status["media_id"], tmpl.label_media):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "printer_error",
+                        "code": code,
+                        "message": f"Printer error: {', '.join(status['errors'])}",
+                        "raw": status,
+                    },
+                )
+            media_id = status["media_id"]
+            if media_id is not None and not media_compatible(media_id, tmpl.label_media):
                 if not override:
-                    raise HTTPException(status_code=409, detail={
-                        "error": "media_mismatch",
-                        "expected": tmpl.label_media,
-                        "loaded": status["media_id"],
-                        "override_allowed": True,
-                        "message": (
-                            f"Printer has {status['media_id']} loaded, "
-                            f"template expects {tmpl.label_media}. "
-                            "Pass override=true to print anyway."
-                        ),
-                    })
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "error": "media_mismatch",
+                            "expected": tmpl.label_media,
+                            "loaded": media_id,
+                            "override_allowed": True,
+                            "message": (
+                                f"Printer has {media_id} loaded, "
+                                f"template expects {tmpl.label_media}. "
+                                "Pass override=true to print anyway."
+                            ),
+                        },
+                    )
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
-                    status["media_id"], tmpl.label_media,
+                    media_id,
+                    tmpl.label_media,
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")
@@ -154,7 +170,9 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
 
 
 @router.post("/print/{name}/batch", response_model=BatchPrintResponse)
-async def batch_print(name: str, body: BatchPrintRequest, override: bool = False) -> BatchPrintResponse:
+async def batch_print(
+    name: str, body: BatchPrintRequest, override: bool = False
+) -> BatchPrintResponse:
     count = len(body.labels)
     if count < 1:
         raise HTTPException(status_code=400, detail="Batch count must be >= 1")
@@ -176,28 +194,36 @@ async def batch_print(name: str, body: BatchPrintRequest, override: bool = False
             )
             if status["errors"]:
                 code = status["errors"][0].lower().replace(" ", "_")
-                raise HTTPException(status_code=409, detail={
-                    "error": "printer_error",
-                    "code": code,
-                    "message": f"Printer error: {', '.join(status['errors'])}",
-                    "raw": status,
-                })
-            if status["media_id"] is not None and not media_compatible(status["media_id"], tmpl.label_media):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "printer_error",
+                        "code": code,
+                        "message": f"Printer error: {', '.join(status['errors'])}",
+                        "raw": status,
+                    },
+                )
+            media_id = status["media_id"]
+            if media_id is not None and not media_compatible(media_id, tmpl.label_media):
                 if not override:
-                    raise HTTPException(status_code=409, detail={
-                        "error": "media_mismatch",
-                        "expected": tmpl.label_media,
-                        "loaded": status["media_id"],
-                        "override_allowed": True,
-                        "message": (
-                            f"Printer has {status['media_id']} loaded, "
-                            f"template expects {tmpl.label_media}. "
-                            "Pass override=true to print anyway."
-                        ),
-                    })
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "error": "media_mismatch",
+                            "expected": tmpl.label_media,
+                            "loaded": media_id,
+                            "override_allowed": True,
+                            "message": (
+                                f"Printer has {media_id} loaded, "
+                                f"template expects {tmpl.label_media}. "
+                                "Pass override=true to print anyway."
+                            ),
+                        },
+                    )
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
-                    status["media_id"], tmpl.label_media,
+                    media_id,
+                    tmpl.label_media,
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")
@@ -246,6 +272,4 @@ async def batch_print(name: str, body: BatchPrintRequest, override: bool = False
             ).model_dump(),
         )
 
-    return BatchPrintResponse(
-        batch_id=batch_id, jobs=jobs, succeeded=succeeded, failed=failed
-    )
+    return BatchPrintResponse(batch_id=batch_id, jobs=jobs, succeeded=succeeded, failed=failed)

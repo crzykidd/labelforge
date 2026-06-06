@@ -159,7 +159,10 @@ def prune_history() -> None:
             db_size_after = db_path.stat().st_size if db_path.exists() else 0
             logger.info(
                 "prune_history: pruned %d rows (mode=%s), DB %d → %d bytes",
-                pruned, mode, db_size_before, db_size_after,
+                pruned,
+                mode,
+                db_size_before,
+                db_size_after,
             )
         finally:
             conn.close()

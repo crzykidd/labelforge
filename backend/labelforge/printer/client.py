@@ -4,7 +4,8 @@
 #   brother_ql.backends.helpers.send                — transmits bytes to the printer
 #   brother_ql.backends.helpers.backend_factory     — returns {"backend_class": ..., ...}
 #   brother_ql.reader.interpret_response            — parses 32-byte status reply into dict
-#   brother_ql.labels.ALL_LABELS                    — list of Label objects; .tape_size, .identifier, .color
+#   brother_ql.labels.ALL_LABELS                    — list of Label objects;
+#     .tape_size, .identifier, .color
 #
 # Network backend expects printer_identifier in the form "tcp://host[:port]"
 # (port defaults to 9100 when omitted).  The send() helper also accepts
@@ -72,7 +73,7 @@ def _media_id_from_dims(width_mm: int, length_mm: int, tape_color_raw: int | Non
 def _color_capable(media_id: str | None) -> bool:
     if media_id is None:
         return False
-    lbl = next((l for l in ALL_LABELS if l.identifier == media_id), None)
+    lbl = next((lbl for lbl in ALL_LABELS if lbl.identifier == media_id), None)
     return bool(lbl and int(getattr(lbl, "color", 0) or 0))
 
 
@@ -269,7 +270,9 @@ def print_image(
         # print-head width. rotate='auto' (the library default) can flip a
         # wide continuous image into a geometry the printer reads as the wrong
         # roll type. The renderer already produces the correct orientation.
-        instructions = convert(qlr, [img], label_media, cut=True, rotate="0", threshold=PRINT_THRESHOLD, red=red)
+        instructions = convert(
+            qlr, [img], label_media, cut=True, rotate="0", threshold=PRINT_THRESHOLD, red=red
+        )
         identifier = f"tcp://{host}" if backend == "network" else host
         result = send(
             instructions=instructions,

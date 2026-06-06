@@ -90,7 +90,7 @@ Every task follows: **plan → decide → execute → document**.
 - Line endings: LF only. `.gitattributes` enforces this. If `git diff --stat` shows all files modified, run `git config core.autocrlf input && git checkout -- .`
 - Branches: `main` is protected — the ONLY way in is a pull request, gated by CodeQL and other checks; never push to `main` directly. `dev` is the working branch (solo work commits straight to `dev`). Use `feature/<name>` branches when more than one person is working; merge those to `dev`, then PR `dev` → `main` for a release.
 - Commits: imperative present tense with a Conventional-Commits prefix — `feat:` (user-facing feature), `fix:` (bug fix), `chore:` (config/tooling/deps), `docs:` (docs only). E.g. `feat: add template recall endpoint`. No co-author tags. See the **Code check-in (operational rules)** section below for the full rule set.
-- Compose stack lives at the repo root as `compose.yml`. Dev compose at `compose.dev.yml`.
+- Compose stack lives at the repo root as `docker-compose.yml`. Dev compose at `docker-compose.dev.yml`.
 
 ## Things to never do
 

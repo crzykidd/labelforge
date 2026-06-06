@@ -2,12 +2,18 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from labelforge import settings_store
 from labelforge.catalog.loader import get_label
 from labelforge.config import settings
-from labelforge import settings_store
 from labelforge.history import insert_job_with_preview
 from labelforge.models import PrintJobResponse, QuickPrintRequest
-from labelforge.printer.client import PrintError, StatusUnavailable, media_compatible, print_image, status_read
+from labelforge.printer.client import (
+    PrintError,
+    StatusUnavailable,
+    media_compatible,
+    print_image,
+    status_read,
+)
 from labelforge.render.text import RenderError, render_text
 from labelforge.routes.auth import require_auth
 
@@ -48,28 +54,36 @@ async def quick_print(request: QuickPrintRequest, override: bool = False) -> Pri
             )
             if status["errors"]:
                 code = status["errors"][0].lower().replace(" ", "_")
-                raise HTTPException(status_code=409, detail={
-                    "error": "printer_error",
-                    "code": code,
-                    "message": f"Printer error: {', '.join(status['errors'])}",
-                    "raw": status,
-                })
-            if status["media_id"] is not None and not media_compatible(status["media_id"], request.label_media):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "printer_error",
+                        "code": code,
+                        "message": f"Printer error: {', '.join(status['errors'])}",
+                        "raw": status,
+                    },
+                )
+            media_id = status["media_id"]
+            if media_id is not None and not media_compatible(media_id, request.label_media):
                 if not override:
-                    raise HTTPException(status_code=409, detail={
-                        "error": "media_mismatch",
-                        "expected": request.label_media,
-                        "loaded": status["media_id"],
-                        "override_allowed": True,
-                        "message": (
-                            f"Printer has {status['media_id']} loaded, "
-                            f"template expects {request.label_media}. "
-                            "Pass override=true to print anyway."
-                        ),
-                    })
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "error": "media_mismatch",
+                            "expected": request.label_media,
+                            "loaded": media_id,
+                            "override_allowed": True,
+                            "message": (
+                                f"Printer has {media_id} loaded, "
+                                f"template expects {request.label_media}. "
+                                "Pass override=true to print anyway."
+                            ),
+                        },
+                    )
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
-                    status["media_id"], request.label_media,
+                    media_id,
+                    request.label_media,
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")

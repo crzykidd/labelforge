@@ -55,6 +55,7 @@ class PrintJobResponse(BaseModel):
 
 # ── Templates ────────────────────────────────────────────────────────────────
 
+
 class FieldSpec(BaseModel):
     name: str
     type: Literal["text", "number", "date", "enum"] = "text"
@@ -91,6 +92,7 @@ class TemplateUpdate(BaseModel):
 
 # ── Print / batch ─────────────────────────────────────────────────────────────
 
+
 class PrintRequest(BaseModel):
     fields: dict[str, str] = {}
 
@@ -112,6 +114,7 @@ class BatchPrintResponse(BaseModel):
 
 
 # ── History ───────────────────────────────────────────────────────────────────
+
 
 class HistoryItem(BaseModel):
     id: int

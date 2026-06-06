@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **CI: compose validation now targets `docker-compose.yml` / `docker-compose.dev.yml`** — the compose job previously looked for `compose.yml` / `compose.dev.yml` (wrong filenames) and used a `bash -e` one-liner that treated a missing file as a failure. The loop is now hardened to skip absent files and only fail on a bad `docker compose config`. The `CLAUDE.md` convention note is corrected to match the actual filenames. Backend linting (ruff) is also clean: import order fixed in `routes/print.py`, `datetime.UTC` modernisation in `templates/store.py`, and long-line wraps across several `backend/` files.
+
 ### Added
 
 - **Load previous values on template recall** — the recall form now has a **Load previous values** button (only for templates with variable fields). Clicking it fills the form with the field values from the last time this template was printed, so you can make quick adjustments without re-typing. The button is disabled when the template has no print history. The most recent print job for each template is now also protected from retention pruning, so these values survive cleanup. Requires a container image rebuild.

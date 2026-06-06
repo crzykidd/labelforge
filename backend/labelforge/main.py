@@ -15,8 +15,8 @@ from labelforge.db import init_db
 from labelforge.render.fonts import load_fonts
 from labelforge.routes import fonts, health, labels
 from labelforge.routes import history as history_router
-from labelforge.routes import print as print_router
 from labelforge.routes import preview as preview_router
+from labelforge.routes import print as print_router
 from labelforge.routes import printer as printer_router
 from labelforge.routes import settings as settings_router
 from labelforge.routes import template_print as template_print_router
@@ -43,9 +43,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
             shutil.copy(default_yml, yml_path)
             logger.info("Copied default labels.yml to %s", yml_path)
         else:
-            logger.warning(
-                "labels.yml missing at %s and no default at /app/labels.yml", yml_path
-            )
+            logger.warning("labels.yml missing at %s and no default at /app/labels.yml", yml_path)
 
     db_path = data_dir / "data" / "app.db"
     init_db(db_path)
@@ -109,5 +107,6 @@ if _FRONTEND_DIST.exists():
     async def spa_fallback(request: Request, full_path: str) -> FileResponse:
         if full_path.startswith("api/"):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404)
         return FileResponse(_FRONTEND_DIST / "index.html")

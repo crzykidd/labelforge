@@ -8,8 +8,17 @@ _SYSTEM_FONT_DIR = Path("/usr/share/fonts/truetype")
 _EXTENSIONS = {".ttf", ".otf"}
 # Style keyword tokens used to split family from style in filename stems.
 _STYLE_TOKENS = {
-    "Bold", "Italic", "Light", "Thin", "Medium", "Regular",
-    "Black", "Condensed", "Oblique", "SemiBold", "ExtraBold",
+    "Bold",
+    "Italic",
+    "Light",
+    "Thin",
+    "Medium",
+    "Regular",
+    "Black",
+    "Condensed",
+    "Oblique",
+    "SemiBold",
+    "ExtraBold",
 }
 
 _font_cache: list["FontInfo"] = []
@@ -17,7 +26,7 @@ _font_cache: list["FontInfo"] = []
 
 @dataclass
 class FontInfo:
-    name: str   # filename stem — used as font identifier in the API
+    name: str  # filename stem — used as font identifier in the API
     path: str
     family: str
     style: str

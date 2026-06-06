@@ -115,9 +115,7 @@ def _paste_onto(
         canvas.paste(sub, (left, top), mask=mask)
 
 
-def _render_text_element(
-    obj: dict, values: dict[str, str], box_w: int, box_h: int
-) -> Image.Image:
+def _render_text_element(obj: dict, values: dict[str, str], box_w: int, box_h: int) -> Image.Image:
     raw = obj.get("labelforge_raw_content") or obj.get("text", "")
     text = resolve_content(raw, values)
 
@@ -138,7 +136,9 @@ def _render_text_element(
 
     # Measure actual PIL text extent — browser font metrics in Fabric differ from PIL's.
     scratch = Image.new("L", (1, 1))
-    bbox = ImageDraw.Draw(scratch).multiline_textbbox((0, 0), text, font=pil_font, align=align, spacing=4)
+    bbox = ImageDraw.Draw(scratch).multiline_textbbox(
+        (0, 0), text, font=pil_font, align=align, spacing=4
+    )
     real_w = max(box_w, math.ceil(bbox[2]))
     real_h = math.ceil(bbox[3]) + 4  # +4px descender margin
 
@@ -150,9 +150,7 @@ def _render_text_element(
 
 
 # TODO: re-enable when QR/barcode 1-bit print bug is fixed
-def _render_qr_element(
-    payload: str, correction: str, box_w: int, box_h: int
-) -> Image.Image:
+def _render_qr_element(payload: str, correction: str, box_w: int, box_h: int) -> Image.Image:
     if not payload:
         raise RenderError("QR payload is empty after field substitution")
     ec = _QR_CORRECTION.get((correction or "M").upper(), ERROR_CORRECT_M)
@@ -181,9 +179,7 @@ def _render_qr_element(
 
 
 # TODO: re-enable when QR/barcode 1-bit print bug is fixed
-def _render_barcode_element(
-    payload: str, symbology: str, box_w: int, box_h: int
-) -> Image.Image:
+def _render_barcode_element(payload: str, symbology: str, box_w: int, box_h: int) -> Image.Image:
     if not payload:
         raise RenderError("Barcode payload is empty after field substitution")
     symb = (symbology or "code128").lower().replace("-", "").replace("_", "")
@@ -243,7 +239,11 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
         for i, obj in enumerate(objects):
             t = int(obj.get("top", 0))
             # Text: use PIL-measured height; other elements: Fabric height is reliable.
-            h = text_subs[i].height if i in text_subs else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
+            h = (
+                text_subs[i].height
+                if i in text_subs
+                else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
+            )
             bottommost = max(bottommost, t + h)
         canvas_h = max(bottommost + _PADDING, 1)
     else:
@@ -299,7 +299,11 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
                     stroke_color = _canvas_color_to_rgb(obj.get("stroke") or "#000000") or (0, 0, 0)
                 else:
                     stroke_color = 0
-                draw.line([(x1, y1), (x2, y2)], fill=stroke_color, width=max(1, int(obj.get("strokeWidth", 1))))
+                draw.line(
+                    [(x1, y1), (x2, y2)],
+                    fill=stroke_color,
+                    width=max(1, int(obj.get("strokeWidth", 1))),
+                )
 
             elif norm_type == "rect":
                 sw = max(1, int(obj.get("strokeWidth", 1)))
@@ -321,7 +325,9 @@ def render_template(template: Template, values: dict[str, str]) -> Image.Image:
                     fill_v = _canvas_color_to_l(obj.get("fill"))
                     sub = Image.new("L", (box_w, box_h), 255)
                     sub_draw = ImageDraw.Draw(sub)
-                    sub_draw.rectangle([0, 0, box_w - 1, box_h - 1], fill=fill_v, outline=0, width=sw)
+                    sub_draw.rectangle(
+                        [0, 0, box_w - 1, box_h - 1], fill=fill_v, outline=0, width=sw
+                    )
                     _paste_onto(canvas, sub, left, top, angle)
 
             else:
