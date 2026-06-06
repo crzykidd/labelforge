@@ -87,11 +87,12 @@ def get_latest_field_values(template_name: str) -> tuple[dict | None, str | None
     return json.loads(row["field_values"]), row["created_at"]
 
 
-def prune_history() -> None:
+def prune_history() -> int:
+    """Prune history per the retention policy. Returns the number of jobs removed."""
     try:
         mode = settings_store.get("retention_mode")
         if mode == "forever":
-            return
+            return 0
 
         db_path = settings.data_dir / "data" / "app.db"
         conn = get_connection(db_path)
@@ -127,10 +128,10 @@ def prune_history() -> None:
                     (f"-{days} days",),
                 ).fetchall()
             else:
-                return
+                return 0
 
             if not rows:
-                return
+                return 0
 
             ids = [r["id"] for r in rows]
             preview_paths = [r["preview_path"] for r in rows if r["preview_path"]]
@@ -165,7 +166,9 @@ def prune_history() -> None:
                 db_size_before,
                 db_size_after,
             )
+            return pruned
         finally:
             conn.close()
     except Exception:
         logger.error("prune_history failed", exc_info=True)
+        return 0

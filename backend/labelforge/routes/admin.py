@@ -3,6 +3,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
+from labelforge import history as history_module
 from labelforge.catalog.loader import load_catalog
 from labelforge.catalog.reconcile import reconcile_catalog_files
 from labelforge.config import settings
@@ -41,3 +42,10 @@ async def reload_catalog() -> dict[str, Any]:
         "reason": summary["reason"],
         "catalog_size": len(get_catalog()),
     }
+
+
+@router.post("/admin/prune-history")
+async def prune_history_now() -> dict[str, int]:
+    """Run history retention pruning immediately. Returns the number of jobs removed."""
+    pruned = history_module.prune_history()
+    return {"pruned": pruned}
