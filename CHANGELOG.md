@@ -36,9 +36,22 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Changed
 
+- **Template list actions are now compact icon buttons** — the per-row Print / Edit / Delete
+  buttons were full-size text buttons that, together with a verbose timestamp, overflowed the
+  card. They're now small icon buttons (with tooltips and accessible labels), the Updated
+  column shows a shorter date (no seconds) on a single line, and the table fits within the card
+  without widening the layout. Requires a container image rebuild.
+
 - **Adopted `release-prep-and-cut` standard (v1.0.0)** — `/release-prep` and `/release-cut` slash commands added to `.claude/commands/`; publish workflow (`build-and-push.yml`) now fires on `release: published` (tag-push trigger removed); `CLAUDE.md` and `standards.md` updated. Developer/process-facing only — no runtime change.
 
 ### Fixed
+
+- **"Run cleanup now" works again** — the Settings → History & Retention "Run cleanup now"
+  button returned **Method Not Allowed**: the frontend posted to `/api/admin/prune-history`,
+  but that route was never implemented, so the request fell through to the SPA catch-all (a
+  GET) and 405'd. The endpoint now exists (auth-gated, like the other admin routes) and
+  `prune_history()` returns the number of jobs removed, so the button reports e.g. "Cleanup
+  done — 3 job(s) removed." Requires a container image rebuild.
 
 - **Upgrade now delivers new and corrected default catalog entries** (#16) — upgrading the
   container image no longer leaves the operator's `labels.yml` stale. On startup, labelforge

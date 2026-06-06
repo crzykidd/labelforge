@@ -23,10 +23,19 @@ function esc(s: string): string {
     .replace(/>/g, '&gt;')
 }
 
+// Inline line icons (no icon-font dependency). 16px, inherit currentColor.
+const ICON_PRINT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`
+const ICON_EDIT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`
+const ICON_DELETE = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`
+
 function fmtDate(iso: string | undefined): string {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleString()
+    // Compact: drop seconds so the column stays on one line (e.g. "6/6/2026, 8:51 AM").
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    })
   } catch {
     return iso
   }
@@ -79,11 +88,11 @@ export function mountTemplatesList(root: HTMLElement): void {
             <tr data-name="${esc(t.name)}">
               <td>${esc(t.display_name || t.name)}</td>
               <td>${mediaCellHtml}</td>
-              <td>${esc(fmtDate(t.updated_at))}</td>
+              <td class="tpl-updated">${esc(fmtDate(t.updated_at))}</td>
               <td class="tpl-actions">
-                <button class="btn-print" data-name="${esc(t.name)}">Print</button>
-                <button class="btn-edit" data-name="${esc(t.name)}">Edit</button>
-                <button class="btn-delete" data-name="${esc(t.name)}">Delete</button>
+                <button class="icon-btn btn-print" data-name="${esc(t.name)}" title="Print" aria-label="Print ${esc(t.display_name || t.name)}">${ICON_PRINT}</button>
+                <button class="icon-btn btn-edit" data-name="${esc(t.name)}" title="Edit" aria-label="Edit ${esc(t.display_name || t.name)}">${ICON_EDIT}</button>
+                <button class="icon-btn btn-delete" data-name="${esc(t.name)}" title="Delete" aria-label="Delete ${esc(t.display_name || t.name)}">${ICON_DELETE}</button>
               </td>
             </tr>
           `}).join('')}

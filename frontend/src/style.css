@@ -198,8 +198,45 @@ button:disabled {
 
 .tpl-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.tpl-updated {
+  white-space: nowrap;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+/* compact icon button used for the per-row template actions */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #d3d6db;
+  border-radius: 5px;
+  background: #fff;
+  color: #4a5260;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.icon-btn svg {
+  display: block;
+}
+
+.icon-btn:hover {
+  background: #f3f4f6;
+  border-color: #b9bec6;
+}
+
+.tpl-actions .btn-delete:hover {
+  background: #fdeaea;
+  border-color: #e6a6a6;
+  color: #c0392b;
 }
 
 .empty-state {
@@ -397,6 +434,12 @@ button:disabled {
   background: #1a6fdb;
   color: #fff;
   border-color: #1a6fdb;
+}
+
+.tpl-actions .btn-print:hover {
+  background: #155cb8;
+  border-color: #155cb8;
+  color: #fff;
 }
 
 /* history page */
