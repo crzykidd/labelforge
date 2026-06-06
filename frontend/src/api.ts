@@ -2,6 +2,15 @@ import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEnt
 
 export const TOKEN_KEY = 'labelforge_token'
 
+// Carries HTTP status and whether a 409 (e.g. media mismatch) can be retried with
+// override=true, so callers can offer a "print anyway" path.
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public overrideAllowed: boolean) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? ''
 }
@@ -36,6 +45,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   })
   if (!res.ok) {
     let detail = `HTTP ${res.status}`
+    let overrideAllowed = false
     try {
       const body = await res.json() as { detail?: unknown }
       const d = body.detail
@@ -44,11 +54,12 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
         // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
         detail = (d as { message: string }).message
+        if ((d as { override_allowed?: unknown }).override_allowed === true) overrideAllowed = true
       } else if (d != null) {
         detail = JSON.stringify(d)
       }
     } catch { /* use status fallback */ }
-    throw new Error(detail)
+    throw new ApiError(detail, res.status, overrideAllowed)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -173,10 +184,12 @@ export function printTemplate(
   name: string,
   fields: Record<string, string>,
   labelMedia?: string,
+  override?: boolean,
 ): Promise<PrintJobResponse> {
   const body: Record<string, unknown> = { fields }
   if (labelMedia !== undefined) body.label_media = labelMedia
-  return apiFetch<PrintJobResponse>(`/api/print/${encodeURIComponent(name)}`, {
+  const qs = override ? '?override=true' : ''
+  return apiFetch<PrintJobResponse>(`/api/print/${encodeURIComponent(name)}${qs}`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
@@ -186,10 +199,12 @@ export function batchPrint(
   name: string,
   labels: Record<string, string>[],
   labelMedia?: string,
+  override?: boolean,
 ): Promise<BatchPrintResponse> {
   const body: Record<string, unknown> = { labels }
   if (labelMedia !== undefined) body.label_media = labelMedia
-  return apiFetch<BatchPrintResponse>(`/api/print/${encodeURIComponent(name)}/batch`, {
+  const qs = override ? '?override=true' : ''
+  return apiFetch<BatchPrintResponse>(`/api/print/${encodeURIComponent(name)}/batch${qs}`, {
     method: 'POST',
     body: JSON.stringify(body),
   })

@@ -7,12 +7,15 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 ### Added
 
 - **Print a template on a different label media at recall time (one-off)** — the recall page
-  now shows a media selector instead of a read-only badge. Same-width media appear first
+  now shows a media selector instead of a read-only badge, defaulting to the template's own
+  media (e.g. a two-color template defaults to `62red`). Same-width media appear first
   (most likely to fit the design without adjustment); a "Loaded in printer" toggle narrows
   the list to the roll currently mounted. The stored template media is never mutated. The
   chosen media is logged to history and reproduced faithfully on reprint. The Print button is
-  gated until a fresh preview has been taken after any media change. Requires a container
-  image rebuild.
+  gated until a fresh preview has been taken after any media change. If the chosen media
+  doesn't match the roll actually loaded, the printer-status check still blocks with a 409,
+  but the recall page now offers a "print anyway" confirmation to override it. Requires a
+  container image rebuild.
 - **Mono + red notice on recall** — when a template contains red elements and a mono
   (single-color) media is selected, an inline notice explains that red will print in black.
   The renderer already maps red → black automatically; no action is needed.

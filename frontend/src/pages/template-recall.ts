@@ -1,4 +1,4 @@
-import { batchPrint, getLabels, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
+import { ApiError, batchPrint, getLabels, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
 import type { FieldSpec, LabelEntry, Template, TemplateLastValues } from '../types'
 import { mountLabelMediaSelect } from '../labels'
 import { navigate } from '../router'
@@ -222,7 +222,7 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
   //
   // Chosen approach: mount with all supported labels (provides the toggle machinery),
   // then immediately replace option content with our grouped version.
-  const mediaHandle = mountLabelMediaSelect({
+  mountLabelMediaSelect({
     container: mediaSelectorContainer,
     labels: supportedLabels,
     initialValue: tpl.label_media,
@@ -231,20 +231,22 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
     },
   })
 
-  // Replace the option content with same-width-first grouping, preserving current value.
+  // Replace the option content with same-width-first grouping, preserving a desired value.
+  // Note: setting innerHTML resets the <select> value, so the caller must pass the value to
+  // keep (captured BEFORE this runs) — reading the select here would see the post-wipe reset.
   const innerSelect = mediaSelectorContainer.querySelector<HTMLSelectElement>('.media-filter-select')!
-  function repopulateGrouped(list: LabelEntry[]): void {
+  function repopulateGrouped(list: LabelEntry[], desiredValue: string): void {
     const { sameWidth: sw, other: ot } = partitionByWidth(list, tplWidthMm)
     innerSelect.innerHTML = buildRecallOptionsHtml(sw, ot, tplWidthMm)
-    // Restore the current value if still available; otherwise fall to first supported
-    if (mediaHandle.getValue() && innerSelect.querySelector(`option[value="${CSS.escape(mediaHandle.getValue())}"]`)) {
-      innerSelect.value = mediaHandle.getValue()
+    if (desiredValue && innerSelect.querySelector(`option[value="${CSS.escape(desiredValue)}"]`)) {
+      innerSelect.value = desiredValue
     } else {
       const first = innerSelect.querySelector<HTMLOptionElement>('option:not([disabled])')
       if (first) innerSelect.value = first.value
     }
   }
-  repopulateGrouped(supportedLabels)
+  // Default to the template's own media (e.g. a red template defaults to 62red).
+  repopulateGrouped(supportedLabels, tpl.label_media)
 
   // Patch the "Show all" toggle to also rebuild with grouping.
   // We can't override mountLabelMediaSelect internals, so we intercept via the
@@ -261,7 +263,8 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
           Array.from(innerSelect.options).map(o => o.value)
         )
         const visibleLabels = supportedLabels.filter(l => visibleIds.has(l.id))
-        repopulateGrouped(visibleLabels)
+        // Preserve the selection the toggle just produced (capture before regroup wipes it).
+        repopulateGrouped(visibleLabels, innerSelect.value)
       }, 0)
     })
   })
@@ -373,24 +376,42 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
     hideStatus()
     const chosenMedia = getCurrentMedia()
     const mediaOverride = chosenMedia !== tpl.label_media ? chosenMedia : undefined
-    try {
+
+    async function attemptPrint(override: boolean): Promise<void> {
       if (batchEnable?.checked) {
         const batchLabels = buildBatchLabels()
-        const result = await batchPrint(tpl.name, batchLabels, mediaOverride)
+        const result = await batchPrint(tpl.name, batchLabels, mediaOverride, override)
         const kind = result.failed > 0 ? 'error' : 'success'
         showStatus(
           `Batch ${result.batch_id}: ${result.succeeded} sent, ${result.failed} failed (${batchLabels.length} requested). "Sent" means transmitted to the printer; delivery is not confirmed.`,
           kind,
         )
       } else {
-        const result = await printTemplate(tpl.name, collectFields(), mediaOverride)
+        const result = await printTemplate(tpl.name, collectFields(), mediaOverride, override)
         showStatus(
           `Sent — job #${result.job_id} (status: ${result.status}). "Sent" means the job was transmitted to the printer; delivery is not confirmed.`,
           'success',
         )
       }
+    }
+
+    try {
+      await attemptPrint(false)
     } catch (err) {
-      showStatus((err as Error).message, 'error')
+      // A 409 media mismatch (loaded roll ≠ selected media) is overridable — offer to print anyway.
+      if (err instanceof ApiError && err.overrideAllowed) {
+        if (window.confirm(`${err.message}\n\nPrint anyway on the currently loaded roll?`)) {
+          try {
+            await attemptPrint(true)
+          } catch (err2) {
+            showStatus((err2 as Error).message, 'error')
+          }
+        } else {
+          showStatus(err.message, 'error')
+        }
+      } else {
+        showStatus((err as Error).message, 'error')
+      }
     } finally {
       updateButtons()
     }
