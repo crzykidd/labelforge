@@ -13,6 +13,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
   warning) are now passed through a `scrub()` helper that strips CR/LF before interpolation,
   so a crafted value can't forge additional log entries. No behaviour change for legitimate
   input.
+- **Code-scanning cleanup** — documented three intentionally-empty exception handlers flagged
+  by CodeQL `py/empty-except` (shutdown-task cancellation, best-effort printer-socket close,
+  malformed stored-payload fallback); the socket-close handler now logs at debug instead of
+  silently swallowing. No behaviour change.
 
 ### Added
 

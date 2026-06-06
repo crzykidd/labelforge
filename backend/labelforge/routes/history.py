@@ -47,6 +47,7 @@ def _row_to_detail(row) -> HistoryDetail:
         try:
             payload = json.loads(row["payload_json"])
         except Exception:
+            # Malformed stored payload — return the row without the decoded payload.
             pass
     return HistoryDetail(**item.model_dump(), payload_json=payload)
 

@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     try:
         await retention_task
     except asyncio.CancelledError:
+        # Expected: the task we just cancelled re-raises CancelledError on await.
         pass
 
 

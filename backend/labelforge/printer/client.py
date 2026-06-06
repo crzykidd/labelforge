@@ -171,8 +171,8 @@ def status_read(host: str, backend: str, timeout_ms: int = 2000) -> dict:
             if printer is not None:
                 try:
                     printer.s.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to close printer socket cleanly: %s", exc)
     except Exception as exc:
         logger.debug("TCP status path failed: %s", exc)
 
