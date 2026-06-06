@@ -6,6 +6,7 @@ from labelforge import settings_store
 from labelforge.catalog.loader import get_label
 from labelforge.config import settings
 from labelforge.history import insert_job_with_preview
+from labelforge.logutil import scrub
 from labelforge.models import PrintJobResponse, QuickPrintRequest
 from labelforge.printer.client import (
     PrintError,
@@ -82,8 +83,8 @@ async def quick_print(request: QuickPrintRequest, override: bool = False) -> Pri
                     )
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
-                    media_id,
-                    request.label_media,
+                    scrub(media_id),
+                    scrub(request.label_media),
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")

@@ -6,6 +6,14 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [0.1.0] — 2026-06-06
 
+### Security
+
+- **Log-injection hardening (CWE-117)** — user-influenced values that reach a log line
+  (the history `job_id` path parameter and the requested label media on a media-mismatch
+  warning) are now passed through a `scrub()` helper that strips CR/LF before interpolation,
+  so a crafted value can't forge additional log entries. No behaviour change for legitimate
+  input.
+
 ### Added
 
 - **Friendly template names** — when creating a template, type a human-readable name (e.g.

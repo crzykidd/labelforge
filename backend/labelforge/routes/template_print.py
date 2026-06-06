@@ -9,6 +9,7 @@ from labelforge import settings_store
 from labelforge.catalog.loader import get_label
 from labelforge.config import settings
 from labelforge.history import insert_job_with_preview
+from labelforge.logutil import scrub
 from labelforge.models import (
     BatchJobResult,
     BatchPrintRequest,
@@ -128,8 +129,8 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
                     )
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
-                    media_id,
-                    effective_media,
+                    scrub(media_id),
+                    scrub(effective_media),
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")
@@ -250,8 +251,8 @@ async def batch_print(
                     )
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
-                    media_id,
-                    effective_media,
+                    scrub(media_id),
+                    scrub(effective_media),
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")

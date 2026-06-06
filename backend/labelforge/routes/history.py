@@ -8,6 +8,7 @@ from labelforge.catalog.loader import get_label
 from labelforge.config import settings
 from labelforge.db import get_connection
 from labelforge.history import insert_job_with_preview
+from labelforge.logutil import scrub
 from labelforge.models import HistoryDetail, HistoryItem, PinRequest, QuickPrintRequest
 from labelforge.printer.client import PrintError, print_image
 from labelforge.render.template import render_template
@@ -245,4 +246,4 @@ async def delete_history(job_id: int) -> None:
         try:
             (settings.data_dir / "label-previews" / row["preview_path"]).unlink(missing_ok=True)
         except Exception:
-            logger.warning("Could not delete preview file for job %d", job_id, exc_info=True)
+            logger.warning("Could not delete preview file for job %s", scrub(job_id), exc_info=True)
