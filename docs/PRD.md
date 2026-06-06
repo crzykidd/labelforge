@@ -28,8 +28,10 @@ Single Docker container, deployed on `docker10` via Dockhand. External access vi
 
 - Quick-print mode (text + font + size + label media — like brother_ql_web, kept)
 - Named templates with a freeform canvas layout (text, QR, barcode, image, line, rect)
+- Two-color (black + red) text in templates on two-color media; red maps to black on mono media
 - Variable fields auto-detected from `{placeholder}` syntax in element content
 - Template recall: form auto-generated from field schema, fill, preview, print
+- One-off print of a template on a different label media at recall time (stored media unchanged)
 - Increment / batch printing for numeric fields
 - Print history with reprint, pinning, and configurable retention
 - HTTP API: every template callable via `POST /api/print/{name}` with JSON field values

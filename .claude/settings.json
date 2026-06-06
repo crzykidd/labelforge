@@ -1,16 +1,58 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Grep|Glob|Regex",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/vexp-guard.sh",
-            "timeout": 3000
-          }
-        ]
-      }
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)",
+      "Bash(uname -a && hostname && cat /etc/os-release 2>/dev/null | head -5 && echo \"---\" && cat /proc/version 2>/dev/null)",
+      "Read(//usr/lib/**)",
+      "Read(//proc/**)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git ls-files *)",
+      "Bash(git show *)",
+      "Bash(gh issue *)",
+      "Bash(gh repo *)",
+      "Bash(command -v tea)",
+      "Bash(tea --version)",
+      "Bash(tea issues *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(node_modules/.bin/tsc *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(docker compose *)",
+      "Bash(docker *)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowLocalBinding": true,
+      "allowedDomains": [
+        "localhost",
+        "127.0.0.1",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "registry.npmjs.org"
+      ]
+    },
+    "filesystem": {
+      "allowWrite": [
+        "/tmp/**",
+        "~/.cache/**",
+        "~/.npm/**"
+      ]
+    }
   }
 }

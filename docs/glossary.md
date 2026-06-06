@@ -14,7 +14,9 @@ The merged set of available label media — library's printable list intersected
 
 ### Template
 
-A saved, named label design. Belongs to exactly one label media (a 62mm Spool template cannot be printed on a 29×90 die-cut). Contains an ordered list of elements and an auto-derived field schema. Identified by a slug-like name (`spool`, `file-folder`, `box`).
+A saved, named label design. Has a *default/home* label media stored with it, but can be printed on a different compatible media at recall time (one-off — the stored media is never mutated). The recall page lets the user pick any supported media; same-width options appear first. Contains an ordered list of elements and an auto-derived field schema. Identified by a slug-like name (`spool`, `file-folder`, `box`).
+
+See also: **Save As** (the way to permanently retarget a design to a new media), **Print-time media override** (the one-off recall path).
 
 ### Element
 

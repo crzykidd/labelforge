@@ -12,7 +12,9 @@ Every template is callable from anywhere in the homelab. A Home Assistant automa
 
 ## Auth
 
-Single shared secret in `.env` as `API_TOKEN`. Required as `Authorization: Bearer <token>` on:
+**Optional, default-on (see ADR 2026-06-02).** Setting `DISABLE_AUTH=true` runs the app with no app-level auth — every `/api/*` route is open, intended for deployments fronted by a reverse proxy (e.g. Traefik) that authenticates at the edge. With auth disabled, `GET /api/health` returns `"auth_required": false` and the SPA skips its token gate. The rest of this section describes the default (auth enabled) mode.
+
+Single shared secret in `.env` as `API_TOKEN` (required unless `DISABLE_AUTH=true`; the app refuses to start otherwise). Required as `Authorization: Bearer <token>` on:
 
 - All `POST`, `PUT`, `DELETE` endpoints
 - `GET /api/admin/*`

@@ -12,6 +12,20 @@ __pycache__/
 .venv/
 venv/
 env/
+# uv is not this project's toolchain (Dockerfile uses pip + hatchling); lockfile is a local artifact
+uv.lock
+
+# Sandbox-mounted host dotfiles (not project files)
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.idea
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
 
 # Build artifacts
 build/
@@ -25,6 +39,8 @@ node_modules/
 
 # Frontend build output (consumed by FastAPI in container build)
 frontend/dist/
+# Compiled TS output emitted next to source (tsc artifacts; not used by Vite)
+frontend/src/**/*.js
 
 # IDE
 .vscode/
@@ -41,28 +57,30 @@ Thumbs.db
 
 # Runtime data (should never be committed)
 data/
+data-dev/
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
 
-# vexp (VS Code extension daemon — all runtime state)
+# Leftover vexp index dir — vexp is de-adopted (see standards.md), but its host
+# daemon keeps regenerating .vexp/ until host teardown lands in the ansible repo.
+# Ignored only to prevent accidentally committing regenerated index state.
 .vexp/
 
 # Logs
 *.log
 logs/
 
-# vexp — local index only; manifest.json and .gitattributes are tracked
-.vexp/index.db
-.vexp/index.db-wal
-.vexp/index.db-shm
-.vexp/healthy
-.vexp/daemon.pid
-.vexp/daemon.pipe
-.vexp/vexp.log
+# claude — ignore the dir but track the shared settings.json and slash commands.
+# Any per-host auto-generated .claude/CLAUDE.md and settings.local.json stay ignored.
+.claude/*
+!.claude/settings.json
+!.claude/commands/
+!.claude/commands/*.md
 
 # Test artifacts
 .coverage
 htmlcov/
 coverage.xml
+test-print.json

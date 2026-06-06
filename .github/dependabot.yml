@@ -2,9 +2,9 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '06:00'
       timezone: Etc/UTC
     open-pull-requests-limit: 5
@@ -13,12 +13,16 @@ updates:
     labels:
       - dependencies
       - github-actions
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
 
   - package-ecosystem: pip
     directory: /
+    target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '06:00'
       timezone: Etc/UTC
     open-pull-requests-limit: 5
@@ -35,9 +39,9 @@ updates:
 
   - package-ecosystem: npm
     directory: /frontend
+    target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '06:00'
       timezone: Etc/UTC
     open-pull-requests-limit: 5
@@ -54,9 +58,9 @@ updates:
 
   - package-ecosystem: docker
     directory: /
+    target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '06:00'
       timezone: Etc/UTC
     open-pull-requests-limit: 5

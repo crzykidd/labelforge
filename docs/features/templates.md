@@ -8,7 +8,9 @@ The core feature. A template is a saved, named label design with a freeform canv
 
 1. Navigate to `/templates` → list of existing templates
 2. Click **New template**
-3. Modal: pick a name (slug-validated: lowercase, hyphens, no spaces) and a label media
+3. Modal: type a friendly name (e.g. `Spool Label`) — the URL slug is auto-derived (`spool-label`)
+   and shown as a read-only hint. Pick a label media. The OK button is gated on a valid slug
+   (non-empty, matches `^[a-z0-9][a-z0-9-]*$`) and a selected media.
 4. Land in editor with a blank canvas sized exactly to that label media at print DPI
 5. Add elements from a toolbar (text, QR, barcode, image, line, rect)
 6. Position, resize, rotate, layer
@@ -24,7 +26,10 @@ The core feature. A template is a saved, named label design with a freeform canv
 
 ### Save As (clone with different label media)
 
-A template is locked to its label media. To re-use a design on a different media:
+A template's stored media can be permanently changed only via Save As. For a one-off print on
+different media, use the recall page's media selector instead (no new template created).
+
+To permanently re-use a design on a different media:
 
 1. Open template
 2. Click **Save As**
@@ -41,11 +46,25 @@ History rows referencing a deleted template keep their `template_id` and resolve
 ### Recall (print from template)
 
 1. From `/templates`, click **Print** on a template
-2. Form auto-generated from the template's field schema
-3. Required fields validated client-side and server-side
-4. **Preview** button → true preview reflecting filled values
-5. **Print** button → prints, logs to history
-6. **Batch** toggle → see [`templates - batch`](#batch--increment) below
+2. **Media selector** — pick which label media to print on (default: the template's stored media).
+   Same-width media are listed first (most likely to fit the design). A "Loaded in printer"
+   toggle narrows the list to the roll currently mounted (fetches printer status once). This is
+   a one-off choice — the stored template media is never mutated.
+3. **Mono + red notice** — if the template contains red elements and the chosen media is
+   mono (single-color), an inline notice explains that red will print as black. The renderer
+   automatically maps red → black; no toggle is needed.
+4. Form auto-generated from the template's field schema
+5. Required fields validated client-side and server-side
+6. **Preview** button → true preview reflecting filled values on the chosen media. The Print
+   button is gated until a fresh preview has been taken after any media change.
+7. **Overflow warning** — if the chosen media is a die-cut and content extends beyond its
+   printable height, an inline warning appears ("Content may be clipped"). Printing still
+   proceeds; the user decides from the preview.
+8. **Print** button → prints on the chosen media, logs to history with the chosen media.
+9. **Batch** toggle → see [`templates - batch`](#batch--increment) below
+
+One-off media overrides are captured in history with the actual printed media. Reprinting a
+history row reproduces the original media choice, not the template's stored media.
 
 ## Data model
 
@@ -92,6 +111,23 @@ For continuous media (62mm endless), the canvas has a fixed width and a user-set
 
 Top: undo, redo, zoom, fit, save, save-as, preview, print
 
+The editor title shows the friendly `display_name` (falls back to the slug when they match).
+The current label media is shown as a read-only badge next to the template name so
+the user can see what they are editing without opening any menu.
+
+**Save As** opens a modal for entering a new slug name and picking a label media
+(pre-filled with the current media). It saves the current canvas first, then calls
+`POST /api/templates/{name}/duplicate`. On success, the editor navigates to the new
+template. This is the only sanctioned way to retarget a design to different media —
+the current template's media is never mutated in the editor.
+
+**Text color** — a Black / Red toggle appears in the toolbar **only when the loaded
+label is two-color** (`label.color === 1`, e.g. `62red` / DK-2251). For mono media
+the control is hidden and all text is always black. When visible, changing the
+control sets the active text element's `fill` property; new text elements default to
+the currently-selected color. The server renderer honors the `fill` value and
+composites red or black ink onto the print image.
+
 Left: element type palette (text, QR, barcode, image, line, rect)
 
 Right: properties panel for selected element + global panels (fields, label info)
@@ -132,6 +168,18 @@ Edge cases:
 - Overflow of zero-padded width: when `047` → `048` ... `099` → `100`: width grows. Document as expected behavior.
 - Negative or zero count: 400, "Batch count must be >= 1"
 - Batch count > 1000: 400, "Batch count exceeds maximum (1000)" — sanity guard
+
+## Template list
+
+The template list shows:
+- **Name** — `display_name` (falls back to the slug)
+- **Media** — the Brother DK part number with size, e.g. `DK-1209 (62×29mm)` for a die-cut,
+  `DK-2251 (62mm) Red` for a two-color continuous roll. If the media id is not in the catalog
+  (deleted or custom entry), the raw id is shown in `<code>` as a fallback.
+- **Updated** — last-modified timestamp
+
+Renaming `display_name` after creation is not yet supported in the UI (the `TemplateUpdate`
+model supports it via the API; a rename modal is left for a future iteration).
 
 ## API
 
