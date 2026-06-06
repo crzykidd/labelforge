@@ -8,9 +8,14 @@ Context for AI coding sessions in this repo. Read this before doing anything.
 
 Owner: crzykidd. Personal homelab project, public open source. Single-user app — no multi-user features.
 
+## Build Status
+
+- **Last shipped:** — (no release yet)
+- **Target for next release:** TBD
+
 ## Standards
 
-This project implements shared engineering standards from the crzynet `homelab-configs` repo. **Read [`standards.md`](standards.md) at the repo root on session start** whenever the work could touch branching, commits, PRs, handoff prompts, or the sandbox — it pins which standards and versions this repo conforms to. The hard per-session operational rules from those standards are pasted verbatim at the end of this file (Code check-in).
+This project implements shared engineering standards from the crzynet `homelab-configs` repo. **Read [`standards.md`](standards.md) at the repo root on session start** whenever the work could touch branching, commits, PRs, handoff prompts, or the sandbox — it pins which standards and versions this repo conforms to. The hard per-session operational rules from those standards are pasted verbatim at the end of this file (Code check-in; Release process).
 
 ## Source of truth
 
@@ -134,3 +139,42 @@ honor by default:
 
 If you're unsure whether an action would violate one of the above, stop and ask before
 acting.
+
+<!--
+Source: standards/release-prep-and-cut @ v1.0.0 (crzynet/homelab-configs).
+Paste the section below verbatim into the adopting project's CLAUDE.md.
+The full standard (two-phase prep/cut workflow, archive trigger, validation
+steps, adoption checklist) lives at:
+https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/release-prep-and-cut/README.md
+-->
+
+## Release process (operational rules)
+
+This project adopts the `release-prep-and-cut` standard. The full why-and-how
+lives at the source above; the rules below are the per-session do/don'ts a
+coding agent must honor by default:
+
+- **The version is stored BARE in the source-of-truth file** — no `v` prefix
+  anywhere in code. The `v` prefix is added in exactly one place: the git tag
+  and matching GitHub release name. Don't add it to README badges, CHANGELOG
+  headers, in-code image tags, or anywhere else.
+- **`CHANGELOG.md` is the single source of truth for release notes.** The PR
+  description (set by `/release-prep`) and the GitHub release body (set by
+  `/release-cut`) reuse the **same section verbatim**. Never author release
+  notes twice.
+- **One commit per release prep.** Version bump + changelog roll + every doc
+  sync ship in a single `chore(release): prepare v<version>` commit. No
+  `Co-authored-by:` trailers.
+- **Never re-tag.** If `v<version>` already exists as a local tag, a remote
+  tag, or a GitHub release, STOP. Never delete-and-recreate; never `--force`.
+  Pick the next version instead.
+- **`/release-cut` only after the PR has merged and CI is green.** The
+  publish-to-`main` workflow must have already pushed `:latest` images to the
+  registry before `/release-cut` runs. If you cannot confirm both — STOP and
+  tell the user to wait.
+- **The release tag is the only thing the cut command writes to `main`.** Both
+  the prep commit and any follow-up docs commit land on `dev` and reach `main`
+  only via PR. Never push directly to `main` as part of a release.
+
+If you're unsure whether an action would violate one of the above, stop and
+ask before acting.

@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Adopted `release-prep-and-cut` standard (v1.0.0)** — `/release-prep` and `/release-cut` slash commands added to `.claude/commands/`; publish workflow (`build-and-push.yml`) now fires on `release: published` (tag-push trigger removed); `CLAUDE.md` and `standards.md` updated. Developer/process-facing only — no runtime change.
+
 ### Fixed
 
 - **Upgrade now delivers new and corrected default catalog entries** (#16) — upgrading the
@@ -134,15 +138,3 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 - Printer status: empirically confirmed the network print path (TCP 9100) does not answer status requests; the printer's EWS page (HTTP port 80) does report loaded media and is the chosen status source (opt-in). See ADR 2026-05-20 (c).
 - Deferred to later slices: Fabric.js canvas editor, history UI + retention, printer-status feature (EWS scrape), settings UI, two-color (62red) rendering, image elements / image upload.
 
----
-
-Format for future entries:
-
-## [version] — YYYY-MM-DD
-
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security

@@ -2,7 +2,13 @@
 
 Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.
 
-**Status**: Early development. Not yet usable.
+**Status**: Pre-release. Core print and template features working; not yet packaged for deployment.
+
+**Version:** 0.0.1
+
+## What's New
+
+_No releases yet. See `CHANGELOG.md` for upcoming changes._
 
 ## What it does
 

@@ -4,6 +4,24 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-05 — Release publish trigger: `release: published` replaces tag-push for production builds
+
+**Decision**: Removed the `tags: v*.*.*` trigger from `build-and-push.yml`. `release: published` is now the sole trigger for production image builds. The `push: branches: [main, dev]` trigger is retained for rolling dev/latest builds.
+
+**Why**: `gh release create v<version>` (run by `/release-cut`) both creates the GitHub release AND pushes the git tag. With both `tags: v*.*.*` and `release: published` active, a single `/release-cut` invocation would fire the build workflow twice on the same commit — wasting CI minutes and risking a race between two concurrent builds pushing identical `:latest` image layers. Removing the tag-push trigger makes `release: published` the single, deterministic gate for release builds. This aligns with the `code-checkin-and-pr` standard's publishing matrix and is required by the `release-prep-and-cut` standard's `/release-cut` step 6 (verifies the build triggered by the `release` event specifically).
+
+**Image tags on release**: The `metadata-action`'s `type=semver,prefix=v` rules produce `:v<version>`, `:v<major>.<minor>`, `:v<major>` (with a `v` prefix on image tags, matching the existing tag convention). `:latest` is also produced by `type=raw,value=latest,enable=startsWith(github.ref, 'refs/tags/v')`. This implements the `code-checkin-and-pr` matrix (`:latest`, `:<semver>`, `:<major>`) with an added `v` prefix from the existing config.
+
+**Context**: Part of adopting `release-prep-and-cut @ 1.0.0`.
+
+**Considered**:
+- Keep `tags: v*.*.*` only, remove `release: published` — rejected; the `release-prep-and-cut` standard requires `/release-cut` to verify a build triggered by the `release` event.
+- Keep both triggers and deduplicate in the workflow — rejected; fragile and over-engineered for a solo project.
+
+**Would revisit if**: Docker image tag conventions change (e.g. dropping the `v` prefix from image tags); or if the release workflow needs pre-release staging triggered by draft releases.
+
+---
+
 ## 2026-06-05 — Catalog reconciliation: 3-way merge with baseline, operator-wins, never-delete
 
 **Decision**: On startup, labelforge performs a non-destructive 3-way merge of the bundled

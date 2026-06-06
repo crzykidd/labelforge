@@ -72,10 +72,12 @@ data-dev/
 *.log
 logs/
 
-# claude — ignore the dir but track the shared settings.json. Any per-host
-# auto-generated .claude/CLAUDE.md and settings.local.json stay ignored.
+# claude — ignore the dir but track the shared settings.json and slash commands.
+# Any per-host auto-generated .claude/CLAUDE.md and settings.local.json stay ignored.
 .claude/*
 !.claude/settings.json
+!.claude/commands/
+!.claude/commands/*.md
 
 # Test artifacts
 .coverage
