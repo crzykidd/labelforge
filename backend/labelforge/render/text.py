@@ -95,7 +95,7 @@ def render_text(
 
 def _measure_line_height(font: ImageFont.FreeTypeFont, draw: ImageDraw.ImageDraw) -> int:
     bbox = draw.textbbox((0, 0), "Ag|", font=font)
-    return (bbox[3] - bbox[1]) + 4  # +4px inter-line gap
+    return int(bbox[3] - bbox[1]) + 4  # +4px inter-line gap
 
 
 def _wrap_text(

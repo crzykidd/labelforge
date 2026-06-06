@@ -39,6 +39,7 @@ def insert_job_with_preview(
         )
         conn.commit()
         job_id = cursor.lastrowid
+        assert job_id is not None
     finally:
         conn.close()
 

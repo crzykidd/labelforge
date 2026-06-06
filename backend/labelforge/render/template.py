@@ -103,7 +103,7 @@ def _paste_onto(
         # Preserve centre point across expand-rotation.
         cx = left + sub.width // 2
         cy = top + sub.height // 2
-        sub = sub.rotate(-angle, expand=True, resample=Image.BICUBIC, fillcolor=255)
+        sub = sub.rotate(-angle, expand=True, resample=Image.Resampling.BICUBIC, fillcolor=255)
         left = cx - sub.width // 2
         top = cy - sub.height // 2
     # Dark pixels (value≈0) → mask 255 (opaque); white (255) → mask 0 (skip).
@@ -170,12 +170,12 @@ def _render_qr_element(payload: str, correction: str, box_w: int, box_h: int) ->
         # Integer-multiple upscale: every module maps to exactly scale×scale pixels,
         # pure black/white — no grey edges that the print threshold could crush.
         scaled_w, scaled_h = nat_w * scale, nat_h * scale
-        scaled = nat.resize((scaled_w, scaled_h), Image.NEAREST)
+        scaled = nat.resize((scaled_w, scaled_h), Image.Resampling.NEAREST)
         result = Image.new("L", (box_w, box_h), 255)
         result.paste(scaled, ((box_w - scaled_w) // 2, (box_h - scaled_h) // 2))
         return result
     # Fallback: box smaller than natural QR; NEAREST keeps pixels pure B/W.
-    return nat.resize((max(box_w, 1), max(box_h, 1)), Image.NEAREST)
+    return nat.resize((max(box_w, 1), max(box_h, 1)), Image.Resampling.NEAREST)
 
 
 # TODO: re-enable when QR/barcode 1-bit print bug is fixed
@@ -199,7 +199,7 @@ def _render_barcode_element(payload: str, symbology: str, box_w: int, box_h: int
     # Force pure black/white before scaling; NEAREST keeps bars as whole-pixel
     # columns with no anti-aliased grey that the print threshold could merge.
     bw = img.convert("L").point(lambda x: 0 if x < 128 else 255)
-    return bw.resize((max(box_w, 1), max(box_h, 1)), Image.NEAREST)
+    return bw.resize((max(box_w, 1), max(box_h, 1)), Image.Resampling.NEAREST)
 
 
 def render_template(template: Template, values: dict[str, str]) -> Image.Image:

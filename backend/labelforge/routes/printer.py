@@ -14,7 +14,7 @@ router = APIRouter(tags=["printer"])
 
 
 @router.get("/printer/status")
-async def get_printer_status() -> dict:
+async def get_printer_status() -> dict | JSONResponse:
     timeout_ms = settings_store.get("printer_status_timeout_ms")
 
     try:

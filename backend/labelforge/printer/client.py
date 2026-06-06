@@ -154,6 +154,8 @@ def status_read(host: str, backend: str, timeout_ms: int = 2000) -> dict:
 
     timeout_s = timeout_ms / 1000
     raw: bytes = b""
+    width_mm: int | None = None
+    length_mm: int | None = None
 
     # Primary: raw TCP ESC i S (may return empty on some firmware — HTTP fallback handles it)
     try:
@@ -212,8 +214,8 @@ def status_read(host: str, backend: str, timeout_ms: int = 2000) -> dict:
         media_type_str = parser.pairs.get("Media Type", "")
         ready = "READY" in device_status.upper()
 
-        width_mm: int | None = None
-        length_mm: int | None = None
+        width_mm = None
+        length_mm = None
         if media_type_str:
             m = re.search(r"(\d+)mm\s*x\s*(\d+)mm", media_type_str, re.IGNORECASE)
             if m:
@@ -225,7 +227,11 @@ def status_read(host: str, backend: str, timeout_ms: int = 2000) -> dict:
                     width_mm = int(m2.group(1))
                     length_mm = 0
 
-        media_id = _media_id_from_dims(width_mm, length_mm, None) if width_mm is not None else None
+        media_id = (
+            _media_id_from_dims(width_mm, length_mm, None)
+            if width_mm is not None and length_mm is not None
+            else None
+        )
         return {
             "ready": ready,
             "model": None,
