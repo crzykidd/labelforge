@@ -22,18 +22,21 @@ function esc(s: string): string {
     .replace(/>/g, '&gt;')
 }
 
-function parsePath(): { name: string; isNew: boolean; newMedia: string } {
+function parsePath(): { name: string; isNew: boolean; newMedia: string; newDisplayName: string } {
   const path = window.location.pathname  // /templates/my-name
   const parts = path.split('/')
   const name = decodeURIComponent(parts[parts.length - 1] ?? '')
   const params = new URLSearchParams(window.location.search)
   const isNew = params.get('new') === '1'
   const newMedia = params.get('media') ?? ''
-  return { name, isNew, newMedia }
+  const newDisplayName = params.get('display_name') ?? ''
+  return { name, isNew, newMedia, newDisplayName }
 }
 
 export function mountTemplateEditor(root: HTMLElement): void {
-  const { name, isNew, newMedia } = parsePath()
+  const { name, isNew, newMedia, newDisplayName } = parsePath()
+  // Friendly name shown in the toolbar title; falls back to the slug
+  let displayName = newDisplayName || name
 
   // Widen the app container for the editor
   const appEl = document.getElementById('app')
@@ -44,7 +47,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
       <div class="editor-toolbar">
         <button id="btn-back">← Back</button>
         <span class="toolbar-sep"></span>
-        <span class="editor-title" id="editor-title">${esc(name)}</span>
+        <span class="editor-title" id="editor-title">${esc(displayName)}</span>${displayName !== name ? `<span class="editor-title-slug" id="editor-title-slug">${esc(name)}</span>` : ''}
         <code class="editor-media-badge" id="editor-media">${esc(isNew ? newMedia : '')}</code>
         <span class="toolbar-sep"></span>
         <button id="btn-add-text" title="Add a text element. Use {fieldname} placeholders (single braces) for variable fields.">Add Text</button>
@@ -215,7 +218,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
       if (existsOnServer) {
         await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia })
       } else {
-        await createTemplate({ name, label_media: labelMedia, canvas_json: canvasJson })
+        await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson })
         existsOnServer = true
       }
       showStatus('Saved.', 'success')
@@ -246,7 +249,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
         if (existsOnServer) {
           await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia })
         } else {
-          await createTemplate({ name, label_media: labelMedia, canvas_json: canvasJson })
+          await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson })
           existsOnServer = true
         }
       }
@@ -287,6 +290,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
       try {
         const tmpl = await getTemplate(name)
         labelMedia = tmpl.label_media
+        // Update title to show the stored display_name
+        displayName = tmpl.display_name || name
+        const titleEl = root.querySelector<HTMLElement>('#editor-title')
+        if (titleEl) titleEl.textContent = displayName
         const label = labels.find(l => l.id === tmpl.label_media)
         if (!label) { showStatus(`Unknown label media: ${tmpl.label_media}`, 'error'); return }
         await initEditor(label)

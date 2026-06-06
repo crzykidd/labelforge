@@ -8,7 +8,9 @@ The core feature. A template is a saved, named label design with a freeform canv
 
 1. Navigate to `/templates` → list of existing templates
 2. Click **New template**
-3. Modal: pick a name (slug-validated: lowercase, hyphens, no spaces) and a label media
+3. Modal: type a friendly name (e.g. `Spool Label`) — the URL slug is auto-derived (`spool-label`)
+   and shown as a read-only hint. Pick a label media. The OK button is gated on a valid slug
+   (non-empty, matches `^[a-z0-9][a-z0-9-]*$`) and a selected media.
 4. Land in editor with a blank canvas sized exactly to that label media at print DPI
 5. Add elements from a toolbar (text, QR, barcode, image, line, rect)
 6. Position, resize, rotate, layer
@@ -109,6 +111,7 @@ For continuous media (62mm endless), the canvas has a fixed width and a user-set
 
 Top: undo, redo, zoom, fit, save, save-as, preview, print
 
+The editor title shows the friendly `display_name` (falls back to the slug when they match).
 The current label media is shown as a read-only badge next to the template name so
 the user can see what they are editing without opening any menu.
 
@@ -165,6 +168,18 @@ Edge cases:
 - Overflow of zero-padded width: when `047` → `048` ... `099` → `100`: width grows. Document as expected behavior.
 - Negative or zero count: 400, "Batch count must be >= 1"
 - Batch count > 1000: 400, "Batch count exceeds maximum (1000)" — sanity guard
+
+## Template list
+
+The template list shows:
+- **Name** — `display_name` (falls back to the slug)
+- **Media** — the Brother DK part number with size, e.g. `DK-1209 (62×29mm)` for a die-cut,
+  `DK-2251 (62mm) Red` for a two-color continuous roll. If the media id is not in the catalog
+  (deleted or custom entry), the raw id is shown in `<code>` as a fallback.
+- **Updated** — last-modified timestamp
+
+Renaming `display_name` after creation is not yet supported in the UI (the `TemplateUpdate`
+model supports it via the API; a rename modal is left for a future iteration).
 
 ## API
 

@@ -6,6 +6,17 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Added
 
+- **Friendly template names** — when creating a template, type a human-readable name (e.g.
+  `Spool Label`); the URL slug (`spool-label`) is auto-derived and shown as a live read-only
+  hint. The friendly name is stored as `display_name`, shown in the template list and as the
+  editor title. Renaming `display_name` after creation is not yet available in the UI. Requires
+  a container image rebuild.
+
+- **DK part number in the template list** — the Media column now shows the Brother DK part
+  number with dimensions (e.g. `DK-1209 (62×29mm)`) instead of the raw media id. Two-color
+  media gets a `Red` suffix (e.g. `DK-2251 (62mm) Red`). If the media id is not in the catalog,
+  the raw id is shown as before. Requires a container image rebuild.
+
 - **Print a template on a different label media at recall time (one-off)** — the recall page
   now shows a media selector instead of a read-only badge, defaulting to the template's own
   media (e.g. a two-color template defaults to `62red`). Same-width media appear first
