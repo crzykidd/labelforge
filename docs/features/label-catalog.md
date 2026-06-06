@@ -122,14 +122,68 @@ On the default `QL-820NWB`: the six wide rolls (`102`, `103`, `104`, `102x51`, `
 
 At startup:
 
-1. Load `labels.yml` from `/var/docker/labelforge/labels.yml`
-2. If missing, copy the default shipped at `/app/labels.yml` (image asset) to the volume on first run
+1. Reconcile `$DATA_DIR/labels.yml` from the bundled default (see "Upgrade reconciliation" below)
+2. Load `$DATA_DIR/labels.yml`
 3. Validate against schema (Pydantic model); log warnings for malformed entries, skip them
 4. Call `brother_ql.labels` for the printable set
 5. Build merged catalog in memory; cache for the process lifetime
 6. Log: catalog size, count of yml-only (hidden) entries, count of library-only (fallback) entries
 
-Reload on `SIGHUP` or via an admin endpoint (`POST /api/admin/reload-catalog`). No file watcher in v1 — restart or reload is fine.
+Reload via `POST /api/admin/reload-catalog` (auth-gated). No file watcher — restart or reload is fine.
+
+## Upgrade reconciliation
+
+Each image ships a default catalog at `/app/labels.yml`. On startup labelforge performs a
+non-destructive **3-way merge** to deliver new and corrected entries from the bundled default
+without overwriting operator customizations.
+
+### State files
+
+| Path | Purpose |
+|---|---|
+| `/app/labels.yml` | Bundled default — read-only truth for what this release ships |
+| `$DATA_DIR/labels.yml` | Operator's live file (what the app reads) |
+| `$DATA_DIR/data/labels.default.yml` | Baseline — a copy of the default as of the last sync |
+
+### Startup flows
+
+- **First run** (`$DATA_DIR/labels.yml` absent): default is copied to both the operator file and
+  the baseline. No merge needed.
+- **No baseline** (existing install upgrading to this feature for the first time): brand-new
+  entries (ids in default but not in operator file) are appended; existing entries are never
+  touched. Baseline is written. Field-level corrections apply on the next default change.
+- **Baseline present, default unchanged** (bytes equal): no-op.
+- **Baseline present, default changed**: full 3-way merge runs (see below).
+
+A backup is written to `$DATA_DIR/labels.yml.bak` before any write (single rolling copy).
+
+### 3-way merge rules
+
+Entries are keyed by `id`. For each entry:
+
+- **New entry** (id in default, not in operator): added verbatim at the end.
+- **Existing entry** (id in both): for each field in the new default —
+  - If `operator_value == baseline_value` (never customized) **and** the default changed it:
+    take the new value from the default (e.g. a corrected `brother_part` SKU).
+  - If `operator_value != baseline_value` (operator customized it): **keep the operator's value.**
+  - Fields the operator added that aren't in the default: kept untouched.
+- **Operator-only entry** (id not in default): kept as-is. Custom media the operator added is
+  **never deleted**, even if a later default release removed the entry.
+
+Ordering: operator's existing entries in their original order, new default entries appended after.
+
+### Operator controls
+
+- `CATALOG_AUTO_MERGE=false` — disable writes entirely. Startup still detects and logs when an
+  updated default is available, but the operator file is never touched.
+
+### Notes
+
+- PyYAML is used for the round-trip. YAML comments and non-standard formatting in the operator
+  file are lost when a write occurs (the backup preserves the original). `ruamel.yaml`
+  (comment-preserving) was deferred; see ADR 2026-06-05.
+- The source for reconciliation is always the bundled image default, **never the internet**.
+  This does not violate the "no auto-update from the internet" rule.
 
 ## API
 

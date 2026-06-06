@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,9 +9,11 @@ from fastapi.staticfiles import StaticFiles
 
 from labelforge import history as history_module
 from labelforge.catalog.loader import load_catalog
+from labelforge.catalog.reconcile import reconcile_catalog_files
 from labelforge.config import settings
 from labelforge.db import init_db
 from labelforge.render.fonts import load_fonts
+from labelforge.routes import admin as admin_router
 from labelforge.routes import fonts, health, labels
 from labelforge.routes import history as history_router
 from labelforge.routes import preview as preview_router
@@ -37,13 +38,18 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     logger.info("Data directory: %s", data_dir)
 
     yml_path = data_dir / "labels.yml"
-    if not yml_path.exists():
-        default_yml = Path("/app/labels.yml")
-        if default_yml.exists():
-            shutil.copy(default_yml, yml_path)
-            logger.info("Copied default labels.yml to %s", yml_path)
-        else:
-            logger.warning("labels.yml missing at %s and no default at /app/labels.yml", yml_path)
+    baseline_path = data_dir / "data" / "labels.default.yml"
+    default_yml = Path("/app/labels.yml")
+    try:
+        summary = reconcile_catalog_files(
+            default_yml,
+            yml_path,
+            baseline_path,
+            auto_merge=settings.catalog_auto_merge,
+        )
+        logger.info("Catalog reconcile: %s", summary["reason"])
+    except Exception:
+        logger.error("Catalog reconcile failed — loading existing file as-is", exc_info=True)
 
     db_path = data_dir / "data" / "app.db"
     init_db(db_path)
@@ -83,6 +89,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(admin_router.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
 app.include_router(labels.router, prefix="/api")
 app.include_router(fonts.router, prefix="/api")

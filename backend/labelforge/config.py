@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("/data")
     default_label_media: str = "62"
     log_level: str = "INFO"
+    catalog_auto_merge: bool = True
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

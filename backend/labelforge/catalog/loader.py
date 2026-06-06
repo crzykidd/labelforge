@@ -46,8 +46,8 @@ def load_catalog(yml_path: Path) -> None:
     lib_labels = {label.identifier: label for label in ALL_LABELS}
 
     # Compatibility is computed against the configured printer at load time
-    # (printer_model is fixed in config). A future POST /api/admin/reload-catalog
-    # should call this again to recompute.
+    # (printer_model is fixed in config). POST /api/admin/reload-catalog calls
+    # this again to recompute.
     printer_model = settings.printer_model
     model = next((m for m in ALL_MODELS if m.identifier == printer_model), None)
     if model is None:

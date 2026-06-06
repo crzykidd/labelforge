@@ -1,10 +1,12 @@
 ---
 name: 2026-06-05-catalog-reconcile-on-upgrade
-status: pending          # pending | completed | failed
+status: completed
 created: 2026-06-05
-model: sonnet            # opus = research/planning, sonnet = coding
-completed:               # filled when the work is done
-result:                  # one-line summary of the outcome
+model: sonnet
+completed: 2026-06-05
+result: >-
+  3-way merge at startup (reconcile.py + 13 tests), CATALOG_AUTO_MERGE config toggle,
+  POST /api/admin/reload-catalog route, ADR + changelog + doc update; closes #16
 ---
 
 # Task: Reconcile the shipped `labels.yml` into the operator's copy on upgrade (issue #16)

@@ -4,6 +4,49 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-05 — Catalog reconciliation: 3-way merge with baseline, operator-wins, never-delete
+
+**Decision**: On startup, labelforge performs a non-destructive 3-way merge of the bundled
+`/app/labels.yml` into the operator's `$DATA_DIR/labels.yml`. A baseline copy
+(`$DATA_DIR/data/labels.default.yml`) records the default as of the last sync. Merge logic:
+if a field's operator value equals the baseline value (never customized), a changed default
+value is applied; if the operator changed it, the operator wins. Entries the operator added or
+that a later default removed are never deleted. A rolling backup (`$DATA_DIR/labels.yml.bak`)
+is written before any write. The feature is opt-out via `CATALOG_AUTO_MERGE=false`. Closes #16.
+
+**Source of truth for reconciliation is the bundled image default, NOT the internet.** This is
+intentionally distinct from "don't auto-update the catalog from the internet" (`CLAUDE.md`):
+reconcile reads only the default shipped inside the image; no network access occurs.
+
+**PyYAML is used for the round-trip** (not `ruamel.yaml`). PyYAML drops YAML comments and
+non-standard formatting from the operator file on write. Mitigation: the backup preserves the
+original. This is an accepted trade-off; the operator file is user-editable but not expected to
+carry extensive comments.
+
+**Why operator-wins + never-delete**: The operator may have customized `brother_part`, tweaked
+`display_name`, or added custom media entries that have no default counterpart. Silently
+overwriting these would break their setup. "Never delete" covers the case where an operator
+has a physical roll for an entry a future default drops — their printer still works.
+
+**Why the baseline (3-source model, not 2)**: Without a baseline, distinguishing "operator
+customized this field" from "operator left it at the old default value" is impossible when the
+default changes. The baseline is the missing anchor that makes intent deterministic.
+
+**Considered**:
+- `ruamel.yaml` for comment-preserving round-trips — deferred. `ruamel.yaml` is not in the
+  locked stack (PyYAML is); adding it would need its own ADR. The backup mitigates the loss.
+- Simple overwrite on upgrade — rejected; clobbers operator customizations, the root cause of #16.
+- Operator-file-wins on every field, no merge — rejected; defeats the purpose (SKU corrections
+  and new entries would never arrive).
+- Delete entries removed from the default — rejected; custom media the operator added would
+  silently vanish.
+
+**Would revisit if**: comment-preserving round-trips become a strong operator ask (add
+`ruamel.yaml` with an ADR); or the locked stack adds a structured YAML library with better
+semantics.
+
+---
+
 ## 2026-06-04 — Template recall pre-fill uses print history; retention preserves latest job per template
 
 **Decision**: The "Load previous values" button on the recall form reads `field_values` from the newest `print_jobs` row for that template. No new table or column was needed — `field_values` was already stored at print time. `GET /api/templates/{name}/last-values` returns `{values, printed_at}`.

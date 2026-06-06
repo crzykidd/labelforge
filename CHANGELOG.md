@@ -4,6 +4,22 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **Upgrade now delivers new and corrected default catalog entries** (#16) — upgrading the
+  container image no longer leaves the operator's `labels.yml` stale. On startup, labelforge
+  performs a non-destructive 3-way merge: new entries from the bundled default are added,
+  corrected field values (e.g. `brother_part` SKU fixes) are applied to fields the operator
+  never customized, and any operator customizations or custom media entries are preserved and
+  never deleted. A backup is written to `$DATA_DIR/labels.yml.bak` before any change. Opt out
+  with `CATALOG_AUTO_MERGE=false`. Requires a container image rebuild.
+
+### Added
+
+- **`POST /api/admin/reload-catalog`** — re-runs catalog reconciliation and reloads the catalog
+  from disk without restarting the container. Returns a JSON summary of entries added/updated
+  and whether the operator file was rewritten. Requires API token.
+
 ### Changed
 
 - **CI: compose validation now targets `docker-compose.yml` / `docker-compose.dev.yml`** — the compose job previously looked for `compose.yml` / `compose.dev.yml` (wrong filenames) and used a `bash -e` one-liner that treated a missing file as a failure. The loop is now hardened to skip absent files and only fail on a bad `docker compose config`. The `CLAUDE.md` convention note is corrected to match the actual filenames. Backend linting (ruff) is also clean: import order fixed in `routes/print.py`, `datetime.UTC` modernisation in `templates/store.py`, and long-line wraps across several `backend/` files.
