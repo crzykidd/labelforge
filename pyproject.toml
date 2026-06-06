@@ -19,7 +19,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pillow>=10.4",
     "qrcode[pil]>=8.0",
-    "python-barcode>=0.15",
+    "python-barcode>=0.16.1",
     "brother-ql-inventree>=1.3",
 ]
 
