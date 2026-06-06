@@ -1,7 +1,7 @@
 import json
 import re
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 
 from labelforge.config import settings
 from labelforge.db import get_connection
@@ -15,7 +15,7 @@ def _db_path():
 
 
 def _now_utc() -> str:
-    return datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _row_to_template(row: sqlite3.Row) -> Template:

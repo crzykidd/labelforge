@@ -156,6 +156,9 @@ jobs:
       - uses: actions/checkout@v6
       - name: Validate compose files
         run: |
+          # compose files reference `env_file: .env`, which is gitignored.
+          # Seed a throwaway .env from the tracked example so `config` can resolve it.
+          [ -f .env ] || cp .env.example .env
           for f in docker-compose.yml docker-compose.dev.yml; do
             if [ -f "$f" ]; then
               docker compose -f "$f" config --quiet && echo "OK $f"
