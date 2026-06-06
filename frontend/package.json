@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "fabric": "6.6.1"
+    "fabric": "7.4.0"
   },
   "devDependencies": {
     "typescript": "^5.7.2",
