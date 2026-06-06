@@ -4,6 +4,22 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Print a template on a different label media at recall time (one-off)** — the recall page
+  now shows a media selector instead of a read-only badge. Same-width media appear first
+  (most likely to fit the design without adjustment); a "Loaded in printer" toggle narrows
+  the list to the roll currently mounted. The stored template media is never mutated. The
+  chosen media is logged to history and reproduced faithfully on reprint. The Print button is
+  gated until a fresh preview has been taken after any media change. Requires a container
+  image rebuild.
+- **Mono + red notice on recall** — when a template contains red elements and a mono
+  (single-color) media is selected, an inline notice explains that red will print in black.
+  The renderer already maps red → black automatically; no action is needed.
+- **Overflow warning on recall** — when a die-cut media is chosen and the content extends
+  past its printable height, an inline warning appears near the preview. Printing still
+  proceeds — the user decides from the preview whether to adjust or proceed.
+
 ### Changed
 
 - **Adopted `release-prep-and-cut` standard (v1.0.0)** — `/release-prep` and `/release-cut` slash commands added to `.claude/commands/`; publish workflow (`build-and-push.yml`) now fires on `release: published` (tag-push trigger removed); `CLAUDE.md` and `standards.md` updated. Developer/process-facing only — no runtime change.

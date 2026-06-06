@@ -135,20 +135,23 @@ async def _reprint_template(job_id: int, row) -> dict:
             status_code=409,
             detail=f"Template '{row['template_id']}' no longer exists and cannot be reprinted",
         )
-    if get_label(tmpl.label_media) is None:
+    # Reprint on the media from the original history row, not the template's stored media.
+    # This reproduces one-off media overrides from the recall page exactly.
+    row_media = row["label_media"]
+    if get_label(row_media) is None:
         raise HTTPException(
             status_code=409,
-            detail=f"Label media '{tmpl.label_media}' is no longer in the catalog",
+            detail=f"Label media '{row_media}' is no longer in the catalog",
         )
     field_values = json.loads(row["field_values"]) if row["field_values"] else {}
     try:
-        image = render_template(tmpl, field_values)
+        image = render_template(tmpl, field_values, media_override=row_media)
     except RenderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         outcome = print_image(
             image=image,
-            label_media=tmpl.label_media,
+            label_media=row_media,
             model=settings.printer_model,
             backend=settings.printer_backend,
             host=settings.printer_host,
@@ -158,7 +161,7 @@ async def _reprint_template(job_id: int, row) -> dict:
     new_id = insert_job_with_preview(
         image=image,
         payload_json=row["payload_json"],
-        label_media=tmpl.label_media,
+        label_media=row_media,
         template_name=row["template_id"],
         field_values=field_values,
         reprint_of=job_id,

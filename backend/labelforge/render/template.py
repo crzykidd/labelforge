@@ -202,18 +202,49 @@ def _render_barcode_element(payload: str, symbology: str, box_w: int, box_h: int
     return bw.resize((max(box_w, 1), max(box_h, 1)), Image.Resampling.NEAREST)
 
 
-def render_template(template: Template, values: dict[str, str]) -> Image.Image:
+def detect_overflow(template: Template, media_id: str) -> bool:
+    """True when any element's bottom edge exceeds the printable height for a die-cut media.
+
+    Continuous media never overflows (canvas length is content-driven). Returns False
+    for continuous media or when the media is unknown.
+    """
+    label = get_label(media_id)
+    if label is None:
+        return False
+    if label.form_factor in _CONTINUOUS_FORM_FACTORS:
+        return False
+    max_h = label.dots_printable[1]
+    for obj in template.canvas_json.get("objects", []):
+        top = int(obj.get("top", 0))
+        h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
+        if top + h > max_h:
+            return True
+    return False
+
+
+def render_template(
+    template: Template,
+    values: dict[str, str],
+    *,
+    media_override: str | None = None,
+) -> Image.Image:
     """Rasterize *template* with *values* substituted for placeholders.
+
+    media_override: when set, render as if the template were on this media rather
+    than template.label_media. The stored template is never mutated. Used for
+    print-time one-off media selection (e.g. print a 62red design on 62x29).
 
     Returns a PIL Image sized for the print head. Mode is 'L' (0=black, 255=white)
     for mono media. For two-color media (label.color == 1, e.g. 62red / DK-2251)
     mode is 'RGB': black pixels are (0,0,0), red pixels are (255,0,0), paper is
     (255,255,255). The print path promotes L→RGB and passes red=True for two-color
     media; an RGB image here means red pixels land on the red print plane.
+    On mono media any red element is rendered as black (via _canvas_color_to_l/rgb).
     """
-    label = get_label(template.label_media)
+    effective_media = media_override or template.label_media
+    label = get_label(effective_media)
     if label is None:
-        raise RenderError(f"Unknown label media: {template.label_media!r}")
+        raise RenderError(f"Unknown label media: {effective_media!r}")
 
     canvas_w = label.dots_printable[0]
     objects = template.canvas_json.get("objects", [])

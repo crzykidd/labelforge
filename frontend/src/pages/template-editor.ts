@@ -252,7 +252,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
       }
       // Build a fields dict: use field name as its own placeholder value for preview
       const fields: Record<string, string> = {}
-      const blob = await previewTemplate(name, fields)
+      const { blob } = await previewTemplate(name, fields)
       if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl)
       previewObjectUrl = URL.createObjectURL(blob)
       previewImg.src = previewObjectUrl

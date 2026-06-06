@@ -43,6 +43,7 @@ export interface PrintJobResponse {
   job_id: number;
   status: string;
   preview_url: string | null;
+  overflow?: boolean;
 }
 
 export interface BatchJobResult {

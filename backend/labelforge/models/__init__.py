@@ -95,10 +95,12 @@ class TemplateUpdate(BaseModel):
 
 class PrintRequest(BaseModel):
     fields: dict[str, str] = {}
+    label_media: str | None = None  # None = use the template's stored media
 
 
 class BatchPrintRequest(BaseModel):
     labels: list[dict[str, str]]
+    label_media: str | None = None  # None = use the template's stored media
 
 
 class BatchJobResult(BaseModel):

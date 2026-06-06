@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from labelforge import settings_store
+from labelforge.catalog.loader import get_label
 from labelforge.config import settings
 from labelforge.history import insert_job_with_preview
 from labelforge.models import (
@@ -22,7 +23,7 @@ from labelforge.printer.client import (
     status_read,
     to_print_bitmap,
 )
-from labelforge.render.template import render_template
+from labelforge.render.template import detect_overflow, render_template
 from labelforge.render.text import RenderError
 from labelforge.routes.auth import require_auth
 from labelforge.templates import store
@@ -62,16 +63,30 @@ def _apply_sample_defaults(template_fields, values: dict[str, str]) -> dict[str,
     return result
 
 
+def _resolve_effective_media(body_label_media: str | None, tmpl_label_media: str) -> str:
+    """Validate and return the effective media id, raising HTTPException on invalid input."""
+    if body_label_media is None:
+        return tmpl_label_media
+    label = get_label(body_label_media)
+    if label is None or not label.supported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Label media '{body_label_media}' is not a supported catalog entry",
+        )
+    return body_label_media
+
+
 @router.post("/print/{name}")
 async def print_template(name: str, body: PrintRequest, override: bool = False) -> dict:
     tmpl = store.get_template(name)
     if tmpl is None:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
 
+    effective_media = _resolve_effective_media(body.label_media, tmpl.label_media)
     values = _apply_defaults(tmpl.field_schema, body.fields)
 
     try:
-        image = render_template(tmpl, values)
+        image = render_template(tmpl, values, media_override=body.label_media)
     except RenderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -95,18 +110,18 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
                     },
                 )
             media_id = status["media_id"]
-            if media_id is not None and not media_compatible(media_id, tmpl.label_media):
+            if media_id is not None and not media_compatible(media_id, effective_media):
                 if not override:
                     raise HTTPException(
                         status_code=409,
                         detail={
                             "error": "media_mismatch",
-                            "expected": tmpl.label_media,
+                            "expected": effective_media,
                             "loaded": media_id,
                             "override_allowed": True,
                             "message": (
                                 f"Printer has {media_id} loaded, "
-                                f"template expects {tmpl.label_media}. "
+                                f"template expects {effective_media}. "
                                 "Pass override=true to print anyway."
                             ),
                         },
@@ -114,7 +129,7 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
                     media_id,
-                    tmpl.label_media,
+                    effective_media,
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")
@@ -122,7 +137,7 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
     try:
         outcome = print_image(
             image=image,
-            label_media=tmpl.label_media,
+            label_media=effective_media,
             model=settings.printer_model,
             backend=settings.printer_backend,
             host=settings.printer_host,
@@ -133,16 +148,19 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
     job_id = insert_job_with_preview(
         image=image,
         payload_json=body.model_dump_json(),
-        label_media=tmpl.label_media,
+        label_media=effective_media,
         template_name=name,
         field_values=values,
     )
+
+    overflow = detect_overflow(tmpl, effective_media)
 
     return {
         "job_id": job_id,
         "status": outcome,
         "template": name,
-        "label_media": tmpl.label_media,
+        "label_media": effective_media,
+        "overflow": overflow,
         "preview_url": f"/api/history/{job_id}/preview.png",
     }
 
@@ -153,11 +171,13 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
     if tmpl is None:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
 
+    effective_media = _resolve_effective_media(body.label_media, tmpl.label_media)
+
     # Preview is a layout check — fill missing fields with samples rather than failing.
     values = _apply_sample_defaults(tmpl.field_schema, body.fields)
 
     try:
-        image = render_template(tmpl, values)
+        image = render_template(tmpl, values, media_override=body.label_media)
     except RenderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -166,7 +186,13 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
     # Mono templates apply the print threshold so preview == print.
     preview = image if image.mode == "RGB" else to_print_bitmap(image)
     preview.save(buf, format="PNG")
-    return Response(content=buf.getvalue(), media_type="image/png")
+
+    overflow = detect_overflow(tmpl, effective_media)
+    headers: dict[str, str] = {}
+    if overflow:
+        headers["X-Label-Overflow"] = "true"
+
+    return Response(content=buf.getvalue(), media_type="image/png", headers=headers)
 
 
 @router.post("/print/{name}/batch", response_model=BatchPrintResponse)
@@ -182,6 +208,8 @@ async def batch_print(
     tmpl = store.get_template(name)
     if tmpl is None:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
+
+    effective_media = _resolve_effective_media(body.label_media, tmpl.label_media)
 
     # Status check once before the loop — avoids per-label overhead
     if settings_store.get("printer_status_check"):
@@ -204,18 +232,18 @@ async def batch_print(
                     },
                 )
             media_id = status["media_id"]
-            if media_id is not None and not media_compatible(media_id, tmpl.label_media):
+            if media_id is not None and not media_compatible(media_id, effective_media):
                 if not override:
                     raise HTTPException(
                         status_code=409,
                         detail={
                             "error": "media_mismatch",
-                            "expected": tmpl.label_media,
+                            "expected": effective_media,
                             "loaded": media_id,
                             "override_allowed": True,
                             "message": (
                                 f"Printer has {media_id} loaded, "
-                                f"template expects {tmpl.label_media}. "
+                                f"template expects {effective_media}. "
                                 "Pass override=true to print anyway."
                             ),
                         },
@@ -223,7 +251,7 @@ async def batch_print(
                 logger.warning(
                     "Media mismatch (override): loaded=%s expected=%s",
                     media_id,
-                    tmpl.label_media,
+                    effective_media,
                 )
         except StatusUnavailable:
             logger.warning("Printer status unavailable; proceeding without check")
@@ -236,10 +264,10 @@ async def batch_print(
     for label_values in body.labels:
         try:
             values = _apply_defaults(tmpl.field_schema, label_values)
-            image = render_template(tmpl, values)
+            image = render_template(tmpl, values, media_override=body.label_media)
             outcome = print_image(
                 image=image,
-                label_media=tmpl.label_media,
+                label_media=effective_media,
                 model=settings.printer_model,
                 backend=settings.printer_backend,
                 host=settings.printer_host,
@@ -247,7 +275,7 @@ async def batch_print(
             job_id = insert_job_with_preview(
                 image=image,
                 payload_json=BatchPrintRequest(labels=[label_values]).model_dump_json(),
-                label_media=tmpl.label_media,
+                label_media=effective_media,
                 template_name=name,
                 field_values=values,
                 batch_id=batch_id,

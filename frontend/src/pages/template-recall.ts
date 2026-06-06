@@ -1,5 +1,6 @@
-import { batchPrint, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
-import type { FieldSpec, Template, TemplateLastValues } from '../types'
+import { batchPrint, getLabels, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
+import type { FieldSpec, LabelEntry, Template, TemplateLastValues } from '../types'
+import { mountLabelMediaSelect } from '../labels'
 import { navigate } from '../router'
 
 function fmtDate(iso: string): string {
@@ -32,6 +33,53 @@ function nameFromPath(): string {
   return decodeURIComponent(parts[1] ?? '')
 }
 
+/** True when any canvas object uses a red fill or stroke color. */
+function templateHasRed(tpl: Template): boolean {
+  const redValues = new Set(['#ff0000', '#f00', 'red', 'rgb(255,0,0)'])
+  const objects = (tpl.canvas_json?.objects ?? []) as Array<Record<string, unknown>>
+  for (const obj of objects) {
+    const fill = (obj.fill as string | undefined)?.toLowerCase().trim() ?? ''
+    const stroke = (obj.stroke as string | undefined)?.toLowerCase().trim() ?? ''
+    if (redValues.has(fill) || redValues.has(stroke)) return true
+  }
+  return false
+}
+
+/** Group labels: same-width-as-template first, then all others. */
+function partitionByWidth(labels: LabelEntry[], templateWidthMm: number): { sameWidth: LabelEntry[]; other: LabelEntry[] } {
+  const sameWidth: LabelEntry[] = []
+  const other: LabelEntry[] = []
+  for (const l of labels) {
+    if (l.tape_size[0] === templateWidthMm) {
+      sameWidth.push(l)
+    } else {
+      other.push(l)
+    }
+  }
+  return { sameWidth, other }
+}
+
+/** Build optgroup HTML for the grouped recall media selector.
+ *
+ * Same-width media appear first (most likely to fit without clipping).
+ * Within each group, only supported media are selectable.
+ */
+function buildRecallOptionsHtml(sameWidth: LabelEntry[], other: LabelEntry[], widthMm: number): string {
+  function renderOpt(l: LabelEntry): string {
+    const text = l.brother_part ? `${l.brother_part}: ${l.display_name}` : l.display_name
+    if (l.supported) {
+      return `<option value="${esc(l.id)}">${esc(text)}</option>`
+    }
+    const reason = l.incompatible_reason ?? 'Not supported by the configured printer'
+    return `<option value="${esc(l.id)}" disabled title="${esc(reason)}">${esc(text)} — unavailable</option>`
+  }
+  const sw = sameWidth.map(renderOpt).join('')
+  const ot = other.map(renderOpt).join('')
+  const swLabel = `Same width (${widthMm}mm)`
+  return (sw ? `<optgroup label="${esc(swLabel)}">${sw}</optgroup>` : '') +
+         (ot ? `<optgroup label="Other media">${ot}</optgroup>` : '')
+}
+
 export function mountTemplateRecall(root: HTMLElement): void {
   const name = nameFromPath()
   root.innerHTML = `<div class="template-recall"><p>Loading…</p></div>`
@@ -39,8 +87,9 @@ export function mountTemplateRecall(root: HTMLElement): void {
   Promise.all([
     getTemplate(name),
     getLastValues(name).catch(() => ({ values: null, printed_at: null } satisfies TemplateLastValues)),
+    getLabels(),
   ])
-    .then(([tpl, lastVals]) => renderRecall(root, tpl, lastVals))
+    .then(([tpl, lastVals, allLabels]) => renderRecall(root, tpl, lastVals, allLabels))
     .catch((err: Error) => {
       root.innerHTML = `
         <div class="template-recall">
@@ -55,18 +104,32 @@ export function mountTemplateRecall(root: HTMLElement): void {
     })
 }
 
-function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastValues): void {
+function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastValues, allLabels: LabelEntry[]): void {
   const fields = tpl.field_schema ?? []
   const hasFields = fields.length > 0
   const incrementFields = fields.filter(f => f.increment)
   const canBatch = incrementFields.length > 0
+  const hasRed = templateHasRed(tpl)
+
+  // Only supported media in the selector
+  const supportedLabels = allLabels.filter(l => l.supported)
+
+  // Find template's label width for grouping
+  const tplLabel = allLabels.find(l => l.id === tpl.label_media)
+  const tplWidthMm = tplLabel?.tape_size[0] ?? 0
 
   root.innerHTML = `
     <div class="template-recall">
       <a href="#" class="back-link" id="back-link">← Templates</a>
       <h2>${esc(tpl.display_name || tpl.name)}</h2>
-      <p class="recall-meta">Media: <code>${esc(tpl.label_media)}</code></p>
       <div id="status-msg" class="status-msg" hidden></div>
+
+      <div class="recall-media-selector">
+        <p class="recall-meta">Print media (default: <code>${esc(tpl.label_media)}</code>):</p>
+        <div id="media-selector-container"></div>
+        <p id="mono-red-notice" class="recall-notice info" hidden>This label is black-only — red elements will print in black.</p>
+        <p id="overflow-notice" class="recall-notice warn" hidden>Content may be clipped — it's taller than this label.</p>
+      </div>
 
       <form id="recall-form" autocomplete="off">
         ${hasFields ? fields.map(fieldInput).join('') : '<p class="recall-meta">This template has no variable fields.</p>'}
@@ -88,7 +151,7 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
         <div class="actions">
           ${hasFields ? `<button type="button" id="btn-load-prev"${lastVals.values ? '' : ' disabled'}>Load previous values${lastVals.printed_at ? ` (${fmtDate(lastVals.printed_at)})` : ''}</button>` : ''}
           <button type="button" id="btn-preview">Preview</button>
-          <button type="submit" id="btn-print">Print</button>
+          <button type="submit" id="btn-print" disabled>Print</button>
         </div>
       </form>
 
@@ -108,9 +171,15 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
   const batchEnable = root.querySelector<HTMLInputElement>('#batch-enable')
   const batchOpts = root.querySelector<HTMLDivElement>('#batch-opts')
   const batchCount = root.querySelector<HTMLInputElement>('#batch-count')
+  const monoRedNotice = root.querySelector<HTMLParagraphElement>('#mono-red-notice')!
+  const overflowNotice = root.querySelector<HTMLParagraphElement>('#overflow-notice')!
+  const mediaSelectorContainer = root.querySelector<HTMLDivElement>('#media-selector-container')!
 
   let previewObjectUrl: string | null = null
   let debounceTimer: number | undefined
+  // True when the selected media has changed since the last preview was run.
+  // Print is blocked until a fresh preview confirms the user has seen the output.
+  let previewStale = false
 
   root.querySelector('#back-link')!.addEventListener('click', e => {
     e.preventDefault()
@@ -141,7 +210,86 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
   }
 
   function updateButtons(): void {
-    btnPrint.disabled = missingRequired()
+    // Print requires: all required fields filled AND a fresh preview after any media change.
+    btnPrint.disabled = missingRequired() || previewStale
+  }
+
+  // Wire the reusable label-media selector with same-width-first grouping.
+  // We build the HTML directly rather than using buildLabelOptionsHtml so we can
+  // inject custom optgroups. The toggle (Show all / Loaded in printer) comes from
+  // mountLabelMediaSelect, but the option content is replaced after mount via the
+  // handle — simpler to just override innerHTML of the inner <select> element.
+  //
+  // Chosen approach: mount with all supported labels (provides the toggle machinery),
+  // then immediately replace option content with our grouped version.
+  const mediaHandle = mountLabelMediaSelect({
+    container: mediaSelectorContainer,
+    labels: supportedLabels,
+    initialValue: tpl.label_media,
+    onChange: (id: string) => {
+      onMediaChange(id)
+    },
+  })
+
+  // Replace the option content with same-width-first grouping, preserving current value.
+  const innerSelect = mediaSelectorContainer.querySelector<HTMLSelectElement>('.media-filter-select')!
+  function repopulateGrouped(list: LabelEntry[]): void {
+    const { sameWidth: sw, other: ot } = partitionByWidth(list, tplWidthMm)
+    innerSelect.innerHTML = buildRecallOptionsHtml(sw, ot, tplWidthMm)
+    // Restore the current value if still available; otherwise fall to first supported
+    if (mediaHandle.getValue() && innerSelect.querySelector(`option[value="${CSS.escape(mediaHandle.getValue())}"]`)) {
+      innerSelect.value = mediaHandle.getValue()
+    } else {
+      const first = innerSelect.querySelector<HTMLOptionElement>('option:not([disabled])')
+      if (first) innerSelect.value = first.value
+    }
+  }
+  repopulateGrouped(supportedLabels)
+
+  // Patch the "Show all" toggle to also rebuild with grouping.
+  // We can't override mountLabelMediaSelect internals, so we intercept via the
+  // select's change event (which fires after mountLabelMediaSelect updates it).
+  // The simplest robust approach: re-run grouping whenever the mode toggle fires.
+  const toggleBtns = mediaSelectorContainer.querySelectorAll<HTMLButtonElement>('.media-filter-btn')
+  toggleBtns.forEach(btn => {
+    // Add a second listener that runs after the one mounted by mountLabelMediaSelect.
+    btn.addEventListener('click', () => {
+      // Allow mountLabelMediaSelect's listener to run first (same tick), then regroup.
+      window.setTimeout(() => {
+        // Collect whichever labels are now visible (all or filtered) from the current options.
+        const visibleIds = new Set(
+          Array.from(innerSelect.options).map(o => o.value)
+        )
+        const visibleLabels = supportedLabels.filter(l => visibleIds.has(l.id))
+        repopulateGrouped(visibleLabels)
+      }, 0)
+    })
+  })
+
+  function getCurrentMedia(): string {
+    return innerSelect.value || tpl.label_media
+  }
+
+  function onMediaChange(id: string): void {
+    // Update mono+red notice
+    const label = supportedLabels.find(l => l.id === id)
+    const isMono = label ? label.color === 0 : true
+    monoRedNotice.hidden = !(hasRed && isMono)
+
+    // Mark preview as stale — force user to preview before printing.
+    previewStale = true
+    overflowNotice.hidden = true
+    updateButtons()
+
+    // Immediately trigger preview so the user sees the new layout.
+    window.clearTimeout(debounceTimer)
+    debounceTimer = window.setTimeout(() => runPreview(), 0)
+  }
+
+  // Initialize notice state for the template's default media
+  const initialLabel = supportedLabels.find(l => l.id === tpl.label_media)
+  if (initialLabel && hasRed && initialLabel.color === 0) {
+    monoRedNotice.hidden = false
   }
 
   function buildBatchLabels(): Record<string, string>[] {
@@ -164,12 +312,19 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
     if (missingRequired()) return
     btnPreview.disabled = true
     hideStatus()
-    previewTemplate(tpl.name, collectFields())
-      .then(blob => {
+    const chosenMedia = getCurrentMedia()
+    // Only pass label_media override when it differs from the template's stored media.
+    const mediaOverride = chosenMedia !== tpl.label_media ? chosenMedia : undefined
+    previewTemplate(tpl.name, collectFields(), mediaOverride)
+      .then(({ blob, overflow }) => {
         if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl)
         previewObjectUrl = URL.createObjectURL(blob)
         previewImg.src = previewObjectUrl
         previewArea.hidden = false
+        overflowNotice.hidden = !overflow
+        // Preview is fresh — allow printing.
+        previewStale = false
+        updateButtons()
       })
       .catch((err: Error) => showStatus(err.message, 'error'))
       .finally(() => { btnPreview.disabled = false })
@@ -210,19 +365,25 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
       showStatus('Fill all required fields before printing.', 'error')
       return
     }
+    if (previewStale) {
+      showStatus('Preview the label with the selected media before printing.', 'error')
+      return
+    }
     btnPrint.disabled = true
     hideStatus()
+    const chosenMedia = getCurrentMedia()
+    const mediaOverride = chosenMedia !== tpl.label_media ? chosenMedia : undefined
     try {
       if (batchEnable?.checked) {
-        const labels = buildBatchLabels()
-        const result = await batchPrint(tpl.name, labels)
+        const batchLabels = buildBatchLabels()
+        const result = await batchPrint(tpl.name, batchLabels, mediaOverride)
         const kind = result.failed > 0 ? 'error' : 'success'
         showStatus(
-          `Batch ${result.batch_id}: ${result.succeeded} sent, ${result.failed} failed (${labels.length} requested). "Sent" means transmitted to the printer; delivery is not confirmed.`,
+          `Batch ${result.batch_id}: ${result.succeeded} sent, ${result.failed} failed (${batchLabels.length} requested). "Sent" means transmitted to the printer; delivery is not confirmed.`,
           kind,
         )
       } else {
-        const result = await printTemplate(tpl.name, collectFields())
+        const result = await printTemplate(tpl.name, collectFields(), mediaOverride)
         showStatus(
           `Sent — job #${result.job_id} (status: ${result.status}). "Sent" means the job was transmitted to the printer; delivery is not confirmed.`,
           'success',

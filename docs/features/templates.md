@@ -24,7 +24,10 @@ The core feature. A template is a saved, named label design with a freeform canv
 
 ### Save As (clone with different label media)
 
-A template is locked to its label media. To re-use a design on a different media:
+A template's stored media can be permanently changed only via Save As. For a one-off print on
+different media, use the recall page's media selector instead (no new template created).
+
+To permanently re-use a design on a different media:
 
 1. Open template
 2. Click **Save As**
@@ -41,11 +44,25 @@ History rows referencing a deleted template keep their `template_id` and resolve
 ### Recall (print from template)
 
 1. From `/templates`, click **Print** on a template
-2. Form auto-generated from the template's field schema
-3. Required fields validated client-side and server-side
-4. **Preview** button → true preview reflecting filled values
-5. **Print** button → prints, logs to history
-6. **Batch** toggle → see [`templates - batch`](#batch--increment) below
+2. **Media selector** — pick which label media to print on (default: the template's stored media).
+   Same-width media are listed first (most likely to fit the design). A "Loaded in printer"
+   toggle narrows the list to the roll currently mounted (fetches printer status once). This is
+   a one-off choice — the stored template media is never mutated.
+3. **Mono + red notice** — if the template contains red elements and the chosen media is
+   mono (single-color), an inline notice explains that red will print as black. The renderer
+   automatically maps red → black; no toggle is needed.
+4. Form auto-generated from the template's field schema
+5. Required fields validated client-side and server-side
+6. **Preview** button → true preview reflecting filled values on the chosen media. The Print
+   button is gated until a fresh preview has been taken after any media change.
+7. **Overflow warning** — if the chosen media is a die-cut and content extends beyond its
+   printable height, an inline warning appears ("Content may be clipped"). Printing still
+   proceeds; the user decides from the preview.
+8. **Print** button → prints on the chosen media, logs to history with the chosen media.
+9. **Batch** toggle → see [`templates - batch`](#batch--increment) below
+
+One-off media overrides are captured in history with the actual printed media. Reprinting a
+history row reproduces the original media choice, not the template's stored media.
 
 ## Data model
 

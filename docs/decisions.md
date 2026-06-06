@@ -4,6 +4,59 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-06 — Print-time media override: one-off, warn-but-allow, red→black automatic, reprint binds to history
+
+**Decision**: A template can be printed on any supported media at recall time without mutating
+the stored template. The behavior:
+
+- **One-off, non-persistent**: the media choice applies to the current print/preview only.
+  `template.label_media` is never modified. Save As remains the way to permanently retarget
+  a design.
+- **Overflow on die-cut: warn but allow**: when the chosen media is a die-cut and content
+  extends beyond its printable height (`label.dots_printable[1]`), the preview response
+  returns `X-Label-Overflow: true` (header) and the print response includes `"overflow": true`
+  in the JSON body. The recall UI shows an inline warning. Printing is never blocked.
+- **Red → black on mono: automatic, no toggle**: the renderer's existing `_canvas_color_to_l`
+  already maps any non-white color (including red) to 0 (black). Choosing a mono media for
+  a two-color template requires no additional renderer work — the preview will show the result.
+  An inline notice in the recall UI informs the user.
+- **Reprint binds to the historical media**: `_reprint_template` now renders with
+  `media_override=row["label_media"]` (the row's actual print media) rather than
+  `tmpl.label_media`. This makes one-off overrides reproducible from history.
+
+**Supersedes**: the glossary rule "a template belongs to exactly one label media (a 62mm Spool
+template cannot be printed on a 29×90 die-cut)" — see `docs/glossary.md`. The spirit of the
+rule (Save As for persistent retargeting; editor media is immutable) is preserved. What changes
+is the recall path: a one-off override is now supported.
+
+**Why**: The same physical design (e.g. a spool label) fits on rolls of the same width but
+different geometries (continuous vs die-cut, different die-cut lengths). The user physically
+swaps rolls and the pre-print media compatibility check already guards mismatches. Blocking
+the print when geometry is close (same width, different length) is friction with no safety
+benefit — the preview shows the result before ink touches paper.
+
+**Why same-width-first grouping**: When the list of all media is shown unsorted, the user must
+scan to find the relevant alternatives. Same-width media share the design's coordinate system
+width and are the most natural substitutes. Surfacing them first addresses the "overwhelming
+list" concern without removing any option.
+
+**Considered**:
+- Block cross-width prints entirely — rejected; a 62mm design on 62x29 is the exact motivating
+  case (user has a die-cut roll loaded, wants the label to auto-crop). The warn path is safer.
+- A "save this media to the template" affordance — rejected; Save As already covers persistent
+  retargeting, and adding a second save path creates confusion about which one is canonical.
+- Recolor toggle for red→black (explicit opt-in) — rejected; the preview already shows the
+  result, and an automatic mapping is simpler. A notice informs the user.
+- Keep history logging the template's stored media — rejected; the historical row would then
+  be wrong (it logged a 62red print when a 62 roll was used), and reprint would reproduce
+  the wrong media.
+
+**Would revisit if**: a future override needs to be persistent without a full Save As (e.g.
+"set this media as the new default for the template") — at that point a dedicated endpoint
+or UI affordance would be appropriate.
+
+---
+
 ## 2026-06-05 — Release publish trigger: `release: published` replaces tag-push for production builds
 
 **Decision**: Removed the `tags: v*.*.*` trigger from `build-and-push.yml`. `release: published` is now the sole trigger for production image builds. The `push: branches: [main, dev]` trigger is retained for rolling dev/latest builds.

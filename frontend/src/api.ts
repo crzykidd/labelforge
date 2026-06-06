@@ -134,20 +134,26 @@ export function getLastValues(name: string): Promise<TemplateLastValues> {
   return apiFetch<TemplateLastValues>(`/api/templates/${encodeURIComponent(name)}/last-values`)
 }
 
-export async function previewTemplate(name: string, fields: Record<string, string>): Promise<Blob> {
+export async function previewTemplate(
+  name: string,
+  fields: Record<string, string>,
+  labelMedia?: string,
+): Promise<{ blob: Blob; overflow: boolean }> {
+  const body: Record<string, unknown> = { fields }
+  if (labelMedia !== undefined) body.label_media = labelMedia
   const res = await fetch(`/api/preview/${encodeURIComponent(name)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${getToken()}`,
     },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     let detail = `HTTP ${res.status}`
     try {
-      const body = await res.json() as { detail?: unknown }
-      const d = body.detail
+      const errBody = await res.json() as { detail?: unknown }
+      const d = errBody.detail
       if (typeof d === 'string') {
         detail = d
       } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
@@ -159,20 +165,33 @@ export async function previewTemplate(name: string, fields: Record<string, strin
     } catch { /* use status fallback */ }
     throw new Error(detail)
   }
-  return res.blob()
+  const overflow = res.headers.get('X-Label-Overflow') === 'true'
+  return { blob: await res.blob(), overflow }
 }
 
-export function printTemplate(name: string, fields: Record<string, string>): Promise<PrintJobResponse> {
+export function printTemplate(
+  name: string,
+  fields: Record<string, string>,
+  labelMedia?: string,
+): Promise<PrintJobResponse> {
+  const body: Record<string, unknown> = { fields }
+  if (labelMedia !== undefined) body.label_media = labelMedia
   return apiFetch<PrintJobResponse>(`/api/print/${encodeURIComponent(name)}`, {
     method: 'POST',
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify(body),
   })
 }
 
-export function batchPrint(name: string, labels: Record<string, string>[]): Promise<BatchPrintResponse> {
+export function batchPrint(
+  name: string,
+  labels: Record<string, string>[],
+  labelMedia?: string,
+): Promise<BatchPrintResponse> {
+  const body: Record<string, unknown> = { labels }
+  if (labelMedia !== undefined) body.label_media = labelMedia
   return apiFetch<BatchPrintResponse>(`/api/print/${encodeURIComponent(name)}/batch`, {
     method: 'POST',
-    body: JSON.stringify({ labels }),
+    body: JSON.stringify(body),
   })
 }
 
