@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-07
+
 ### Fixed
 
 - **Published container image was unpullable (`manifest unknown` / 404)** — the publish
