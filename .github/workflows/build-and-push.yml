@@ -63,3 +63,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          # Push a plain single-platform image manifest, NOT an OCI index with
+          # provenance/SBOM attestation child manifests. Those children are
+          # untagged and were being deleted by the weekly untagged-image cleanup,
+          # which left every tag pointing at a missing manifest (404 on pull).
+          provenance: false
+          sbom: false

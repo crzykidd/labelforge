@@ -29,11 +29,17 @@ jobs:
     permissions:
       packages: write
     steps:
-      # actions/delete-package-versions has no native age gating; runs weekly
-      # for finer control a script querying the GHCR API by date would be needed
+      # WARNING: "untagged" versions include the per-platform image manifests and
+      # the provenance/SBOM attestation manifests that make up a tagged OCI *index*.
+      # Deleting those breaks the tagged image — pulls 404 on the missing child.
+      # build-and-push.yml now pushes plain single-platform manifests
+      # (provenance/sbom disabled), so normal builds create no untagged children and
+      # this job only reaps genuinely-orphaned old manifests. Keep a buffer so a
+      # freshly-overwritten tag's prior digest isn't reaped before it settles, and
+      # never set min-versions-to-keep to 0 while any indexed/attested image exists.
       - uses: actions/delete-package-versions@v5
         with:
           package-name: labelforge
           package-type: container
-          min-versions-to-keep: 0
+          min-versions-to-keep: 5
           delete-only-untagged-versions: true
