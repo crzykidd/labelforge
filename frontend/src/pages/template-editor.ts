@@ -10,6 +10,7 @@ import {
   isTextType,
   loadCanvasJSON,
 } from '../editor/canvas'
+import { loadServerFonts } from '../editor/fonts'
 import { mountLabelMediaSelect } from '../labels'
 import type { LabelMediaSelectHandle } from '../labels'
 import type { Canvas } from 'fabric'
@@ -267,7 +268,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
     }
   }
 
-  // Bootstrap: load label catalog + fonts, then either load existing template or init blank
+  // Bootstrap: load label catalog + fonts, register fonts in browser, then
+  // either load existing template or init blank canvas.
   Promise.all([getLabels(), getFonts()]).then(async ([labels, fonts]) => {
     cachedLabels = labels
 
@@ -279,6 +281,11 @@ export function mountTemplateEditor(root: HTMLElement): void {
     // Try to select DejaVuSans as default
     const dvs = fonts.find(f => f.name.includes('DejaVu') || f.name.includes('DejaVuSans'))
     if (dvs) { fontSelect.value = dvs.name; defaultFont = dvs.name }
+
+    // Register server fonts so the canvas uses real typefaces instead of the
+    // browser's serif fallback.  loadServerFonts guards double-registration so
+    // fonts already loaded app-wide (main.ts) are skipped cheaply.
+    await loadServerFonts(fonts)
 
     if (isNew) {
       // New template: use newMedia from query params
@@ -299,6 +306,9 @@ export function mountTemplateEditor(root: HTMLElement): void {
         await initEditor(label)
         if (fabricCanvas && tmpl.canvas_json && Object.keys(tmpl.canvas_json).length > 0) {
           await loadCanvasJSON(fabricCanvas, tmpl.canvas_json)
+          // Re-render after fonts are guaranteed registered so text elements
+          // paint with the correct typeface rather than a serif fallback.
+          fabricCanvas?.renderAll()
         }
       } catch (err) {
         showStatus((err as Error).message, 'error')

@@ -4,6 +4,20 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Font bytes served via authenticated fetch, not bare CSS url()
+
+**Decision**: `loadServerFonts()` fetches font bytes through an authenticated `fetch()` call (attaching the `Authorization: Bearer` header) and constructs the `FontFace` from the resulting `ArrayBuffer`, rather than passing a bare `url(/api/fonts/{name}/file)` string to the `FontFace` constructor.
+
+**Why**: The API uses a per-request Bearer token in the `Authorization` header. A bare CSS `url(...)` inside `FontFace` is loaded by the browser's font engine, which cannot attach custom request headers — the request would arrive unauthenticated and be rejected with 401/403 unless `DISABLE_AUTH=true`. Fetching bytes through the same authenticated `fetch()` pattern already used for preview PNGs (`previewQuick`, `fetchHistoryPreview`) is the correct approach and requires no special-casing of the font endpoint.
+
+**Considered**:
+- Make `GET /api/fonts/{name}/file` public (no auth required) — rejected. Font names reveal which fonts are installed (data disclosure), and diverging auth on a single route class adds maintenance confusion. When `DISABLE_AUTH=true` the bearer header is sent but ignored, so the ArrayBuffer path works in both modes.
+- Use a short-lived signed URL or a cookie-based session — rejected as over-engineering for a single-user homelab app with no session mechanism.
+
+**Would revisit if**: A cookie-based auth mechanism is added, in which case `FontFace` with a bare URL would work and the ArrayBuffer fetch could be simplified.
+
+---
+
 ## 2026-06-07 — Server renderer honors Fabric `originX`/`originY`
 
 **Decision**: The server renderer (`render/template.py`) now translates each element's stored `left`/`top` from origin-relative coordinates to the true top-left corner before pasting. A small helper `_origin_top_left(obj, left, top, box_w, box_h)` handles the shift: `center` origin subtracts half the box dimension; `right`/`bottom` subtracts the full dimension; `left`/`top` (the Fabric defaults) are a no-op. The translation is applied at all three sites that consume `left`/`top`: the main draw loop, the continuous-canvas `bottommost` accumulation, and `detect_overflow`.

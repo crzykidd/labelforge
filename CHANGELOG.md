@@ -7,6 +7,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 ### Fixed
 
 - fix: render templates at the correct position when elements use centered origins (`originX: 'center'` / `originY: 'center'`); previously such elements were shifted right and down by half their box size, fanning wider elements further than narrow ones.
+- fix: editor canvas now shows the selected font instead of a serif fallback; server fonts are loaded into the browser via the new `GET /api/fonts/{name}/file` endpoint and registered with the FontFace API on startup.
 
 ## [0.1.2] — 2026-06-07
 
