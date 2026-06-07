@@ -4,6 +4,20 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-07
+
+### Fixed
+
+- **Published container image was unpullable (`manifest unknown` / 404)** — the publish
+  workflow built with `docker/build-push-action` defaults, which attach provenance/SBOM
+  *attestations* and turn each pushed tag into an OCI image index whose per-platform and
+  attestation manifests are **untagged**. The weekly "Cleanup Container Images" job deleted
+  untagged versions with `min-versions-to-keep: 0`, removing those child manifests and leaving
+  every tag (`:latest`, `:v0.1.1`, …) pointing at a missing manifest. The build now pushes a
+  plain single-platform manifest (`provenance: false`, `sbom: false`), and the cleanup keeps a
+  buffer (`min-versions-to-keep: 5`) with a warning that untagged-deletion is unsafe for
+  indexed/attested images. Pulling `:latest` works again after the next publish.
+
 ## [0.1.1] — 2026-06-06
 
 ### Added
