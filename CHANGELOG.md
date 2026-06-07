@@ -4,6 +4,19 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency updates** — rolled in the pending Dependabot bumps: backend `fastapi >=0.136.3`,
+  `pydantic >=2.13.4`, `python-barcode >=0.16.1`, and dev tools `mypy >=2.1.0` /
+  `types-PyYAML >=6.0.12`; frontend `fabric 7.4.0`, `vite 8`, `typescript 6`; the Docker base
+  image to `python:3.14-slim`; and CI actions (`docker/metadata-action@v6`,
+  `docker/build-push-action@v7`, `github/codeql-action@v4`). Verified locally: backend lint +
+  mypy 2.x + tests pass, and the frontend type-checks and builds. A `frontend/src/vite-env.d.ts`
+  (`vite/client` reference) was added because TypeScript 6 now requires ambient types for the
+  side-effect `import './style.css'`. Fabric 7's serialization was checked to still emit `IText`
+  and preserve the `labelforge_raw_content` custom property, so existing saved templates and the
+  server renderer are unaffected. No user-facing behaviour change.
+
 ## [0.1.0] — 2026-06-06
 
 ### Security

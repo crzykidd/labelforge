@@ -5,7 +5,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # System fonts required by render/text.py; Pillow wheels include libjpeg/zlib.
 RUN apt-get update && apt-get install -y --no-install-recommends \
