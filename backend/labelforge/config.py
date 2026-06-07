@@ -4,11 +4,15 @@ from pathlib import Path
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
-# Importing bootstrap configures logging as a side effect, so a failure to build
-# Settings() below is logged instead of crashing silently before logging exists.
-from labelforge import bootstrap  # noqa: F401
+from labelforge.bootstrap import configure_logging
+
+# Configure logging before building Settings() so a missing required env var is
+# logged with a clear message instead of crashing silently before logging exists.
+configure_logging()
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["Settings", "settings"]
 
 
 class Settings(BaseSettings):
