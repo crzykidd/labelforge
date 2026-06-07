@@ -5,7 +5,12 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.14-slim
+
+# Unbuffered stdout/stderr so startup logs appear immediately (critical for
+# diagnosing a crash-on-start) and never get lost in a buffer on a fast restart.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # System fonts required by render/text.py; Pillow wheels include libjpeg/zlib.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,7 +36,12 @@ RUN pip install --no-cache-dir -e .
 COPY labels.yml /app/labels.yml
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 
-RUN chown -R labelforge:labelforge /app
+# Create the data dir and hand it to the runtime user. A *named volume* inherits
+# this ownership (uid 1000), so it works out of the box. A *bind mount* keeps the
+# host directory's ownership — that host path must be writable by uid 1000, or
+# startup will fail with a clear "DATA_DIR not writable" message.
+RUN mkdir -p /data && chown -R labelforge:labelforge /app /data
+
 USER labelforge
 
 EXPOSE 8000

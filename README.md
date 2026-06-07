@@ -2,11 +2,22 @@
 
 Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.
 
-**Status**: First release (v0.1.0) — all v1 features are working and the app is packaged as a single Docker image.
+**Status**: Released (v0.1.1) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.1.0
+**Version:** 0.1.1
 
 ## What's New
+
+### v0.1.1 (2026-06-06)
+
+Deployment reliability. Startup now logs in detail (version, effective config, data directory,
+database created/opened, migrations, "startup complete") and **fails fast with a clear message**
+instead of crashing silently — a missing `PRINTER_HOST`/`API_TOKEN` or an unwritable `DATA_DIR`
+(the container runs as uid 1000) is now reported as a `CRITICAL` log line with the fix. The
+image sets `PYTHONUNBUFFERED=1` and creates/owns `/data` so named-volume deploys work out of the
+box. Also rolls in the pending dependency updates (fastapi, pydantic, fabric 7, vite 8,
+typescript 6, Docker base `python:3.14-slim`, CI actions). See the permissions notes under
+**Running it**.
 
 ### v0.1.0 (2026-06-06)
 
@@ -107,6 +118,21 @@ All config is environment-driven (see `.env.example` for the full list). The ess
 
 Persistent data lives under `$DATA_DIR`; back it with a named volume or bind mount. The
 interactive API docs are at `/docs`.
+
+### Permissions
+
+The container runs as a **non-root user, uid 1000** (`labelforge`). Everything it writes lives
+under `$DATA_DIR` (default `/data`), so that path must be writable by uid 1000:
+
+- **Named volume** (e.g. the default `docker-compose.yml`): works out of the box — the image
+  creates `/data` owned by uid 1000 and the volume inherits that ownership.
+- **Bind mount** (host directory): the host keeps its own ownership, so make the directory
+  writable by uid 1000 first: `chown -R 1000:1000 /path/on/host`. Alternatively run the
+  container with `--user $(id -u):$(id -g)` and ensure that user owns the directory.
+
+If `$DATA_DIR` isn't writable, startup aborts immediately with a `CRITICAL ... DATA_DIR ... is
+NOT writable by uid=1000` log line telling you exactly what to fix. Watch `docker logs` on
+first start — the app logs its version, config, and database status as it comes up.
 
 ## Design docs
 

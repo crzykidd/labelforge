@@ -1,7 +1,18 @@
+import logging
 from pathlib import Path
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+from labelforge.bootstrap import configure_logging
+
+# Configure logging before building Settings() so a missing required env var is
+# logged with a clear message instead of crashing silently before logging exists.
+configure_logging()
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["Settings", "settings"]
 
 
 class Settings(BaseSettings):
@@ -30,4 +41,13 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except Exception:
+    logger.critical(
+        "Configuration failed to load. Check required environment variables: "
+        "PRINTER_HOST (always required) and API_TOKEN (required unless "
+        "DISABLE_AUTH=true). Full error below.",
+        exc_info=True,
+    )
+    raise
