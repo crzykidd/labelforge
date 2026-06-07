@@ -27,6 +27,26 @@ _QR_CORRECTION = {
 }
 
 
+def _origin_top_left(obj: dict, left: int, top: int, box_w: int, box_h: int) -> tuple[int, int]:
+    """Translate Fabric left/top (origin-relative) to the top-left corner.
+
+    Fabric stores left/top relative to originX/originY. The renderer pastes at the
+    top-left, so shift by half/full box for center/right (x) and center/bottom (y).
+    Defaults (left/top) are a no-op.
+    """
+    ox = str(obj.get("originX", "left")).lower()
+    oy = str(obj.get("originY", "top")).lower()
+    if ox == "center":
+        left -= box_w // 2
+    elif ox == "right":
+        left -= box_w
+    if oy == "center":
+        top -= box_h // 2
+    elif oy == "bottom":
+        top -= box_h
+    return left, top
+
+
 def _canvas_color_to_l(color: str | None) -> int | None:
     """Map a CSS color string to mode-L pixel value; None means no fill."""
     if not color or color in ("transparent", "rgba(0,0,0,0)", "none"):
@@ -215,8 +235,10 @@ def detect_overflow(template: Template, media_id: str) -> bool:
         return False
     max_h = label.dots_printable[1]
     for obj in template.canvas_json.get("objects", []):
-        top = int(obj.get("top", 0))
+        raw_top = int(obj.get("top", 0))
+        box_w = int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
         h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
+        _, top = _origin_top_left(obj, 0, raw_top, box_w, h)
         if top + h > max_h:
             return True
     return False
@@ -268,13 +290,15 @@ def render_template(
     if is_continuous:
         bottommost = 0
         for i, obj in enumerate(objects):
-            t = int(obj.get("top", 0))
+            raw_top = int(obj.get("top", 0))
+            box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
             # Text: use PIL-measured height; other elements: Fabric height is reliable.
             h = (
                 text_subs[i].height
                 if i in text_subs
                 else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
             )
+            _, t = _origin_top_left(obj, 0, raw_top, box_w, h)
             bottommost = max(bottommost, t + h)
         canvas_h = max(bottommost + _PADDING, 1)
     else:
@@ -296,6 +320,7 @@ def render_template(
         angle = float(obj.get("angle", 0))
         box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
         box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
+        left, top = _origin_top_left(obj, left, top, box_w, box_h)
 
         try:
             if norm_type in ("itext", "text", "textbox"):

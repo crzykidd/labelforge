@@ -89,7 +89,7 @@ templates
 
 Standard Fabric.js objects with extensions:
 
-- All elements: standard `left`, `top`, `width`, `height`, `angle`, `scaleX`, `scaleY`
+- All elements: standard `left`, `top`, `width`, `height`, `angle`, `scaleX`, `scaleY`. The renderer also honors `originX`/`originY` (defaulting to `left`/`top` when absent), so `left`/`top` are interpreted exactly as Fabric does: as coordinates relative to the element's declared origin, not necessarily its top-left corner.
 - Text: `text`, `fontFamily`, `fontSize`, `fontWeight`, `fontStyle`, `textAlign`
   - Extension: `labelforge_raw_content` — original string with `{placeholders}`, used to re-derive fields on edit
 - QR code: stored as Fabric `Image` with extension `labelforge_qr_payload` (string with placeholders) and `labelforge_qr_error_correction` (`L`/`M`/`Q`/`H`)

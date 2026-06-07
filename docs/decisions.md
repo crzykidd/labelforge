@@ -4,6 +4,22 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Server renderer honors Fabric `originX`/`originY`
+
+**Decision**: The server renderer (`render/template.py`) now translates each element's stored `left`/`top` from origin-relative coordinates to the true top-left corner before pasting. A small helper `_origin_top_left(obj, left, top, box_w, box_h)` handles the shift: `center` origin subtracts half the box dimension; `right`/`bottom` subtracts the full dimension; `left`/`top` (the Fabric defaults) are a no-op. The translation is applied at all three sites that consume `left`/`top`: the main draw loop, the continuous-canvas `bottommost` accumulation, and `detect_overflow`.
+
+**Why**: Fabric stores `left`/`top` relative to `originX`/`originY`. The `testt` template's three text objects all carry `originX: 'center', originY: 'center'`, so the raw coordinates are the element's center point, not its top-left corner. The old renderer treated them as top-left, placing each element's left edge at its intended center — shifting it right (and down) by half its box. Wider elements fanned out further than narrow ones, making the label appear misaligned ("everything fans out / not left-aligned" bug).
+
+**Fix is server-only and origin-agnostic**: no stored templates are mutated, no frontend changes are needed. Templates that already use the `left`/`top` default (the common case) are unaffected — the helper is a no-op. Templates saved with any origin combination will render correctly going forward.
+
+**Considered**:
+- Normalize stored templates on load (convert center-origin coordinates to left/top) — rejected; mutating stored data on read is fragile and breaks the invariant that `canvas_json` always matches what Fabric serialized.
+- Fix in the frontend only (set `originX`/`originY` to `left`/`top` on save) — rejected; would not correct existing templates already in the database, and the server should be the authority on rendering anyway (per 2026-05-20 ADR).
+
+**Would revisit if**: Fabric changes its coordinate serialization format in a future major version such that `left`/`top` are always expressed relative to the top-left corner regardless of declared origin.
+
+---
+
 ## 2026-06-06 — Print-time media override: one-off, warn-but-allow, red→black automatic, reprint binds to history
 
 **Decision**: A template can be printed on any supported media at recall time without mutating
