@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- feat: label pickers default to the last label you used (remembered across sessions via localStorage); applies to Quick Print, New Template, and Save As.
+
 ### Fixed
 
 - fix: render templates at the correct position when elements use centered origins (`originX: 'center'` / `originY: 'center'`); previously such elements were shifted right and down by half their box size, fanning wider elements further than narrow ones.

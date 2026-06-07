@@ -4,6 +4,25 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Label pickers remember the last-used media (localStorage)
+
+**Decision**: All three label-*choosing* pickers (Quick Print, New Template modal, Save As modal) default to the last label media the user selected, persisted in `localStorage` under the key `lf:last-label`. A stale/unsupported id is safe because `mountLabelMediaSelect` already redirects it to the first supported entry. Editing an existing template does **not** read or write this value — the editor keeps the template's stored `label_media`.
+
+**Product decisions**:
+- **`localStorage`** — persists across browser sessions, not just the current tab.
+- **Three pickers in scope**: Quick Print, New Template modal, Save As modal. Each defaults to last-used and updates it on selection change.
+- **Excluded**: the template editor for an existing template. Loading a saved template keeps its stored `label_media` unchanged.
+
+**Implementation**: New module `frontend/src/lastLabel.ts` (`getLastLabel`/`setLastLabel`, try/catch for unavailable storage). `mountLabelMediaSelect` gains an opt-in `remember?: boolean` option; all `onChange` dispatch paths go through a `notify()` wrapper that calls `setLastLabel` when `remember` is true. The initial `populate()` call does NOT write — only user-driven changes do.
+
+**Considered**:
+- `sessionStorage` — rejected; user expectation is that the last-used roll persists across sessions.
+- Storing last-used in backend settings — rejected; this is a purely local UI preference with no server-side value, and avoids an API round-trip on every page load.
+
+**Would revisit if**: A multi-device / multi-user scenario arises (no plan for this — the app is intentionally single-user).
+
+---
+
 ## 2026-06-07 — Font bytes served via authenticated fetch, not bare CSS url()
 
 **Decision**: `loadServerFonts()` fetches font bytes through an authenticated `fetch()` call (attaching the `Authorization: Bearer` header) and constructs the `FontFace` from the resulting `ArrayBuffer`, rather than passing a bare `url(/api/fonts/{name}/file)` string to the `FontFace` constructor.

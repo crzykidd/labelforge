@@ -17,7 +17,7 @@ Type some text, pick a font, pick a label media, print. The brother_ql_web mode,
 9. **Preview** button → renders true preview inline
 10. **Print** button → prints and logs to history
 
-Last-used values for font, size, label media, alignment, and orientation are persisted in `settings` table (single-row, keyed by setting name) and restored on next visit.
+Last-used values for font, size, alignment, and orientation are persisted in the `settings` table (single-row, keyed by setting name) and restored on next visit. Label media is additionally remembered in `localStorage` (`lf:last-label`) and shared with the New Template and Save As pickers so the most-recently-used roll is the default everywhere.
 
 ## Data model
 

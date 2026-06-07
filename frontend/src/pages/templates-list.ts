@@ -2,6 +2,7 @@ import { deleteTemplate, getLabels, listTemplates } from '../api'
 import type { LabelEntry, Template } from '../types'
 import { navigate } from '../router'
 import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
+import { getLastLabel } from '../lastLabel'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -210,7 +211,9 @@ function showNewTemplateModal(onCreated: () => void): void {
     mediaHandle = mountLabelMediaSelect({
       container: mediaContainer,
       labels,
+      initialValue: getLastLabel() ?? undefined,
       onChange: () => updateOk(),
+      remember: true,
     })
     updateOk()
   })

@@ -1,6 +1,7 @@
 import { getFonts, getLabels, getSettings, isAuthRequired, previewQuick, quickPrint, TOKEN_KEY } from '../api'
 import type { QuickPrintRequest } from '../types'
 import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
+import { getLastLabel } from '../lastLabel'
 
 function esc(s: string): string {
   return s
@@ -218,8 +219,9 @@ function renderForm(root: HTMLElement): void {
     labelMediaHandle = mountLabelMediaSelect({
       container: labelMediaContainer,
       labels,
-      initialValue: preferMedia,
+      initialValue: getLastLabel() ?? preferMedia,
       onChange: () => {},
+      remember: true,
     })
   }).catch((err: Error) => {
     showStatus(`Failed to load form data: ${err.message}`, 'error')

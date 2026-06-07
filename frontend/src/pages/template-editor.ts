@@ -13,6 +13,7 @@ import {
 import { loadServerFonts } from '../editor/fonts'
 import { mountLabelMediaSelect } from '../labels'
 import type { LabelMediaSelectHandle } from '../labels'
+import { getLastLabel } from '../lastLabel'
 import type { Canvas } from 'fabric'
 
 function esc(s: string): string {
@@ -368,8 +369,9 @@ function showSaveAsModal(sourceName: string, currentMedia: string, allLabels: La
   mediaHandle = mountLabelMediaSelect({
     container: mediaContainer,
     labels: allLabels,
-    initialValue: currentMedia,
+    initialValue: getLastLabel() ?? currentMedia,
     onChange: () => updateOk(),
+    remember: true,
   })
   updateOk()
 

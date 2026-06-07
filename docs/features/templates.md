@@ -9,7 +9,8 @@ The core feature. A template is a saved, named label design with a freeform canv
 1. Navigate to `/templates` → list of existing templates
 2. Click **New template**
 3. Modal: type a friendly name (e.g. `Spool Label`) — the URL slug is auto-derived (`spool-label`)
-   and shown as a read-only hint. Pick a label media. The OK button is gated on a valid slug
+   and shown as a read-only hint. Pick a label media (defaults to the last-used media, shared
+   with Quick Print and Save As). The OK button is gated on a valid slug
    (non-empty, matches `^[a-z0-9][a-z0-9-]*$`) and a selected media.
 4. Land in editor with a blank canvas sized exactly to that label media at print DPI
 5. Add elements from a toolbar (text, QR, barcode, image, line, rect)
@@ -33,7 +34,7 @@ To permanently re-use a design on a different media:
 
 1. Open template
 2. Click **Save As**
-3. Modal: new name + new label media
+3. Modal: new name + new label media (defaults to the last-used media; falls back to the source template's media if none stored)
 4. Saved as new template; original untouched
 5. Editor opens on the new copy; user adjusts layout for the new dimensions (no auto-reflow)
 
