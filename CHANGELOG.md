@@ -4,6 +4,27 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Detailed, fail-fast startup logging** — the container now logs its version and Python
+  version, the effective (non-secret) configuration, the data directory, whether the database
+  was created or opened, any schema migrations applied, and a "startup complete" line. Logging
+  is configured before the config is loaded and sent unbuffered to stdout, so a misconfiguration
+  is reported clearly instead of crashing silently.
+- **Permission preflight on `DATA_DIR`** — startup now write-probes the data directory and, if
+  it isn't writable by the container's runtime user (uid 1000), aborts with an actionable
+  CRITICAL message (showing the uid/gid and a `chown` hint) instead of a bare `PermissionError`.
+
+### Fixed
+
+- **No more silent crash-on-start** — required-env-var and configuration errors (e.g. a missing
+  `PRINTER_HOST` or `API_TOKEN`) previously raised at import time *before* logging was set up,
+  so a misconfigured deployment failed with no usable output. Configuration now loads behind
+  logging and reports exactly which variable is missing. The Docker image also sets
+  `PYTHONUNBUFFERED=1` so logs are never lost to buffering on a fast restart, and creates/owns
+  `/data` for the runtime user so named-volume deployments work out of the box. The in-app/API
+  version display also now reflects the real package version instead of a hardcoded `0.0.1`.
+
 ### Changed
 
 - **Dependency updates** — rolled in the pending Dependabot bumps: backend `fastapi >=0.136.3`,

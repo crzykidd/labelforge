@@ -1,7 +1,14 @@
+import logging
 from pathlib import Path
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+# Importing bootstrap configures logging as a side effect, so a failure to build
+# Settings() below is logged instead of crashing silently before logging exists.
+from labelforge import bootstrap  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -30,4 +37,13 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except Exception:
+    logger.critical(
+        "Configuration failed to load. Check required environment variables: "
+        "PRINTER_HOST (always required) and API_TOKEN (required unless "
+        "DISABLE_AUTH=true). Full error below.",
+        exc_info=True,
+    )
+    raise

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from labelforge import history as history_module
+from labelforge.bootstrap import __version__, configure_logging
 from labelforge.catalog.loader import load_catalog
 from labelforge.catalog.reconcile import reconcile_catalog_files
 from labelforge.config import settings
@@ -23,19 +25,57 @@ from labelforge.routes import settings as settings_router
 from labelforge.routes import template_print as template_print_router
 from labelforge.routes import templates as templates_router
 
+logger = logging.getLogger(__name__)
+
+
+def _ensure_writable(path: Path) -> None:
+    """Fail fast with an actionable message if DATA_DIR isn't writable.
+
+    The container runs as non-root (uid 1000). A volume/bind-mount owned by
+    another uid is the most common reason startup dies, so surface it clearly.
+    """
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write-probe"
+        probe.write_text("ok")
+        probe.unlink()
+    except OSError as exc:
+        logger.critical(
+            "DATA_DIR %s is NOT writable by uid=%d gid=%d (%s). The container runs as "
+            "non-root (uid 1000); make the mounted volume or host directory writable by "
+            "that uid — e.g. `chown -R 1000:1000 <host-path>` for a bind mount, or run with "
+            "`--user $(id -u):$(id -g)`.",
+            path,
+            os.getuid(),
+            os.getgid(),
+            exc,
+        )
+        raise
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
-    logging.basicConfig(
-        level=settings.log_level.upper(),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    # Re-assert logging after uvicorn has set up its own, so our runtime logs show.
+    configure_logging()
+    logger.info("labelforge %s — running startup", __version__)
+    logger.info(
+        "Effective config: data_dir=%s printer_host=%s printer_model=%s backend=%s "
+        "default_media=%s disable_auth=%s catalog_auto_merge=%s log_level=%s",
+        settings.data_dir,
+        settings.printer_host,
+        settings.printer_model,
+        settings.printer_backend,
+        settings.default_label_media,
+        settings.disable_auth,
+        settings.catalog_auto_merge,
+        settings.log_level,
     )
-    logger = logging.getLogger(__name__)
 
     data_dir: Path = settings.data_dir
+    _ensure_writable(data_dir)
     (data_dir / "data").mkdir(parents=True, exist_ok=True)
     (data_dir / "fonts").mkdir(parents=True, exist_ok=True)
-    logger.info("Data directory: %s", data_dir)
+    logger.info("Data directory ready: %s", data_dir)
 
     yml_path = data_dir / "labels.yml"
     baseline_path = data_dir / "data" / "labels.default.yml"
@@ -52,8 +92,11 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
         logger.error("Catalog reconcile failed — loading existing file as-is", exc_info=True)
 
     db_path = data_dir / "data" / "app.db"
-    init_db(db_path)
-    logger.info("Database ready: %s", db_path)
+    try:
+        init_db(db_path)
+    except Exception:
+        logger.critical("Database initialization failed at %s", db_path, exc_info=True)
+        raise
 
     load_catalog(yml_path)
     load_fonts(data_dir / "fonts")
@@ -62,6 +105,8 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
         history_module.prune_history()
     except Exception:
         logger.error("Startup retention pruning failed", exc_info=True)
+
+    logger.info("Startup complete — labelforge %s ready", __version__)
 
     async def _retention_loop() -> None:
         while True:
@@ -85,7 +130,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
 
 app = FastAPI(
     title="labelforge",
-    version="0.0.1",
+    version=__version__,
     description="Self-hosted Brother QL label printer API",
     lifespan=lifespan,
 )

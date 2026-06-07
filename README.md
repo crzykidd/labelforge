@@ -108,6 +108,21 @@ All config is environment-driven (see `.env.example` for the full list). The ess
 Persistent data lives under `$DATA_DIR`; back it with a named volume or bind mount. The
 interactive API docs are at `/docs`.
 
+### Permissions
+
+The container runs as a **non-root user, uid 1000** (`labelforge`). Everything it writes lives
+under `$DATA_DIR` (default `/data`), so that path must be writable by uid 1000:
+
+- **Named volume** (e.g. the default `docker-compose.yml`): works out of the box — the image
+  creates `/data` owned by uid 1000 and the volume inherits that ownership.
+- **Bind mount** (host directory): the host keeps its own ownership, so make the directory
+  writable by uid 1000 first: `chown -R 1000:1000 /path/on/host`. Alternatively run the
+  container with `--user $(id -u):$(id -g)` and ensure that user owns the directory.
+
+If `$DATA_DIR` isn't writable, startup aborts immediately with a `CRITICAL ... DATA_DIR ... is
+NOT writable by uid=1000` log line telling you exactly what to fix. Watch `docker logs` on
+first start — the app logs its version, config, and database status as it comes up.
+
 ## Design docs
 
 See [`docs/PRD.md`](docs/PRD.md) for scope, then [`docs/features/`](docs/features/) for per-feature designs.
