@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-06
+
 ### Added
 
 - **Detailed, fail-fast startup logging** — the container now logs its version and Python

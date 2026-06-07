@@ -2,11 +2,22 @@
 
 Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.
 
-**Status**: First release (v0.1.0) — all v1 features are working and the app is packaged as a single Docker image.
+**Status**: Released (v0.1.1) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.1.0
+**Version:** 0.1.1
 
 ## What's New
+
+### v0.1.1 (2026-06-06)
+
+Deployment reliability. Startup now logs in detail (version, effective config, data directory,
+database created/opened, migrations, "startup complete") and **fails fast with a clear message**
+instead of crashing silently — a missing `PRINTER_HOST`/`API_TOKEN` or an unwritable `DATA_DIR`
+(the container runs as uid 1000) is now reported as a `CRITICAL` log line with the fix. The
+image sets `PYTHONUNBUFFERED=1` and creates/owns `/data` so named-volume deploys work out of the
+box. Also rolls in the pending dependency updates (fastapi, pydantic, fabric 7, vite 8,
+typescript 6, Docker base `python:3.14-slim`, CI actions). See the permissions notes under
+**Running it**.
 
 ### v0.1.0 (2026-06-06)
 
