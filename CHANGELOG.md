@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- README "What's New" now uses a tiered format — feature releases keep a full overview entry, patch releases get a one-line summary linking to the changelog; `/release-prep` Step 4 updated to match.
+
 ### Added
 
 - feat: label pickers default to the last label you used (remembered across sessions via localStorage); applies to Quick Print, New Template, and Save As.

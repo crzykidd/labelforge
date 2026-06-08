@@ -8,23 +8,11 @@ Self-hosted web app for designing, saving, and printing labels to Brother QL ser
 
 ## What's New
 
-### v0.1.2 (2026-06-07)
+### v0.1.2 (2026-06-07) — [What's New](CHANGELOG.md#012--2026-06-07)
+Fixes the published container image so `docker pull` of `:latest` works again.
 
-Fixes the published container image. Builds were producing an OCI index with provenance/SBOM
-attestation child manifests; the weekly image cleanup deleted those untagged children, leaving
-`:latest`/`:v0.1.1` pointing at a missing manifest (`docker pull` → 404). The image is now a
-plain single-platform manifest and the cleanup keeps a safety buffer, so pulls work again.
-
-### v0.1.1 (2026-06-06)
-
-Deployment reliability. Startup now logs in detail (version, effective config, data directory,
-database created/opened, migrations, "startup complete") and **fails fast with a clear message**
-instead of crashing silently — a missing `PRINTER_HOST`/`API_TOKEN` or an unwritable `DATA_DIR`
-(the container runs as uid 1000) is now reported as a `CRITICAL` log line with the fix. The
-image sets `PYTHONUNBUFFERED=1` and creates/owns `/data` so named-volume deploys work out of the
-box. Also rolls in the pending dependency updates (fastapi, pydantic, fabric 7, vite 8,
-typescript 6, Docker base `python:3.14-slim`, CI actions). See the permissions notes under
-**Running it**.
+### v0.1.1 (2026-06-06) — [What's New](CHANGELOG.md#011--2026-06-06)
+Deployment reliability: fail-fast startup logging, correct `DATA_DIR` permissions, and rolled-in dependency updates.
 
 ### v0.1.0 (2026-06-06)
 

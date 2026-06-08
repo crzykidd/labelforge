@@ -138,10 +138,27 @@ In `README.md`:
 
 1. Update the version badge: in `**Version:** <current>`, replace the current
    version with `$ARGUMENTS` (e.g. `**Version:** 0.0.1` → `**Version:** $ARGUMENTS`).
-2. Add a `### v$ARGUMENTS (<today>)` entry at the top of the `## What's New`
-   section, summarising this release in user-facing language drawn from the
-   changelog entries you just rolled. Keep it consistent with the voice of the
-   existing entries.
+2. Add an entry at the top of the `## What's New` section using the
+   **tiered format** based on whether this is a feature or patch release:
+
+   - **Feature release** (PATCH == 0, e.g. `0.2.0`): add a full **overview**
+     entry — a short paragraph covering the headline features, consistent with
+     the voice of the existing `v0.1.0` entry. Heading:
+     `### v$ARGUMENTS (<today>)`
+
+   - **Patch release** (PATCH > 0, e.g. `0.1.3`): add a **compact** entry.
+     Heading line:
+     `### v$ARGUMENTS (<today>) — [What's New](CHANGELOG.md#<anchor>)`
+     followed by a single line of user-facing prose summarising the release.
+
+     Compute `<anchor>` using GitHub's heading-slug rule: lowercase the
+     changelog section heading, remove every character that is not
+     alphanumeric, a space, or a hyphen (this strips `.` `[` `]` `—` and
+     other punctuation), then replace each remaining space with a hyphen.
+     Two consecutive spaces (left by removing the em-dash and its surrounding
+     spaces) produce a double-hyphen. Example: `## [0.1.2] — 2026-06-07`
+     → remove `[`, `]`, `.`, `—` → `012  20260607` (two spaces where the
+     em-dash was) → lowercase + spaces→hyphens → `#012--2026-06-07`.
 3. Update any top-of-file new-in banner / one-line status blurb to reference
    `$ARGUMENTS` if it currently names a specific version.
 

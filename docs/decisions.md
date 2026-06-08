@@ -4,6 +4,22 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Tiered "What's New" format in README
+
+**Decision**: README `## What's New` uses two tiers: **feature releases** (PATCH == 0, i.e. a new minor or major) keep a full overview paragraph as before; **patch releases** (PATCH > 0) use a compact one-liner with a `[What's New](CHANGELOG.md#<anchor>)` link on the heading line. The link label is always `What's New`; the anchor is computed from the changelog section heading using GitHub's slug rule (lowercase, strip non-alphanumeric/space/hyphen including `.` `[` `]` `—`, spaces → hyphens). The `v0.1.1` and `v0.1.2` entries have been reformatted to the compact form; `v0.1.0` (the first feature release) keeps its full overview.
+
+**Why**: Patch entries were growing into multi-paragraph write-ups that buried the overview in scroll. Patches are incremental — readers benefit more from a one-liner plus a deep-link to the changelog than from a duplicated prose summary. Feature releases warrant the overview because they introduce new capabilities readers haven't seen before.
+
+**Where it's enforced**: `.claude/commands/release-prep.md` Step 4 item 2 now prescribes the tiered format with the anchor-slug worked example (`#012--2026-06-07`) so future release-prep sessions compute it correctly without guessing.
+
+**Considered**:
+- Compact format for all releases (including feature releases) — rejected; the overview is valuable when there is a significant set of new features to survey.
+- Linking directly to a GitHub release URL instead of the CHANGELOG anchor — rejected; that requires the GitHub release to already exist at release-prep time, and the changelog is the single source of truth per project standards.
+
+**Would revisit if**: the project adopts a separate release notes page (website/wiki) that makes the CHANGELOG link redundant; or a new standard changes the release-prep instruction format.
+
+---
+
 ## 2026-06-07 — Dev builds marked via build-time channel + git SHA; update nag suppressed on dev
 
 **Decision**: Dev/unreleased container images carry a channel (`dev`) and an optional short git SHA baked in at image build time via Docker `ARG`/`ENV` (`BUILD_CHANNEL`, `GIT_COMMIT` → `LABELFORGE_CHANNEL`, `LABELFORGE_COMMIT`). The version footer shows `v0.1.2-dev+8e32bb1` for dev builds and plain `v0.1.2` for release builds. When `channel != "release"`, `/api/version` forces `update_available=false` regardless of the semver comparison.
