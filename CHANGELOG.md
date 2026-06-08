@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-07
+
 ### Changed
 
 - README "What's New" now uses a tiered format — feature releases keep a full overview entry, patch releases get a one-line summary linking to the changelog; `/release-prep` Step 4 updated to match.

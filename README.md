@@ -2,11 +2,14 @@
 
 Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.
 
-**Status**: Released (v0.1.2) — all v1 features are working and the app is packaged as a single Docker image.
+**Status**: Released (v0.1.3) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.1.2
+**Version:** 0.1.3
 
 ## What's New
+
+### v0.1.3 (2026-06-07) — [What's New](CHANGELOG.md#013--2026-06-07)
+App version now appears on every page linking to its GitHub release notes, with an update-available indicator and a one-time release-notes popup; adds last-used media defaults and fixes centered-element rendering and editor fonts.
 
 ### v0.1.2 (2026-06-07) — [What's New](CHANGELOG.md#012--2026-06-07)
 Fixes the published container image so `docker pull` of `:latest` works again.
