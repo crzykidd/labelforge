@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- App logo now appears in the nav bar (links home) and as the browser favicon.
+
 ## [0.1.3] — 2026-06-07
 
 ### Changed
