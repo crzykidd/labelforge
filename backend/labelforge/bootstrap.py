@@ -33,6 +33,15 @@ try:
 except PackageNotFoundError:  # running from a source tree, not pip-installed
     __version__ = "unknown"
 
+# Build markers baked in at image build time via Docker build args.
+# The container has no .git, so runtime detection is not possible.
+__channel__ = os.environ.get("LABELFORGE_CHANNEL", "release").strip() or "release"
+__commit__: str | None = os.environ.get("LABELFORGE_COMMIT", "").strip() or None
+
 logging.getLogger("labelforge").info(
-    "labelforge %s — process starting (python %s)", __version__, sys.version.split()[0]
+    "labelforge %s — process starting (python %s) channel=%s commit=%s",
+    __version__,
+    sys.version.split()[0],
+    __channel__,
+    __commit__ or "unknown",
 )

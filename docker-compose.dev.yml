@@ -2,7 +2,13 @@ name: labelforge-dev
 
 services:
   labelforge:
-    build: .
+    # Stamp the dev build with the current commit so the footer shows e.g. v0.1.2-dev+8e32bb1.
+    # Usage: GIT_COMMIT=$(git rev-parse --short HEAD) docker compose -f docker-compose.dev.yml build
+    build:
+      context: .
+      args:
+        BUILD_CHANNEL: dev
+        GIT_COMMIT: ${GIT_COMMIT:-}
     image: labelforge:dev
     restart: "no"
     env_file: .env

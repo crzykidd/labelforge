@@ -4,6 +4,129 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Tiered "What's New" format in README
+
+**Decision**: README `## What's New` uses two tiers: **feature releases** (PATCH == 0, i.e. a new minor or major) keep a full overview paragraph as before; **patch releases** (PATCH > 0) use a compact one-liner with a `[What's New](CHANGELOG.md#<anchor>)` link on the heading line. The link label is always `What's New`; the anchor is computed from the changelog section heading using GitHub's slug rule (lowercase, strip non-alphanumeric/space/hyphen including `.` `[` `]` `—`, spaces → hyphens). The `v0.1.1` and `v0.1.2` entries have been reformatted to the compact form; `v0.1.0` (the first feature release) keeps its full overview.
+
+**Why**: Patch entries were growing into multi-paragraph write-ups that buried the overview in scroll. Patches are incremental — readers benefit more from a one-liner plus a deep-link to the changelog than from a duplicated prose summary. Feature releases warrant the overview because they introduce new capabilities readers haven't seen before.
+
+**Where it's enforced**: `.claude/commands/release-prep.md` Step 4 item 2 now prescribes the tiered format with the anchor-slug worked example (`#012--2026-06-07`) so future release-prep sessions compute it correctly without guessing.
+
+**Considered**:
+- Compact format for all releases (including feature releases) — rejected; the overview is valuable when there is a significant set of new features to survey.
+- Linking directly to a GitHub release URL instead of the CHANGELOG anchor — rejected; that requires the GitHub release to already exist at release-prep time, and the changelog is the single source of truth per project standards.
+
+**Would revisit if**: the project adopts a separate release notes page (website/wiki) that makes the CHANGELOG link redundant; or a new standard changes the release-prep instruction format.
+
+---
+
+## 2026-06-07 — Dev builds marked via build-time channel + git SHA; update nag suppressed on dev
+
+**Decision**: Dev/unreleased container images carry a channel (`dev`) and an optional short git SHA baked in at image build time via Docker `ARG`/`ENV` (`BUILD_CHANNEL`, `GIT_COMMIT` → `LABELFORGE_CHANNEL`, `LABELFORGE_COMMIT`). The version footer shows `v0.1.2-dev+8e32bb1` for dev builds and plain `v0.1.2` for release builds. When `channel != "release"`, `/api/version` forces `update_available=false` regardless of the semver comparison.
+
+**Why build-time, not runtime detection**: The production container image has no `.git` directory; the source tree is absent. Runtime detection of the current commit (`git rev-parse HEAD`) is not possible inside the container. Build-time baking via `ARG` is the standard Docker approach and matches what other self-hosted apps do (Gitea, Immich, etc.). The SHA goes stale on a bind-mounted dev container as new commits land — that is acceptable for a dev-marker, not a safety mechanism.
+
+**Why default `release`**: A plain `docker build` or the prod `docker-compose.yml` should produce a clean, undecorated version string. The dev channel is opt-in via the dev compose file only. This means a release image built without the arg (e.g. from CI) is always `release` without extra wiring.
+
+**Why suppress the update nag on dev**: A dev build is typically *ahead* of the latest published release. Showing "Update available: v0.1.2" on a build that already contains v0.1.3 work-in-progress is misleading. `latest` is still fetched and returned in the response for informational purposes; only `update_available` is forced false.
+
+**Implementation**: `bootstrap.py` reads `LABELFORGE_CHANNEL` / `LABELFORGE_COMMIT` from the OS environment (not from the pydantic Settings — build info is baked into the image, not operator config). `routes/version.py` computes `is_dev`, `build`, `channel`, and `commit` and adds them to both response branches. The `ARG`/`ENV` lines are placed at the very end of the Dockerfile (after `USER` / `EXPOSE`) so they do not bust earlier cache layers on every commit.
+
+**Considered**:
+- Runtime detection via `importlib.metadata` extras or a baked-in `_version.py` — rejected; still can't get the git SHA without `.git` or an env var.
+- Embedding the SHA in `pyproject.toml` at release prep — rejected; that is the release version, not the dev SHA, and would change the installed package version string.
+- A `LABELFORGE_BUILD_META` single env var (combining channel + SHA) — rejected; two discrete args (`channel` and `commit`) are independently useful and easier to document and validate.
+
+**Would revisit if**: the container gains a `.git`-equivalent data file (e.g. a baked-in `REVISION` file) that removes the need for a build arg; or the channel concept expands (e.g. `nightly`, `rc`) — at that point the `is_dev` boolean may need to become a richer check.
+
+---
+
+## 2026-06-07 — Backend-proxied GitHub release check for version badge and update popup
+
+**Decision**: `/api/version` is a new unauthenticated endpoint (mirrors `/api/health`) that always returns the current app version and, when `update_check_enabled` is `true`, proxies a call to the GitHub releases API (`https://api.github.com/repos/crzykidd/labelforge/releases/latest`) to determine whether a newer release exists. Results are cached in-memory with a 6-hour TTL using `time.monotonic()`; the endpoint never 500s on network/timeout/parse failure (degrades to `latest: null`). The browser calls `/api/version` only; it never contacts GitHub directly.
+
+**Setting**: `update_check_enabled` (bool, default `true`) in the shared settings registry. When `false`, the endpoint skips the network call entirely and returns the current version only.
+
+**No new runtime dependency**: the GitHub call uses stdlib `urllib.request` with a 3-second timeout and `User-Agent: labelforge`.
+
+**Version comparison**: a small `_parse_semver` / `_is_newer` helper in `routes/version.py` parses dotted numeric semver (tolerating a leading `v`). If either version is unparseable, `update_available` is `false`. No external library.
+
+**Frontend**: `mountVersionFooter()` in `src/version.ts` fetches `/api/version` once at startup, renders a version link in `#app-footer`, shows an "Update available" pill when applicable, and presents a one-time per-version release-notes popup. The popup is dismissed per-version via `localStorage` (`lf:dismissed-release`). Release notes are rendered as `textContent` into a `<pre>` — never `innerHTML` — so untrusted markdown from GitHub cannot inject HTML.
+
+**Why this does not violate the non-negotiables**:
+- Not a SaaS dependency: it calls the public REST API of the project's own public GitHub repo, read-only, no credentials required.
+- Operator-controllable: `update_check_enabled` defaults on but can be toggled off in Settings with no restart required.
+- No auto-update of the label catalog: the check reads only release metadata, not any data files.
+- No additional runtime library.
+
+**Considered**:
+- Frontend calling GitHub directly — rejected; would require CORS allowlisting or a proxy anyway, and adds a browser-visible third-party call. Backend proxy keeps the check operator-controllable and avoids any client-side token leaks.
+- Persistent cache (SQLite) — rejected; in-memory cache with a 6-hour TTL is sufficient for a single-user homelab; a restart simply re-fetches.
+- Polling / push notification from backend — rejected; a single fetch-on-load is sufficient and avoids long-lived connections.
+
+**Would revisit if**: the GitHub rate limit becomes a problem (unlikely for a single-user instance — unauthenticated API allows 60 req/hour, TTL limits calls to ~4/day); or if the project moves to a self-hosted release registry.
+
+---
+
+## 2026-06-07 — handoff-prompt-workflow upgraded to v2.0.0; Session workflow section split
+
+**Decision**: On upgrading to v2.0.0, the old `## Session workflow` section (which interleaved handoff mechanics with project rules) was split into two parts: (1) a short lead-in paragraph pointing to the new "Handoff prompts (operational rules)" section for mechanics, and (2) four retained project-specific steps (changelog required, dev branch, commit-don't-push, planning prompts). The full v2.0.0 CLAUDE-snippet was pasted verbatim as a new `## Handoff prompts (operational rules)` section immediately before `## Code check-in (operational rules)`, matching the pattern already used by the code-checkin and release standards.
+
+**Why**: v2.0.0 promotes the handoff mechanics to a hard rule (edit-size threshold, spawn-agent-by-default) that must be inline in `CLAUDE.md` to reach fresh sessions. The old hand-written prose in `## Session workflow` was superseded; keeping both would create duplication and contradiction. Project-specific rules (changelog, branch, push discipline) are not owned by the standard and belong in `CLAUDE.md`'s own section.
+
+**Considered**: Deleting `## Session workflow` entirely — rejected; the four project rules it carries (changelog entry, dev branch, commit-don't-push, planning prompts) are not restated by the standard snippet and should remain visible at the session-workflow level.
+
+---
+
+## 2026-06-07 — Label pickers remember the last-used media (localStorage)
+
+**Decision**: All three label-*choosing* pickers (Quick Print, New Template modal, Save As modal) default to the last label media the user selected, persisted in `localStorage` under the key `lf:last-label`. A stale/unsupported id is safe because `mountLabelMediaSelect` already redirects it to the first supported entry. Editing an existing template does **not** read or write this value — the editor keeps the template's stored `label_media`.
+
+**Product decisions**:
+- **`localStorage`** — persists across browser sessions, not just the current tab.
+- **Three pickers in scope**: Quick Print, New Template modal, Save As modal. Each defaults to last-used and updates it on selection change.
+- **Excluded**: the template editor for an existing template. Loading a saved template keeps its stored `label_media` unchanged.
+
+**Implementation**: New module `frontend/src/lastLabel.ts` (`getLastLabel`/`setLastLabel`, try/catch for unavailable storage). `mountLabelMediaSelect` gains an opt-in `remember?: boolean` option; all `onChange` dispatch paths go through a `notify()` wrapper that calls `setLastLabel` when `remember` is true. The initial `populate()` call does NOT write — only user-driven changes do.
+
+**Considered**:
+- `sessionStorage` — rejected; user expectation is that the last-used roll persists across sessions.
+- Storing last-used in backend settings — rejected; this is a purely local UI preference with no server-side value, and avoids an API round-trip on every page load.
+
+**Would revisit if**: A multi-device / multi-user scenario arises (no plan for this — the app is intentionally single-user).
+
+---
+
+## 2026-06-07 — Font bytes served via authenticated fetch, not bare CSS url()
+
+**Decision**: `loadServerFonts()` fetches font bytes through an authenticated `fetch()` call (attaching the `Authorization: Bearer` header) and constructs the `FontFace` from the resulting `ArrayBuffer`, rather than passing a bare `url(/api/fonts/{name}/file)` string to the `FontFace` constructor.
+
+**Why**: The API uses a per-request Bearer token in the `Authorization` header. A bare CSS `url(...)` inside `FontFace` is loaded by the browser's font engine, which cannot attach custom request headers — the request would arrive unauthenticated and be rejected with 401/403 unless `DISABLE_AUTH=true`. Fetching bytes through the same authenticated `fetch()` pattern already used for preview PNGs (`previewQuick`, `fetchHistoryPreview`) is the correct approach and requires no special-casing of the font endpoint.
+
+**Considered**:
+- Make `GET /api/fonts/{name}/file` public (no auth required) — rejected. Font names reveal which fonts are installed (data disclosure), and diverging auth on a single route class adds maintenance confusion. When `DISABLE_AUTH=true` the bearer header is sent but ignored, so the ArrayBuffer path works in both modes.
+- Use a short-lived signed URL or a cookie-based session — rejected as over-engineering for a single-user homelab app with no session mechanism.
+
+**Would revisit if**: A cookie-based auth mechanism is added, in which case `FontFace` with a bare URL would work and the ArrayBuffer fetch could be simplified.
+
+---
+
+## 2026-06-07 — Server renderer honors Fabric `originX`/`originY`
+
+**Decision**: The server renderer (`render/template.py`) now translates each element's stored `left`/`top` from origin-relative coordinates to the true top-left corner before pasting. A small helper `_origin_top_left(obj, left, top, box_w, box_h)` handles the shift: `center` origin subtracts half the box dimension; `right`/`bottom` subtracts the full dimension; `left`/`top` (the Fabric defaults) are a no-op. The translation is applied at all three sites that consume `left`/`top`: the main draw loop, the continuous-canvas `bottommost` accumulation, and `detect_overflow`.
+
+**Why**: Fabric stores `left`/`top` relative to `originX`/`originY`. The `testt` template's three text objects all carry `originX: 'center', originY: 'center'`, so the raw coordinates are the element's center point, not its top-left corner. The old renderer treated them as top-left, placing each element's left edge at its intended center — shifting it right (and down) by half its box. Wider elements fanned out further than narrow ones, making the label appear misaligned ("everything fans out / not left-aligned" bug).
+
+**Fix is server-only and origin-agnostic**: no stored templates are mutated, no frontend changes are needed. Templates that already use the `left`/`top` default (the common case) are unaffected — the helper is a no-op. Templates saved with any origin combination will render correctly going forward.
+
+**Considered**:
+- Normalize stored templates on load (convert center-origin coordinates to left/top) — rejected; mutating stored data on read is fragile and breaks the invariant that `canvas_json` always matches what Fabric serialized.
+- Fix in the frontend only (set `originX`/`originY` to `left`/`top` on save) — rejected; would not correct existing templates already in the database, and the server should be the authority on rendering anyway (per 2026-05-20 ADR).
+
+**Would revisit if**: Fabric changes its coordinate serialization format in a future major version such that `left`/`top` are always expressed relative to the top-left corner regardless of declared origin.
+
+---
+
 ## 2026-06-06 — Print-time media override: one-off, warn-but-allow, red→black automatic, reprint binds to history
 
 **Decision**: A template can be printed on any supported media at recall time without mutating

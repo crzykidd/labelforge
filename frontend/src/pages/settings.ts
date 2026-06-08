@@ -17,6 +17,10 @@ export function mountSettings(root: HTMLElement): void {
         <div id="retention-status" class="status-msg" hidden></div>
         <div id="retention-form"><p>Loading…</p></div>
       </section>
+      <section class="settings-section">
+        <h3>Updates</h3>
+        <div id="updates-settings"><p>Loading…</p></div>
+      </section>
     </div>
   `
 
@@ -201,7 +205,45 @@ export function mountSettings(root: HTMLElement): void {
     })
   }
 
+  const updatesSettingsEl = root.querySelector<HTMLDivElement>('#updates-settings')!
+
+  function renderUpdatesSettings(s: Record<string, unknown>): void {
+    const checkEnabled = s.update_check_enabled !== false
+
+    updatesSettingsEl.innerHTML = `
+      <label class="setting-row">
+        <input type="checkbox" id="update-check-enabled" ${checkEnabled ? 'checked' : ''} />
+        <span class="setting-row-label">Check for updates</span>
+        <span class="setting-hint">Check GitHub for new releases on page load</span>
+      </label>
+      <div class="setting-actions">
+        <button id="btn-save-updates" class="btn-primary">Save</button>
+      </div>
+      <div id="updates-save-status" class="status-msg" hidden></div>
+    `
+
+    const checkbox = updatesSettingsEl.querySelector<HTMLInputElement>('#update-check-enabled')!
+    const btnSaveUpdates = updatesSettingsEl.querySelector<HTMLButtonElement>('#btn-save-updates')!
+    const updatesSaveStatus = updatesSettingsEl.querySelector<HTMLDivElement>('#updates-save-status')!
+
+    btnSaveUpdates.addEventListener('click', async () => {
+      btnSaveUpdates.disabled = true
+      updatesSaveStatus.hidden = true
+      try {
+        await putSettings({ update_check_enabled: checkbox.checked })
+        updatesSaveStatus.textContent = 'Update settings saved.'
+        updatesSaveStatus.className = 'status-msg success'
+      } catch (err) {
+        updatesSaveStatus.textContent = (err as Error).message
+        updatesSaveStatus.className = 'status-msg error'
+      } finally {
+        updatesSaveStatus.hidden = false
+        btnSaveUpdates.disabled = false
+      }
+    })
+  }
+
   getSettings()
-    .then(s => { renderForm(s); renderPrinterSettings(s) })
+    .then(s => { renderForm(s); renderPrinterSettings(s); renderUpdatesSettings(s) })
     .catch(err => showStatus((err as Error).message, 'error'))
 }

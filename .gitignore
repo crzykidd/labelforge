@@ -63,9 +63,9 @@ data-dev/
 *.sqlite
 *.sqlite3
 
-# Leftover vexp index dir — vexp is de-adopted (see standards.md), but its host
-# daemon keeps regenerating .vexp/ until host teardown lands in the ansible repo.
-# Ignored only to prevent accidentally committing regenerated index state.
+# vexp is fully de-adopted (see standards.md) and the host daemon was torn down
+# via the ansible repo — nothing regenerates this anymore. Kept ignored as a
+# defensive guard against accidentally committing any stray index state.
 .vexp/
 
 # Logs

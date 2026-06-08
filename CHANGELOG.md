@@ -4,6 +4,23 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-07
+
+### Changed
+
+- README "What's New" now uses a tiered format — feature releases keep a full overview entry, patch releases get a one-line summary linking to the changelog; `/release-prep` Step 4 updated to match.
+
+### Added
+
+- feat: label pickers default to the last label you used (remembered across sessions via localStorage); applies to Quick Print, New Template, and Save As.
+- feat: app version shown in a fixed footer on every page, linking to its GitHub release notes; shows an "Update available" indicator and a one-time release-notes popup when a newer release is detected (toggle in Settings → Updates, on by default; backend-proxied with a 6-hour cache so the browser never contacts GitHub directly).
+- feat: dev/unreleased builds now show a `-dev+<sha>` suffix in the version footer (e.g. `v0.1.2-dev+8e32bb1`) and never show the "Update available" nag; release builds remain plain `v0.1.2`.
+
+### Fixed
+
+- fix: render templates at the correct position when elements use centered origins (`originX: 'center'` / `originY: 'center'`); previously such elements were shifted right and down by half their box size, fanning wider elements further than narrow ones.
+- fix: editor canvas now shows the selected font instead of a serif fallback; server fonts are loaded into the browser via the new `GET /api/fonts/{name}/file` endpoint and registered with the FontFace API on startup.
+
 ## [0.1.2] — 2026-06-07
 
 ### Fixed

@@ -1,5 +1,6 @@
 import type { LabelEntry, PrinterStatus } from './types'
 import { getPrinterStatus } from './api'
+import { setLastLabel } from './lastLabel'
 
 const FORM_FACTOR_LABEL: Record<number, string> = {
   1: 'Die-cut',
@@ -95,8 +96,15 @@ export function mountLabelMediaSelect(opts: {
   labels: LabelEntry[]
   initialValue?: string
   onChange: (id: string) => void
+  remember?: boolean
 }): LabelMediaSelectHandle {
-  const { container, labels, initialValue, onChange } = opts
+  const { container, labels, initialValue, onChange, remember = false } = opts
+
+  // Wrapper that persists the selection before notifying the caller.
+  function notify(id: string): void {
+    if (remember) setLastLabel(id)
+    onChange(id)
+  }
 
   container.innerHTML = `
     <div class="media-filter-toggle">
@@ -139,7 +147,7 @@ export function mountLabelMediaSelect(opts: {
   // Initialize in Show-all mode
   populate(labels, initialValue)
 
-  sel.addEventListener('change', () => onChange(sel.value))
+  sel.addEventListener('change', () => notify(sel.value))
 
   toggleBtns.forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -151,7 +159,7 @@ export function mountLabelMediaSelect(opts: {
         populate(labels)
         notice.hidden = true
         colorNote.hidden = true
-        onChange(sel.value)
+        notify(sel.value)
         return
       }
 
@@ -196,7 +204,7 @@ export function mountLabelMediaSelect(opts: {
         // Only relevant when same-size mono/two-color variants are both shown.
         colorNote.hidden = filtered.length <= 1
       }
-      onChange(sel.value)
+      notify(sel.value)
     })
   })
 
@@ -204,7 +212,7 @@ export function mountLabelMediaSelect(opts: {
     getValue: () => sel.value,
     setValue: (id: string) => {
       sel.value = id
-      onChange(id)
+      notify(id)
     },
   }
 }
