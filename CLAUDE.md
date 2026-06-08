@@ -64,31 +64,14 @@ From the session prompt that owns this project:
 
 ## Session workflow
 
-Every task follows: **plan → decide → execute → document**.
+Every task follows: **plan → decide → execute → document**. For handoff prompt mechanics
+(edit-size threshold, spawning agents, working-tree check, commit flow) see the
+**Handoff prompts (operational rules)** section at the bottom of this file.
 
-1. **Plan first.** Before writing code, outline what will change and why. For small fixes the plan can be verbal in-session. For larger features, produce a handoff prompt (see below).
-2. **Decide: current session or handoff.** If the plan is scoped and the current session has context, do it here. If it's a large feature slice or a fresh context would be cleaner, write a handoff prompt for a new session.
-3. **Handoff prompts live in `prompts/`** (checked into git), per the `handoff-prompt-workflow` standard pinned in [`standards.md`](standards.md). The top-level `prompts/` dir is the **live queue** — pending work only. Start new prompts from `prompts/TEMPLATE.md`. Frontmatter:
-   ```yaml
-   ---
-   name: YYYY-MM-DD-short-description
-   status: pending          # pending | completed | failed
-   created: YYYY-MM-DD
-   model:                   # opus = research/planning, sonnet = coding
-   completed:               # filled when done
-   result:                  # one-line summary of outcome
-   ---
-   ```
-   Before making edits, run `git status --porcelain` and cross-reference the files the plan touches; if any overlap with uncommitted work, list them and ask before touching. The **last instruction** in every handoff prompt: update its own frontmatter (status / completed / result), then `git mv` it into `prompts/done/` (success) or `prompts/failed/` (failure) — created lazily on first use. Record non-obvious decisions (approach changed, alternative rejected, workaround needed) in `docs/decisions.md` as an ADR entry.
-4. **To run a handoff prompt** — the moment you create one, hand the user this exact command (file-path form, never inlined `cat`):
-   ```
-   claude --model <model> "Read prompts/<file>.md and execute it as your task."
-   ```
-   `<model>` matches the prompt's `model:` field (opus = research/planning, sonnet = coding; omit to use the default). Run from the repo root so the relative path resolves.
-5. **Changelog entry required.** Every change — feature, fix, refactor — gets a short entry in `CHANGELOG.md` under `## [Unreleased]`. Write it for release notes (concise, user-facing language).
-6. **All dev work on `dev`** unless explicitly told otherwise.
-7. **Commit, don't push.** Sessions commit their work with a descriptive message. The owner pushes.
-8. **Planning prompts for large features.** The owner will ask for a planning session prompt when scoping a new feature block. That prompt gets handed to a fresh session to execute.
+1. **Changelog entry required.** Every change — feature, fix, refactor — gets a short entry in `CHANGELOG.md` under `## [Unreleased]`. Write it for release notes (concise, user-facing language).
+2. **All dev work on `dev`** unless explicitly told otherwise.
+3. **Commit, don't push.** Sessions commit their work with a descriptive message. The owner pushes.
+4. **Planning prompts for large features.** The owner will ask for a planning session prompt when scoping a new feature block. That prompt gets handed to a fresh session to execute.
 
 ## Repo conventions
 
@@ -107,6 +90,55 @@ Every task follows: **plan → decide → execute → document**.
 - Don't suggest hosted/SaaS replacements for any component
 - Don't write giant explainer comments in code — code should be readable; comments only for non-obvious *why*
 - Don't generate `package.json` / `pyproject.toml` / `Dockerfile` until the relevant slice has been scoped
+
+<!--
+Source: standards/handoff-prompt-workflow @ v2.0.0 (crzynet/homelab-configs).
+Paste the section below verbatim into the adopting project's CLAUDE.md.
+The full standard (the plan→decide→execute→document principle, model selection,
+TEMPLATE, adoption checklist) lives at:
+https://gitea.crzynet.com/crzynet/homelab-configs/src/branch/main/standards/handoff-prompt-workflow/README.md
+-->
+
+## Handoff prompts (operational rules)
+
+This project adopts the `handoff-prompt-workflow` standard. The full why-and-how lives at
+the source above; the rules below are the per-session do/don'ts an agent must honor by
+default:
+
+- **Edit-size threshold — decide by how much you'll change:**
+  - A genuinely small change — roughly **one or two files and a few lines** (a typo, one
+    config value, a one-line fix) — do it **in-session**, no prompt.
+  - **Anything bigger requires a handoff prompt** — more than ~2 files, a multi-step
+    change, a new feature, or any edit large enough that a fresh context would run it
+    more cleanly. **When in doubt, write the prompt.**
+- **A handoff prompt is a file in `prompts/`** — one per task, from `prompts/TEMPLATE.md`,
+  with frontmatter (`name`, `status`, `created`, `model`, `completed`, `result`). Set
+  `model:` from the task type: **Opus** for research/planning, **Sonnet** for coding;
+  mixed defaults to Opus.
+- **Execute the prompt by spawning a subagent — don't hand the user a command.** Spawn an
+  agent on the prompt's `model:`, let it run the prompt end-to-end, and **report the
+  outcome back**. The agent gets a fresh context; you stay in the loop.
+  - **Manual fallback only on explicit request.** If the user says e.g. "use manual
+    prompts for this," give them
+    `claude --model <model> "Read prompts/<file>.md and execute it as your task."`
+    instead of spawning.
+- **Check the working tree before editing.** Run `git status --porcelain`, cross-reference
+  the files the plan touches; if any have uncommitted changes, list them and ask before
+  touching. Surface unrelated dirty files once; they don't block.
+- **The prompt self-updates and moves when done.** The executing agent sets its
+  frontmatter (`status`/`completed`/`result`) and `git mv`s the file into `prompts/done/`
+  (success) or `prompts/failed/` (failure).
+- **One commit at the end; the prompt bundles in.** The prompt file is **not** committed
+  up front — it lands in the single end commit alongside the work and the prompt move.
+  Propose ONE commit (files list + one-line message), ask `y/n`, stage only those specific
+  paths. **Never `git add -A`, never auto-commit, never push.** A spawned agent prepares
+  the tree and reports the proposed commit back; the orchestrating session surfaces the
+  `y/n`.
+- **Record non-obvious decisions** (approach changes, rejected alternatives, workarounds)
+  in `docs/decisions.md`, newest at top.
+
+If you're unsure whether an action would violate one of the above, stop and ask before
+acting.
 
 <!--
 Source: standards/code-checkin-and-pr @ v1.1.0 (crzynet/homelab-configs).

@@ -4,6 +4,16 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — handoff-prompt-workflow upgraded to v2.0.0; Session workflow section split
+
+**Decision**: On upgrading to v2.0.0, the old `## Session workflow` section (which interleaved handoff mechanics with project rules) was split into two parts: (1) a short lead-in paragraph pointing to the new "Handoff prompts (operational rules)" section for mechanics, and (2) four retained project-specific steps (changelog required, dev branch, commit-don't-push, planning prompts). The full v2.0.0 CLAUDE-snippet was pasted verbatim as a new `## Handoff prompts (operational rules)` section immediately before `## Code check-in (operational rules)`, matching the pattern already used by the code-checkin and release standards.
+
+**Why**: v2.0.0 promotes the handoff mechanics to a hard rule (edit-size threshold, spawn-agent-by-default) that must be inline in `CLAUDE.md` to reach fresh sessions. The old hand-written prose in `## Session workflow` was superseded; keeping both would create duplication and contradiction. Project-specific rules (changelog, branch, push discipline) are not owned by the standard and belong in `CLAUDE.md`'s own section.
+
+**Considered**: Deleting `## Session workflow` entirely — rejected; the four project rules it carries (changelog entry, dev branch, commit-don't-push, planning prompts) are not restated by the standard snippet and should remain visible at the session-workflow level.
+
+---
+
 ## 2026-06-07 — Label pickers remember the last-used media (localStorage)
 
 **Decision**: All three label-*choosing* pickers (Quick Print, New Template modal, Save As modal) default to the last label media the user selected, persisted in `localStorage` under the key `lf:last-label`. A stale/unsupported id is safe because `mountLabelMediaSelect` already redirects it to the first supported entry. Editing an existing template does **not** read or write this value — the editor keeps the template's stored `label_media`.
