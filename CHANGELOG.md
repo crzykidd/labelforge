@@ -7,6 +7,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 ### Added
 
 - feat: label pickers default to the last label you used (remembered across sessions via localStorage); applies to Quick Print, New Template, and Save As.
+- feat: app version shown in a fixed footer on every page, linking to its GitHub release notes; shows an "Update available" indicator and a one-time release-notes popup when a newer release is detected (toggle in Settings → Updates, on by default; backend-proxied with a 6-hour cache so the browser never contacts GitHub directly).
 
 ### Fixed
 

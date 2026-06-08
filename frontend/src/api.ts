@@ -1,4 +1,4 @@
-import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate, TemplateLastValues } from './types'
+import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate, TemplateLastValues, VersionInfo } from './types'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -278,4 +278,8 @@ export function putSettings(partial: Record<string, unknown>): Promise<Record<st
     method: 'PUT',
     body: JSON.stringify(partial),
   })
+}
+
+export function getVersionInfo(): Promise<VersionInfo> {
+  return apiFetch<VersionInfo>('/api/version')
 }

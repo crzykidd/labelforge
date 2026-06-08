@@ -27,6 +27,7 @@ _REGISTRY: dict[str, dict] = {
     "printer_status_check": {"default": True, "vtype": bool},
     "printer_status_timeout_ms": {"default": 2000, "vtype": int},
     "last_quick_print": {"default": None, "vtype": dict, "nullable": True},
+    "update_check_enabled": {"default": True, "vtype": bool},
 }
 
 

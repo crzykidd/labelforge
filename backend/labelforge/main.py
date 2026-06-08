@@ -24,6 +24,7 @@ from labelforge.routes import printer as printer_router
 from labelforge.routes import settings as settings_router
 from labelforge.routes import template_print as template_print_router
 from labelforge.routes import templates as templates_router
+from labelforge.routes import version as version_router
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,7 @@ app.include_router(settings_router.router, prefix="/api")
 app.include_router(templates_router.router, prefix="/api")
 app.include_router(template_print_router.router, prefix="/api")
 app.include_router(history_router.router, prefix="/api")
+app.include_router(version_router.router, prefix="/api")
 
 _FRONTEND_DIST = Path("/app/frontend/dist")
 

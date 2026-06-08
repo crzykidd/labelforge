@@ -8,6 +8,7 @@ import { mountTemplateRecall } from './pages/template-recall'
 import { mountHistory } from './pages/history'
 import { mountSettings } from './pages/settings'
 import { initRouter, register, registerPrefix } from './router'
+import { mountVersionFooter } from './version'
 
 register('/', mountQuickPrint)
 register('/templates', mountTemplates)
@@ -33,3 +34,6 @@ void initAuthMode().finally(() => {
     // loadServerFonts; a total failure (e.g. not logged in yet) is silenced here.
   })
 })
+
+// Version footer is independent of auth/routing — mount once at startup.
+mountVersionFooter()

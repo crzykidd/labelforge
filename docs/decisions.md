@@ -4,6 +4,33 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Backend-proxied GitHub release check for version badge and update popup
+
+**Decision**: `/api/version` is a new unauthenticated endpoint (mirrors `/api/health`) that always returns the current app version and, when `update_check_enabled` is `true`, proxies a call to the GitHub releases API (`https://api.github.com/repos/crzykidd/labelforge/releases/latest`) to determine whether a newer release exists. Results are cached in-memory with a 6-hour TTL using `time.monotonic()`; the endpoint never 500s on network/timeout/parse failure (degrades to `latest: null`). The browser calls `/api/version` only; it never contacts GitHub directly.
+
+**Setting**: `update_check_enabled` (bool, default `true`) in the shared settings registry. When `false`, the endpoint skips the network call entirely and returns the current version only.
+
+**No new runtime dependency**: the GitHub call uses stdlib `urllib.request` with a 3-second timeout and `User-Agent: labelforge`.
+
+**Version comparison**: a small `_parse_semver` / `_is_newer` helper in `routes/version.py` parses dotted numeric semver (tolerating a leading `v`). If either version is unparseable, `update_available` is `false`. No external library.
+
+**Frontend**: `mountVersionFooter()` in `src/version.ts` fetches `/api/version` once at startup, renders a version link in `#app-footer`, shows an "Update available" pill when applicable, and presents a one-time per-version release-notes popup. The popup is dismissed per-version via `localStorage` (`lf:dismissed-release`). Release notes are rendered as `textContent` into a `<pre>` — never `innerHTML` — so untrusted markdown from GitHub cannot inject HTML.
+
+**Why this does not violate the non-negotiables**:
+- Not a SaaS dependency: it calls the public REST API of the project's own public GitHub repo, read-only, no credentials required.
+- Operator-controllable: `update_check_enabled` defaults on but can be toggled off in Settings with no restart required.
+- No auto-update of the label catalog: the check reads only release metadata, not any data files.
+- No additional runtime library.
+
+**Considered**:
+- Frontend calling GitHub directly — rejected; would require CORS allowlisting or a proxy anyway, and adds a browser-visible third-party call. Backend proxy keeps the check operator-controllable and avoids any client-side token leaks.
+- Persistent cache (SQLite) — rejected; in-memory cache with a 6-hour TTL is sufficient for a single-user homelab; a restart simply re-fetches.
+- Polling / push notification from backend — rejected; a single fetch-on-load is sufficient and avoids long-lived connections.
+
+**Would revisit if**: the GitHub rate limit becomes a problem (unlikely for a single-user instance — unauthenticated API allows 60 req/hour, TTL limits calls to ~4/day); or if the project moves to a self-hosted release registry.
+
+---
+
 ## 2026-06-07 — handoff-prompt-workflow upgraded to v2.0.0; Session workflow section split
 
 **Decision**: On upgrading to v2.0.0, the old `## Session workflow` section (which interleaved handoff mechanics with project rules) was split into two parts: (1) a short lead-in paragraph pointing to the new "Handoff prompts (operational rules)" section for mechanics, and (2) four retained project-specific steps (changelog required, dev branch, commit-don't-push, planning prompts). The full v2.0.0 CLAUDE-snippet was pasted verbatim as a new `## Handoff prompts (operational rules)` section immediately before `## Code check-in (operational rules)`, matching the pattern already used by the code-checkin and release standards.
