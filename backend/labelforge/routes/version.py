@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from labelforge.bootstrap import __version__
+from labelforge.bootstrap import __channel__, __commit__, __version__
 from labelforge import settings_store
 
 router = APIRouter()
@@ -96,25 +96,49 @@ def _cached_github() -> dict[str, Any]:
     return _cache.get("result") or {}
 
 
+def _build_label(current: str) -> str:
+    """Compute the display version label (includes leading 'v').
+
+    release channel → ``v0.1.2``
+    dev channel     → ``v0.1.2-dev`` or ``v0.1.2-dev+8e32bb1`` when a commit is baked in.
+    """
+    if __channel__ == "release":
+        return f"v{current}"
+    suffix = f"-{__channel__}"
+    if __commit__:
+        suffix += f"+{__commit__}"
+    return f"v{current}{suffix}"
+
+
 @router.get("/version")
 async def get_version() -> dict:
     current = __version__
+    is_dev = __channel__ != "release"
+    build = _build_label(current)
     check_enabled = settings_store.get("update_check_enabled")
 
     if not check_enabled:
         return {
             "current": current,
             "latest": None,
+            # Dev builds are typically ahead of the latest release; never nag.
             "update_available": False,
             "release_url": None,
             "release_name": None,
             "release_notes": None,
             "checked": False,
+            "channel": __channel__,
+            "commit": __commit__,
+            "build": build,
+            "is_dev": is_dev,
         }
 
     gh = _cached_github()
     latest = gh.get("latest")
     update_available = _is_newer(latest, current) if latest else False
+    if is_dev:
+        # Dev is typically ahead of the latest release; suppress the nag.
+        update_available = False
 
     return {
         "current": current,
@@ -124,4 +148,8 @@ async def get_version() -> dict:
         "release_name": gh.get("release_name"),
         "release_notes": gh.get("release_notes"),
         "checked": True,
+        "channel": __channel__,
+        "commit": __commit__,
+        "build": build,
+        "is_dev": is_dev,
     }

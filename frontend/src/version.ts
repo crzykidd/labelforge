@@ -75,6 +75,8 @@ export function mountVersionFooter(): void {
   if (!footer) return
 
   getVersionInfo().then(info => {
+    // For dev builds the link always points to the base release tag (the SHA suffix
+    // has no corresponding GitHub release page).
     const versionUrl = (info.release_url && !info.update_available)
       ? info.release_url
       : `https://github.com/crzykidd/labelforge/releases/tag/v${info.current}`
@@ -87,7 +89,7 @@ export function mountVersionFooter(): void {
     link.target = '_blank'
     link.rel = 'noopener'
     link.className = 'version-footer-link'
-    link.textContent = `v${info.current}`
+    link.textContent = info.build ?? `v${info.current}`
     wrap.appendChild(link)
 
     if (info.update_available && info.latest && info.release_url) {

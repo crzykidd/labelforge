@@ -46,4 +46,12 @@ USER labelforge
 
 EXPOSE 8000
 
+# Build-time channel + commit markers. Placed last to avoid busting earlier
+# cache layers on every commit.  Stamp with:
+#   docker build --build-arg BUILD_CHANNEL=dev --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) .
+ARG BUILD_CHANNEL=release
+ARG GIT_COMMIT=""
+ENV LABELFORGE_CHANNEL=$BUILD_CHANNEL \
+    LABELFORGE_COMMIT=$GIT_COMMIT
+
 CMD ["uvicorn", "labelforge.main:app", "--host", "0.0.0.0", "--port", "8000"]

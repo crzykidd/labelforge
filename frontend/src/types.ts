@@ -135,4 +135,8 @@ export interface VersionInfo {
   release_name: string | null
   release_notes: string | null
   checked: boolean
+  channel: string
+  commit: string | null
+  build: string
+  is_dev: boolean
 }

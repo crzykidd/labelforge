@@ -2,7 +2,10 @@ name: labelforge
 
 services:
   labelforge:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}
     image: labelforge:latest
     restart: unless-stopped
     env_file: .env

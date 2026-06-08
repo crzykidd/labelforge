@@ -4,6 +4,27 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-07 — Dev builds marked via build-time channel + git SHA; update nag suppressed on dev
+
+**Decision**: Dev/unreleased container images carry a channel (`dev`) and an optional short git SHA baked in at image build time via Docker `ARG`/`ENV` (`BUILD_CHANNEL`, `GIT_COMMIT` → `LABELFORGE_CHANNEL`, `LABELFORGE_COMMIT`). The version footer shows `v0.1.2-dev+8e32bb1` for dev builds and plain `v0.1.2` for release builds. When `channel != "release"`, `/api/version` forces `update_available=false` regardless of the semver comparison.
+
+**Why build-time, not runtime detection**: The production container image has no `.git` directory; the source tree is absent. Runtime detection of the current commit (`git rev-parse HEAD`) is not possible inside the container. Build-time baking via `ARG` is the standard Docker approach and matches what other self-hosted apps do (Gitea, Immich, etc.). The SHA goes stale on a bind-mounted dev container as new commits land — that is acceptable for a dev-marker, not a safety mechanism.
+
+**Why default `release`**: A plain `docker build` or the prod `docker-compose.yml` should produce a clean, undecorated version string. The dev channel is opt-in via the dev compose file only. This means a release image built without the arg (e.g. from CI) is always `release` without extra wiring.
+
+**Why suppress the update nag on dev**: A dev build is typically *ahead* of the latest published release. Showing "Update available: v0.1.2" on a build that already contains v0.1.3 work-in-progress is misleading. `latest` is still fetched and returned in the response for informational purposes; only `update_available` is forced false.
+
+**Implementation**: `bootstrap.py` reads `LABELFORGE_CHANNEL` / `LABELFORGE_COMMIT` from the OS environment (not from the pydantic Settings — build info is baked into the image, not operator config). `routes/version.py` computes `is_dev`, `build`, `channel`, and `commit` and adds them to both response branches. The `ARG`/`ENV` lines are placed at the very end of the Dockerfile (after `USER` / `EXPOSE`) so they do not bust earlier cache layers on every commit.
+
+**Considered**:
+- Runtime detection via `importlib.metadata` extras or a baked-in `_version.py` — rejected; still can't get the git SHA without `.git` or an env var.
+- Embedding the SHA in `pyproject.toml` at release prep — rejected; that is the release version, not the dev SHA, and would change the installed package version string.
+- A `LABELFORGE_BUILD_META` single env var (combining channel + SHA) — rejected; two discrete args (`channel` and `commit`) are independently useful and easier to document and validate.
+
+**Would revisit if**: the container gains a `.git`-equivalent data file (e.g. a baked-in `REVISION` file) that removes the need for a build arg; or the channel concept expands (e.g. `nightly`, `rc`) — at that point the `is_dev` boolean may need to become a richer check.
+
+---
+
 ## 2026-06-07 — Backend-proxied GitHub release check for version badge and update popup
 
 **Decision**: `/api/version` is a new unauthenticated endpoint (mirrors `/api/health`) that always returns the current app version and, when `update_check_enabled` is `true`, proxies a call to the GitHub releases API (`https://api.github.com/repos/crzykidd/labelforge/releases/latest`) to determine whether a newer release exists. Results are cached in-memory with a 6-hour TTL using `time.monotonic()`; the endpoint never 500s on network/timeout/parse failure (degrades to `latest: null`). The browser calls `/api/version` only; it never contacts GitHub directly.
