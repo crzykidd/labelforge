@@ -8,8 +8,8 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from labelforge.bootstrap import __channel__, __commit__, __version__
 from labelforge import settings_store
+from labelforge.bootstrap import __channel__, __commit__, __version__
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -36,15 +36,15 @@ def _parse_semver(v: str) -> tuple[int, ...] | None:
 
 def _is_newer(latest: str, current: str) -> bool:
     """Return True if latest > current. False if either is unparseable."""
-    l = _parse_semver(latest)
-    c = _parse_semver(current)
-    if l is None or c is None:
+    lv = _parse_semver(latest)
+    cv = _parse_semver(current)
+    if lv is None or cv is None:
         return False
     # Pad to equal length for comparison
-    length = max(len(l), len(c))
-    l_padded = l + (0,) * (length - len(l))
-    c_padded = c + (0,) * (length - len(c))
-    return l_padded > c_padded
+    length = max(len(lv), len(cv))
+    lv_padded = lv + (0,) * (length - len(lv))
+    cv_padded = cv + (0,) * (length - len(cv))
+    return lv_padded > cv_padded
 
 
 def _fetch_github() -> dict[str, Any]:
