@@ -1,6 +1,10 @@
-# labelforge
+<p align="center">
+  <img src="docs/logo.png" alt="LabelForge" width="200" />
+</p>
 
-Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.
+<h1 align="center">labelforge</h1>
+
+<p align="center">Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.</p>
 
 **Status**: Released (v0.1.3) — all v1 features are working and the app is packaged as a single Docker image.
 
