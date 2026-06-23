@@ -11,6 +11,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 ### Added
 
 - "Add QR" button in the template editor toolbar lets you place a QR code element on the canvas without hand-editing JSON. A client-generated placeholder image shows the element's position and payload; the real QR bitmap is rendered server-side on Preview/print. Use `{fieldname}` placeholders in the payload to create variable QR codes. Payload and error-correction level (L/M/Q/H) are editable in the toolbar when a QR element is selected. Requires a container image rebuild.
+- App logo now appears in the nav bar (links home) and as the browser favicon.
 
 ### Fixed
 

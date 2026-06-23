@@ -141,6 +141,7 @@ button:disabled {
   max-width: 520px;
   margin: 0 auto 1rem;
   display: flex;
+  align-items: center;
   gap: 1.25rem;
 }
 
@@ -156,6 +157,24 @@ button:disabled {
   border-bottom-color: #1a6fdb;
   color: #1a6fdb;
   font-weight: 600;
+}
+
+#nav-brand {
+  border-bottom: none;
+  padding: 0;
+  margin-right: 0.25rem;
+  flex-shrink: 0;
+}
+
+#nav-brand:hover,
+#nav-brand.active {
+  border-bottom: none;
+}
+
+#nav-brand img {
+  height: 28px;
+  width: auto;
+  display: block;
 }
 
 /* templates list */
