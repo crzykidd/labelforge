@@ -179,7 +179,10 @@ def _render_qr_element(payload: str, correction: str, box_w: int, box_h: int) ->
     qr.add_data(payload)
     qr.make(fit=True)
     buf = io.BytesIO()
-    qr.make_image(fill_color=0, back_color=255).save(buf, "PNG")
+    # Use color names, not ints: qrcode's PIL factory renders back_color=255 as a
+    # grey background (~76 after L-convert), which the hard-threshold below then
+    # crushes to black — turning the whole QR into a solid block.
+    qr.make_image(fill_color="black", back_color="white").save(buf, "PNG")
     buf.seek(0)
     nat = Image.open(buf).convert("L")
     nat.load()

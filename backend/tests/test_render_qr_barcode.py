@@ -121,10 +121,13 @@ def test_qr_white_fraction_sanity():
     img = _render(_qr_obj())
     # QR element box is 100×100 at (left=10, top=10).
     wf = _white_fraction(img, (10, 10, 110, 110))
-    # Finder patterns + quiet zone mean ≥20% white is expected within the box.
-    assert wf >= 0.20, f"White fraction {wf:.2%} too low — maybe solid block"
-    # A QR code is not mostly black either.
-    assert wf <= 0.95, f"White fraction {wf:.2%} too high — maybe blank"
+    # A correctly rendered QR in this box is ~70% white. The solid-black-block bug
+    # (grey QR background crushed to black by the threshold) leaves only the
+    # centering padding white (~34%), so a 0.45 floor catches that regression — a
+    # 0.20 floor did not.
+    assert wf >= 0.45, f"White fraction {wf:.2%} too low — QR is mostly black (solid-block bug)"
+    # A QR code is not mostly white either (it must actually have modules).
+    assert wf <= 0.90, f"White fraction {wf:.2%} too high — maybe blank"
 
 
 def test_qr_payload_field_substitution():
