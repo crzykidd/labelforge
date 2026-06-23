@@ -7,6 +7,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 ### Fixed
 
 - QR code and barcode template elements now print correctly instead of as a solid black block. The server renderer resolves field placeholders in QR/barcode payloads, rasterizes with an integer-multiple NEAREST upscale (no antialiased grey edges), and pastes pure 0/255 pixels onto the print canvas so the 1-bit threshold produces a faithful result. A hard-threshold pass is applied after rasterization as a safety net.
+- A wrong API token is now caught at entry: the token gate validates the candidate against the server before storing it, and shows an inline error if rejected. Any subsequent 401 or 403 from any API call (including previews, font loading, and history) clears the stored token and returns to the token gate with a "your token was rejected" message. A "Sign out / change API token" button is always visible in Settings when auth is enabled. Requires a container image rebuild.
 
 ## [0.1.3] — 2026-06-07
 

@@ -732,6 +732,10 @@ button:disabled {
   margin-bottom: 0.5rem;
 }
 
+.token-gate-error {
+  color: #7a1a14;
+}
+
 /* recall page — media selector section */
 .recall-media-selector {
   margin-bottom: 1rem;

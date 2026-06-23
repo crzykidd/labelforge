@@ -4,6 +4,29 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-22 — Token gate validates before storing; client treats 401 and 403 as auth failures
+
+**Decision**: The token gate (`renderTokenGate` in `pages/quick-print.ts`) calls `validateToken(candidate)` — a `fetch('/api/labels', { Authorization: Bearer <candidate> })` probe — before calling `localStorage.setItem`. On rejection it shows an inline error and leaves the user on the gate. `handleAuthFailure()` in `api.ts` centralizes the bounce logic: clear `localStorage`, set a `sessionStorage` one-shot flag (`lf:token-rejected`), then `navigate('/')`. Both `apiFetch` and the bespoke fetch helpers (`previewQuick`, `previewTemplate`, `fetchHistoryPreview`, `getPrinterStatus`, `loadServerFonts`) call `handleAuthFailure()` on 401 or 403. An `assertOk()` helper de-duplicates the error-body extraction and auth check for the blob-returning helpers. Settings exposes a "Sign out / change API token" button (shown only when `isAuthRequired()` is true) as a manual escape hatch.
+
+**Why 401 AND 403**: The backend `require_auth` dependency returns `HTTPException(403)` for a valid Bearer header with the wrong token value, and `HTTPException(401)` for a missing or non-Bearer header. A client that only handles 401 would silently break on the most common user error (mistyped token). Both statuses must be treated as re-auth events.
+
+**Why validate against `/api/labels` not `/api/health`**: `GET /api/health` is explicitly unauthenticated (it's used by `initAuthMode()` itself) — it returns 200 regardless and cannot validate a token. `GET /api/labels` is always protected by `require_auth` and is cheap (returns a small JSON list).
+
+**Why validate before storing**: Storing first and then failing is the current broken behavior (the user gets a dead UI). Probing first keeps the user on the gate until the token is confirmed good, providing instant feedback without requiring any manual localStorage inspection.
+
+**Why `sessionStorage` for the rejected flag**: A `module variable` would survive in-page navigation but not a hard reload; `localStorage` would persist indefinitely. `sessionStorage` is cleared on tab close / hard reload, which is the right lifetime: the rejection message is relevant only immediately after the bounce, not on a fresh session.
+
+**Why `isAuthRequired()` guard in `handleAuthFailure()`**: On a `DISABLE_AUTH=true` deployment, a stray 403 (e.g. misconfigured reverse proxy) must not trap the user on a token gate that doesn't exist. The guard ensures the bounce only happens when the app actually requires a token.
+
+**Considered**:
+- Module-level variable for the rejected flag — rejected; cleared on hard reload but not on page-close, and module state doesn't survive `navigate()` in certain bundler tree-shake scenarios.
+- Separate auth module instead of adding to `api.ts` — rejected; `api.ts` already owns `TOKEN_KEY`, `isAuthRequired()`, and `initAuthMode()`; splitting would require more imports everywhere.
+- `getPrinterStatus` refactored through `assertOk()` — not done because `getPrinterStatus` intentionally returns `{ ok, body }` for non-error non-ok statuses (printer not ready); `assertOk()` would swallow that. Auth failure is handled inline with an early return before reading the body.
+
+**Would revisit if**: The backend auth model gains a concept of session expiry with its own status code, or DISABLE_AUTH is expanded to a per-route config.
+
+---
+
 ## 2026-06-22 — QR/barcode print fix: integer-multiple NEAREST upscale + hard-threshold insurance
 
 **Decision**: QR elements are rasterized at box_size=1 (1px/module) and then upscaled by the largest integer multiple that fits the target box using `Image.Resampling.NEAREST`. The scaled image is centered in a white canvas of exactly the box dimensions. Barcode elements are thresholded to pure B/W before NEAREST resize. Both paths apply a final `.point(lambda x: 0 if x < 128 else 255)` hard-threshold as insurance before paste.
