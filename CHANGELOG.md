@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- QR code and barcode template elements now print correctly instead of as a solid black block. The server renderer resolves field placeholders in QR/barcode payloads, rasterizes with an integer-multiple NEAREST upscale (no antialiased grey edges), and pastes pure 0/255 pixels onto the print canvas so the 1-bit threshold produces a faithful result. A hard-threshold pass is applied after rasterization as a safety net.
+
 ## [0.1.3] — 2026-06-07
 
 ### Changed

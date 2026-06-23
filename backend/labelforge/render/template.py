@@ -169,7 +169,6 @@ def _render_text_element(obj: dict, values: dict[str, str], box_w: int, box_h: i
     return sub
 
 
-# TODO: re-enable when QR/barcode 1-bit print bug is fixed
 def _render_qr_element(payload: str, correction: str, box_w: int, box_h: int) -> Image.Image:
     if not payload:
         raise RenderError("QR payload is empty after field substitution")
@@ -193,12 +192,14 @@ def _render_qr_element(payload: str, correction: str, box_w: int, box_h: int) ->
         scaled = nat.resize((scaled_w, scaled_h), Image.Resampling.NEAREST)
         result = Image.new("L", (box_w, box_h), 255)
         result.paste(scaled, ((box_w - scaled_w) // 2, (box_h - scaled_h) // 2))
-        return result
-    # Fallback: box smaller than natural QR; NEAREST keeps pixels pure B/W.
-    return nat.resize((max(box_w, 1), max(box_h, 1)), Image.Resampling.NEAREST)
+    else:
+        # Fallback: box smaller than natural QR; NEAREST keeps pixels pure B/W.
+        result = nat.resize((max(box_w, 1), max(box_h, 1)), Image.Resampling.NEAREST)
+    # Hard-threshold insurance: guarantee strictly 0/255 before paste so the print
+    # threshold (any L ≤ 179 prints black) cannot crush an accidentally grey edge.
+    return result.point(lambda x: 0 if x < 128 else 255)
 
 
-# TODO: re-enable when QR/barcode 1-bit print bug is fixed
 def _render_barcode_element(payload: str, symbology: str, box_w: int, box_h: int) -> Image.Image:
     if not payload:
         raise RenderError("Barcode payload is empty after field substitution")
@@ -333,15 +334,25 @@ def render_template(
 
             elif norm_type == "image":
                 if obj.get("labelforge_qr_payload") is not None:
-                    raise RenderError(
-                        "QR elements are not yet supported for printing"
-                        " (known bug: prints as a solid block)"
-                    )
+                    raw_payload = str(obj["labelforge_qr_payload"])
+                    qr_payload = resolve_content(raw_payload, values)
+                    correction = str(obj.get("labelforge_qr_error_correction") or "M").upper()
+                    if correction not in _QR_CORRECTION:
+                        correction = "M"
+                    sub = _render_qr_element(qr_payload, correction, box_w, box_h)
+                    if two_color:
+                        _paste_onto(canvas, sub, left, top, angle, rgb=(0, 0, 0))
+                    else:
+                        _paste_onto(canvas, sub, left, top, angle)
                 elif obj.get("labelforge_barcode_payload") is not None:
-                    raise RenderError(
-                        "Barcode elements are not yet supported for printing"
-                        " (known bug: prints as a solid block)"
-                    )
+                    raw_payload = str(obj["labelforge_barcode_payload"])
+                    bc_payload = resolve_content(raw_payload, values)
+                    symbology = str(obj.get("labelforge_barcode_symbology") or "code128")
+                    sub = _render_barcode_element(bc_payload, symbology, box_w, box_h)
+                    if two_color:
+                        _paste_onto(canvas, sub, left, top, angle, rgb=(0, 0, 0))
+                    else:
+                        _paste_onto(canvas, sub, left, top, angle)
                 else:
                     raise RenderError("Image elements not yet supported")
 

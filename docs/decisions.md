@@ -4,6 +4,24 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-22 — QR/barcode print fix: integer-multiple NEAREST upscale + hard-threshold insurance
+
+**Decision**: QR elements are rasterized at box_size=1 (1px/module) and then upscaled by the largest integer multiple that fits the target box using `Image.Resampling.NEAREST`. The scaled image is centered in a white canvas of exactly the box dimensions. Barcode elements are thresholded to pure B/W before NEAREST resize. Both paths apply a final `.point(lambda x: 0 if x < 128 else 255)` hard-threshold as insurance before paste.
+
+**Why integer-multiple NEAREST**: The print pipeline applies a 1-bit threshold (`_PRINT_CUTOFF = 179`) — any pixel with L ≤ 179 prints black. Any sub-pixel or anti-aliased grey (e.g. L=128 from a smooth-resize) would fall on one side of the cutoff unpredictably, causing a QR module to bleed into adjacent quiet-zone pixels and the printer to see a solid block. NEAREST at an integer scale factor maps every module to an exact N×N block of identical pixels; no grey is introduced.
+
+**Why hard-threshold after upscale**: The `qrcode` library emits pure B/W PNGs at box_size=1 today, but a belt-and-suspenders `.point()` guards against any future library change or edge case (e.g. the fallback path when the box is smaller than the natural QR size). Cost is negligible; the guarantee is absolute.
+
+**Extension keys wired through explicitly**: `labelforge_qr_error_correction` → `correction` param; `labelforge_barcode_symbology` → `symbology` param. Both helpers already had the right signatures; only the dispatch was missing.
+
+**Field substitution**: QR/barcode payloads go through `resolve_content()` (the same function used by the text branch) before rasterization. No second substitution path.
+
+**Two-color media**: QR/barcode ink is always black; on an RGB canvas the glyph is pasted with `rgb=(0,0,0)`, consistent with the black text path.
+
+**Would revisit if**: the qrcode or python-barcode library changes its default rendering mode in a way that introduces antialiasing at the native resolution; or if a new media type requires a non-black QR/barcode color.
+
+---
+
 ## 2026-06-07 — Tiered "What's New" format in README
 
 **Decision**: README `## What's New` uses two tiers: **feature releases** (PATCH == 0, i.e. a new minor or major) keep a full overview paragraph as before; **patch releases** (PATCH > 0) use a compact one-liner with a `[What's New](CHANGELOG.md#<anchor>)` link on the heading line. The link label is always `What's New`; the anchor is computed from the changelog section heading using GitHub's slug rule (lowercase, strip non-alphanumeric/space/hyphen including `.` `[` `]` `—`, spaces → hyphens). The `v0.1.1` and `v0.1.2` entries have been reformatted to the compact form; `v0.1.0` (the first feature release) keeps its full overview.
