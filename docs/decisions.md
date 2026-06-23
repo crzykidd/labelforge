@@ -4,6 +4,29 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-22 — QR editor element is a Fabric Image with custom props; placeholder bitmap generated client-side; no client QR library
+
+**Decision**: The in-editor QR element is a Fabric `FabricImage` (serializes as `type: "Image"`) carrying two custom props: `labelforge_qr_payload` and `labelforge_qr_error_correction`. A placeholder PNG is drawn on an offscreen `<canvas>` (bordered box with corner decorators and truncated payload text) and set as the image `src` via `FabricImage.fromURL(dataUrl)`. No client-side QR library is added. The real QR bitmap is generated server-side at Preview/print time.
+
+**Why Fabric Image not Rect/Group**: The backend dispatch in `render/template.py` normalizes element type to lowercase and dispatches `"image"` → QR/barcode/plain-image by which custom prop is present. A `Rect` serializes as `"Rect"` → the renderer would paint a solid black box. `Image` is the only type the backend accepts for QR.
+
+**Why distinguish QR from plain Image by custom prop**: Both QR elements and plain image elements serialize as `type: "Image"`. `isQrType(obj)` checks for the presence of `labelforge_qr_payload` on the object — exactly mirroring the backend dispatch. A type field on the object doesn't survive round-trips reliably enough to use alone.
+
+**Why regenerate placeholder on load rather than storing the data URL**: Persisting the base64 data URL in `canvas_json` would bloat the stored JSON significantly for every QR element. On load, `loadCanvasJSON` iterates objects, finds QR elements, and calls `refreshQrPlaceholder()` which redraws the placeholder at the element's current pixel size. This keeps the stored JSON lean and ensures the visible payload text is always current even if the payload was edited before the last save.
+
+**Why placeholder size tracks the element's rendered pixel size**: `makeQrPlaceholderDataUrl(payload, px)` accepts a pixel size; `refreshQrPlaceholder` computes `width * scaleX` so the regenerated bitmap matches the element's on-canvas size and avoids Fabric rescaling a tiny image up or a large one down.
+
+**Fabric 7 async image API**: `FabricImage.fromURL(dataUrl)` is async (returns a Promise). `addQrElement` is therefore `async` and the toolbar handler uses `void addQrElement(canvas)`. `setSrc(dataUrl)` used in the payload-edit handler and `refreshQrPlaceholder` is also async; both callers `await` or `void` it and call `canvas.renderAll()` in the `.then()` callback.
+
+**Considered**:
+- Adding a client-side QR library (`qrcode-generator`, etc.) — rejected; no new runtime dependencies per project rules, and it would add ~30 kB to the bundle for a visual that is discarded on every print anyway.
+- Using a Fabric `Rect` with a custom `type` property — rejected; the backend reads the serialized Fabric `type` field (not a custom property) for dispatch, so Rect would always route to the shape renderer.
+- Storing the placeholder data URL in `canvas_json` — rejected; bloats stored JSON; regenerating is cheap and keeps the payload text in sync.
+
+**Would revisit if**: a client-side QR preview becomes important enough to justify a dependency (e.g. user testing shows the placeholder causes confusion); or if the Fabric Image API changes to something that doesn't serialize as `"Image"`.
+
+---
+
 ## 2026-06-22 — Token gate validates before storing; client treats 401 and 403 as auth failures
 
 **Decision**: The token gate (`renderTokenGate` in `pages/quick-print.ts`) calls `validateToken(candidate)` — a `fetch('/api/labels', { Authorization: Bearer <candidate> })` probe — before calling `localStorage.setItem`. On rejection it shows an inline error and leaves the user on the gate. `handleAuthFailure()` in `api.ts` centralizes the bounce logic: clear `localStorage`, set a `sessionStorage` one-shot flag (`lf:token-rejected`), then `navigate('/')`. Both `apiFetch` and the bespoke fetch helpers (`previewQuick`, `previewTemplate`, `fetchHistoryPreview`, `getPrinterStatus`, `loadServerFonts`) call `handleAuthFailure()` on 401 or 403. An `assertOk()` helper de-duplicates the error-body extraction and auth check for the blob-returning helpers. Settings exposes a "Sign out / change API token" button (shown only when `isAuthRequired()` is true) as a manual escape hatch.

@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- "Add QR" button in the template editor toolbar lets you place a QR code element on the canvas without hand-editing JSON. A client-generated placeholder image shows the element's position and payload; the real QR bitmap is rendered server-side on Preview/print. Use `{fieldname}` placeholders in the payload to create variable QR codes. Payload and error-correction level (L/M/Q/H) are editable in the toolbar when a QR element is selected. Requires a container image rebuild.
+
 ### Fixed
 
 - QR code and barcode template elements now print correctly instead of as a solid black block. The server renderer resolves field placeholders in QR/barcode payloads, rasterizes with an integer-multiple NEAREST upscale (no antialiased grey edges), and pastes pure 0/255 pixels onto the print canvas so the 1-bit threshold produces a faithful result. A hard-threshold pass is applied after rasterization as a safety net.
