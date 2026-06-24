@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-23
+
 ### Changed
 
 - Corrected the HTTP API reference (`docs/features/api.md`) to match the implementation: the auth model (almost every route requires the token, not just writes; the only open routes are `/api/health`, `/api/printer/status`, `/api/version`, and the OpenAPI/docs endpoints), the 401-vs-403 distinction (a wrong token returns 403), and the removal of a described-but-nonexistent cookie login / Cloudflare middleware. Documented the previously-missing routes (`/api/health`, `/api/version`, `/api/admin/prune-history`, `/api/fonts/{name}/file`, `/api/templates/{name}/last-values`), removed the nonexistent `/api/printer/info`, fixed response shapes (`status` is `"sent"` not `"printed"`; `overflow` is returned; `printed_at` is not), resolved the batch `207` to its actual 200/500 behavior, and noted the `{"detail": {...}}` error envelope and the `?override=true` param. Docs-only.
