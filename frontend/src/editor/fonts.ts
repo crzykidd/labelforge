@@ -1,4 +1,4 @@
-import { TOKEN_KEY } from '../api'
+import { TOKEN_KEY, handleAuthFailure } from '../api'
 import type { FontInfo } from '../types'
 
 /**
@@ -26,6 +26,11 @@ export async function loadServerFonts(fonts: FontInfo[]): Promise<void> {
           headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}` },
         })
         if (!res.ok) {
+          // 403 = wrong token, 401 = missing — both mean re-auth
+          if (res.status === 401 || res.status === 403) {
+            handleAuthFailure()
+            return
+          }
           console.warn(`Font fetch failed (${res.status}): ${f.name}`)
           return
         }

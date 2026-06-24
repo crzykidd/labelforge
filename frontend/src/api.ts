@@ -1,4 +1,5 @@
 import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate, TemplateLastValues, VersionInfo } from './types'
+import { navigate } from './router'
 
 export const TOKEN_KEY = 'labelforge_token'
 
@@ -34,6 +35,82 @@ export async function initAuthMode(): Promise<void> {
   }
 }
 
+// One-shot flag: when the backend rejects our stored token, we set this so the
+// gate can show "your token was rejected" instead of the generic entry prompt.
+// sessionStorage so it's cleared on tab close / hard reload.
+const REJECTED_FLAG = 'lf:token-rejected'
+
+export function setTokenRejected(): void {
+  try { sessionStorage.setItem(REJECTED_FLAG, '1') } catch { /* ignore */ }
+}
+
+export function consumeTokenRejected(): boolean {
+  try {
+    const v = sessionStorage.getItem(REJECTED_FLAG)
+    sessionStorage.removeItem(REJECTED_FLAG)
+    return v === '1'
+  } catch { return false }
+}
+
+// Clear the stored token and bounce the user back to the gate with a rejection
+// message. Guard on isAuthRequired() so DISABLE_AUTH deployments are never
+// trapped on a gate that shouldn't exist.
+// 403 = wrong token, 401 = missing/malformed — both mean re-auth.
+export function handleAuthFailure(): void {
+  if (!isAuthRequired()) return
+  localStorage.removeItem(TOKEN_KEY)
+  setTokenRejected()
+  navigate('/')
+}
+
+// Validate a candidate token against a real authenticated endpoint without
+// storing it first. Uses GET /api/labels because it's lightweight and always
+// requires auth (GET /api/health is unauthenticated and cannot validate a token).
+// Returns true on 200, false on 401/403/network error.
+export async function validateToken(candidate: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/labels', {
+      headers: { Authorization: `Bearer ${candidate}` },
+    })
+    // 403 = wrong token, 401 = missing/malformed — both mean invalid here.
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+// Shared error-body extractor used by apiFetch and bespoke fetch helpers.
+async function extractDetail(res: Response): Promise<{ detail: string; overrideAllowed: boolean }> {
+  let detail = `HTTP ${res.status}`
+  let overrideAllowed = false
+  try {
+    const body = await res.json() as { detail?: unknown }
+    const d = body.detail
+    if (typeof d === 'string') {
+      detail = d
+    } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
+      // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
+      detail = (d as { message: string }).message
+      if ((d as { override_allowed?: unknown }).override_allowed === true) overrideAllowed = true
+    } else if (d != null) {
+      detail = JSON.stringify(d)
+    }
+  } catch { /* use status fallback */ }
+  return { detail, overrideAllowed }
+}
+
+// Assert a fetch Response is ok. Triggers handleAuthFailure() on 401/403 so
+// every bespoke fetch path benefits from the central re-auth logic.
+// Throws Error (not ApiError) for blob/non-JSON fetch paths.
+export async function assertOk(res: Response): Promise<void> {
+  if (res.ok) return
+  if (res.status === 401 || res.status === 403) {
+    handleAuthFailure()
+  }
+  const { detail } = await extractDetail(res)
+  throw new Error(detail)
+}
+
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     ...options,
@@ -44,21 +121,10 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     },
   })
   if (!res.ok) {
-    let detail = `HTTP ${res.status}`
-    let overrideAllowed = false
-    try {
-      const body = await res.json() as { detail?: unknown }
-      const d = body.detail
-      if (typeof d === 'string') {
-        detail = d
-      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
-        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
-        detail = (d as { message: string }).message
-        if ((d as { override_allowed?: unknown }).override_allowed === true) overrideAllowed = true
-      } else if (d != null) {
-        detail = JSON.stringify(d)
-      }
-    } catch { /* use status fallback */ }
+    if (res.status === 401 || res.status === 403) {
+      handleAuthFailure()
+    }
+    const { detail, overrideAllowed } = await extractDetail(res)
     throw new ApiError(detail, res.status, overrideAllowed)
   }
   if (res.status === 204) return undefined as T
@@ -89,22 +155,7 @@ export async function previewQuick(req: QuickPrintRequest): Promise<Blob> {
     },
     body: JSON.stringify(req),
   })
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`
-    try {
-      const body = await res.json() as { detail?: unknown }
-      const d = body.detail
-      if (typeof d === 'string') {
-        detail = d
-      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
-        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
-        detail = (d as { message: string }).message
-      } else if (d != null) {
-        detail = JSON.stringify(d)
-      }
-    } catch { /* use status fallback */ }
-    throw new Error(detail)
-  }
+  await assertOk(res)
   return res.blob()
 }
 
@@ -160,22 +211,7 @@ export async function previewTemplate(
     },
     body: JSON.stringify(body),
   })
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`
-    try {
-      const errBody = await res.json() as { detail?: unknown }
-      const d = errBody.detail
-      if (typeof d === 'string') {
-        detail = d
-      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
-        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
-        detail = (d as { message: string }).message
-      } else if (d != null) {
-        detail = JSON.stringify(d)
-      }
-    } catch { /* use status fallback */ }
-    throw new Error(detail)
-  }
+  await assertOk(res)
   const overflow = res.headers.get('X-Label-Overflow') === 'true'
   return { blob: await res.blob(), overflow }
 }
@@ -223,22 +259,7 @@ export async function fetchHistoryPreview(id: number): Promise<Blob> {
   const res = await fetch(`/api/history/${id}/preview.png`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`
-    try {
-      const body = await res.json() as { detail?: unknown }
-      const d = body.detail
-      if (typeof d === 'string') {
-        detail = d
-      } else if (d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string') {
-        // structured errors (e.g. 409 media_mismatch / printer_error) carry a human message
-        detail = (d as { message: string }).message
-      } else if (d != null) {
-        detail = JSON.stringify(d)
-      }
-    } catch { /* use status fallback */ }
-    throw new Error(detail)
-  }
+  await assertOk(res)
   return res.blob()
 }
 
@@ -269,6 +290,11 @@ export async function getPrinterStatus(): Promise<{ ok: boolean; body: PrinterSt
   const res = await fetch('/api/printer/status', {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
+  // Auth failure: bounce before trying to parse body
+  if (res.status === 401 || res.status === 403) {
+    handleAuthFailure()
+    throw new Error(`HTTP ${res.status}`)
+  }
   const body = await res.json() as PrinterStatus & Record<string, unknown>
   return { ok: res.ok, body }
 }

@@ -1,4 +1,4 @@
-import { getFonts, getLabels, getSettings, isAuthRequired, previewQuick, quickPrint, TOKEN_KEY } from '../api'
+import { consumeTokenRejected, getFonts, getLabels, getSettings, isAuthRequired, previewQuick, quickPrint, TOKEN_KEY, validateToken } from '../api'
 import type { QuickPrintRequest } from '../types'
 import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
 import { getLastLabel } from '../lastLabel'
@@ -20,26 +20,45 @@ export function mountQuickPrint(root: HTMLElement): void {
 }
 
 function renderTokenGate(root: HTMLElement): void {
+  // Check if we were bounced back here because the backend rejected our token.
+  const wasRejected = consumeTokenRejected()
+
   root.innerHTML = `
     <div class="token-gate">
       <h2>LabelForge</h2>
-      <p>Enter your API token to continue.</p>
+      ${wasRejected
+        ? '<p class="token-gate-error">Your token was rejected — check it and try again.</p>'
+        : '<p>Enter your API token to continue.</p>'
+      }
       <input id="token-input" type="password" placeholder="API token" autocomplete="current-password" />
       <button id="token-save">Save token</button>
+      <div id="token-error" class="token-gate-error" hidden></div>
     </div>
   `
   const input = root.querySelector<HTMLInputElement>('#token-input')!
   const btn = root.querySelector<HTMLButtonElement>('#token-save')!
+  const errorEl = root.querySelector<HTMLDivElement>('#token-error')!
 
-  function save(): void {
+  async function save(): Promise<void> {
     const val = input.value.trim()
     if (!val) return
+    btn.disabled = true
+    btn.textContent = 'Checking…'
+    errorEl.hidden = true
+    const ok = await validateToken(val)
+    if (!ok) {
+      errorEl.textContent = 'That token was rejected — check it and try again.'
+      errorEl.hidden = false
+      btn.disabled = false
+      btn.textContent = 'Save token'
+      return
+    }
     localStorage.setItem(TOKEN_KEY, val)
     renderForm(root)
   }
 
-  btn.addEventListener('click', save)
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save() })
+  btn.addEventListener('click', () => { void save() })
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') void save() })
 }
 
 function renderForm(root: HTMLElement): void {

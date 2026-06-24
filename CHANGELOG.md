@@ -4,6 +4,22 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-23
+
+### Changed
+
+- Corrected the HTTP API reference (`docs/features/api.md`) to match the implementation: the auth model (almost every route requires the token, not just writes; the only open routes are `/api/health`, `/api/printer/status`, `/api/version`, and the OpenAPI/docs endpoints), the 401-vs-403 distinction (a wrong token returns 403), and the removal of a described-but-nonexistent cookie login / Cloudflare middleware. Documented the previously-missing routes (`/api/health`, `/api/version`, `/api/admin/prune-history`, `/api/fonts/{name}/file`, `/api/templates/{name}/last-values`), removed the nonexistent `/api/printer/info`, fixed response shapes (`status` is `"sent"` not `"printed"`; `overflow` is returned; `printed_at` is not), resolved the batch `207` to its actual 200/500 behavior, and noted the `{"detail": {...}}` error envelope and the `?override=true` param. Docs-only.
+
+### Added
+
+- "Add QR" button in the template editor toolbar lets you place a QR code element on the canvas without hand-editing JSON. A client-generated placeholder image shows the element's position and payload; the real QR bitmap is rendered server-side on Preview/print. Use `{fieldname}` placeholders in the payload to create variable QR codes. Payload and error-correction level (L/M/Q/H) are editable in the toolbar when a QR element is selected. Requires a container image rebuild.
+- App logo now appears in the nav bar (links home) and as the browser favicon.
+
+### Fixed
+
+- QR code and barcode template elements now print correctly instead of as a solid black block. The server renderer resolves field placeholders in QR/barcode payloads, rasterizes with an integer-multiple NEAREST upscale (no antialiased grey edges), and pastes pure 0/255 pixels onto the print canvas so the 1-bit threshold produces a faithful result. A hard-threshold pass is applied after rasterization as a safety net.
+- A wrong API token is now caught at entry: the token gate validates the candidate against the server before storing it, and shows an inline error if rejected. Any subsequent 401 or 403 from any API call (including previews, font loading, and history) clears the stored token and returns to the token gate with a "your token was rejected" message. A "Sign out / change API token" button is always visible in Settings when auth is enabled. Requires a container image rebuild.
+
 ## [0.1.3] — 2026-06-07
 
 ### Changed

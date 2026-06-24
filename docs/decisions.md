@@ -4,6 +4,70 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-22 — QR editor element is a Fabric Image with custom props; placeholder bitmap generated client-side; no client QR library
+
+**Decision**: The in-editor QR element is a Fabric `FabricImage` (serializes as `type: "Image"`) carrying two custom props: `labelforge_qr_payload` and `labelforge_qr_error_correction`. A placeholder PNG is drawn on an offscreen `<canvas>` (bordered box with corner decorators and truncated payload text) and set as the image `src` via `FabricImage.fromURL(dataUrl)`. No client-side QR library is added. The real QR bitmap is generated server-side at Preview/print time.
+
+**Why Fabric Image not Rect/Group**: The backend dispatch in `render/template.py` normalizes element type to lowercase and dispatches `"image"` → QR/barcode/plain-image by which custom prop is present. A `Rect` serializes as `"Rect"` → the renderer would paint a solid black box. `Image` is the only type the backend accepts for QR.
+
+**Why distinguish QR from plain Image by custom prop**: Both QR elements and plain image elements serialize as `type: "Image"`. `isQrType(obj)` checks for the presence of `labelforge_qr_payload` on the object — exactly mirroring the backend dispatch. A type field on the object doesn't survive round-trips reliably enough to use alone.
+
+**Why regenerate placeholder on load rather than storing the data URL**: Persisting the base64 data URL in `canvas_json` would bloat the stored JSON significantly for every QR element. On load, `loadCanvasJSON` iterates objects, finds QR elements, and calls `refreshQrPlaceholder()` which redraws the placeholder at the element's current pixel size. This keeps the stored JSON lean and ensures the visible payload text is always current even if the payload was edited before the last save.
+
+**Why placeholder size tracks the element's rendered pixel size**: `makeQrPlaceholderDataUrl(payload, px)` accepts a pixel size; `refreshQrPlaceholder` computes `width * scaleX` so the regenerated bitmap matches the element's on-canvas size and avoids Fabric rescaling a tiny image up or a large one down.
+
+**Fabric 7 async image API**: `FabricImage.fromURL(dataUrl)` is async (returns a Promise). `addQrElement` is therefore `async` and the toolbar handler uses `void addQrElement(canvas)`. `setSrc(dataUrl)` used in the payload-edit handler and `refreshQrPlaceholder` is also async; both callers `await` or `void` it and call `canvas.renderAll()` in the `.then()` callback.
+
+**Considered**:
+- Adding a client-side QR library (`qrcode-generator`, etc.) — rejected; no new runtime dependencies per project rules, and it would add ~30 kB to the bundle for a visual that is discarded on every print anyway.
+- Using a Fabric `Rect` with a custom `type` property — rejected; the backend reads the serialized Fabric `type` field (not a custom property) for dispatch, so Rect would always route to the shape renderer.
+- Storing the placeholder data URL in `canvas_json` — rejected; bloats stored JSON; regenerating is cheap and keeps the payload text in sync.
+
+**Would revisit if**: a client-side QR preview becomes important enough to justify a dependency (e.g. user testing shows the placeholder causes confusion); or if the Fabric Image API changes to something that doesn't serialize as `"Image"`.
+
+---
+
+## 2026-06-22 — Token gate validates before storing; client treats 401 and 403 as auth failures
+
+**Decision**: The token gate (`renderTokenGate` in `pages/quick-print.ts`) calls `validateToken(candidate)` — a `fetch('/api/labels', { Authorization: Bearer <candidate> })` probe — before calling `localStorage.setItem`. On rejection it shows an inline error and leaves the user on the gate. `handleAuthFailure()` in `api.ts` centralizes the bounce logic: clear `localStorage`, set a `sessionStorage` one-shot flag (`lf:token-rejected`), then `navigate('/')`. Both `apiFetch` and the bespoke fetch helpers (`previewQuick`, `previewTemplate`, `fetchHistoryPreview`, `getPrinterStatus`, `loadServerFonts`) call `handleAuthFailure()` on 401 or 403. An `assertOk()` helper de-duplicates the error-body extraction and auth check for the blob-returning helpers. Settings exposes a "Sign out / change API token" button (shown only when `isAuthRequired()` is true) as a manual escape hatch.
+
+**Why 401 AND 403**: The backend `require_auth` dependency returns `HTTPException(403)` for a valid Bearer header with the wrong token value, and `HTTPException(401)` for a missing or non-Bearer header. A client that only handles 401 would silently break on the most common user error (mistyped token). Both statuses must be treated as re-auth events.
+
+**Why validate against `/api/labels` not `/api/health`**: `GET /api/health` is explicitly unauthenticated (it's used by `initAuthMode()` itself) — it returns 200 regardless and cannot validate a token. `GET /api/labels` is always protected by `require_auth` and is cheap (returns a small JSON list).
+
+**Why validate before storing**: Storing first and then failing is the current broken behavior (the user gets a dead UI). Probing first keeps the user on the gate until the token is confirmed good, providing instant feedback without requiring any manual localStorage inspection.
+
+**Why `sessionStorage` for the rejected flag**: A `module variable` would survive in-page navigation but not a hard reload; `localStorage` would persist indefinitely. `sessionStorage` is cleared on tab close / hard reload, which is the right lifetime: the rejection message is relevant only immediately after the bounce, not on a fresh session.
+
+**Why `isAuthRequired()` guard in `handleAuthFailure()`**: On a `DISABLE_AUTH=true` deployment, a stray 403 (e.g. misconfigured reverse proxy) must not trap the user on a token gate that doesn't exist. The guard ensures the bounce only happens when the app actually requires a token.
+
+**Considered**:
+- Module-level variable for the rejected flag — rejected; cleared on hard reload but not on page-close, and module state doesn't survive `navigate()` in certain bundler tree-shake scenarios.
+- Separate auth module instead of adding to `api.ts` — rejected; `api.ts` already owns `TOKEN_KEY`, `isAuthRequired()`, and `initAuthMode()`; splitting would require more imports everywhere.
+- `getPrinterStatus` refactored through `assertOk()` — not done because `getPrinterStatus` intentionally returns `{ ok, body }` for non-error non-ok statuses (printer not ready); `assertOk()` would swallow that. Auth failure is handled inline with an early return before reading the body.
+
+**Would revisit if**: The backend auth model gains a concept of session expiry with its own status code, or DISABLE_AUTH is expanded to a per-route config.
+
+---
+
+## 2026-06-22 — QR/barcode print fix: integer-multiple NEAREST upscale + hard-threshold insurance
+
+**Decision**: QR elements are rasterized at box_size=1 (1px/module) and then upscaled by the largest integer multiple that fits the target box using `Image.Resampling.NEAREST`. The scaled image is centered in a white canvas of exactly the box dimensions. Barcode elements are thresholded to pure B/W before NEAREST resize. Both paths apply a final `.point(lambda x: 0 if x < 128 else 255)` hard-threshold as insurance before paste.
+
+**Why integer-multiple NEAREST**: The print pipeline applies a 1-bit threshold (`_PRINT_CUTOFF = 179`) — any pixel with L ≤ 179 prints black. Any sub-pixel or anti-aliased grey (e.g. L=128 from a smooth-resize) would fall on one side of the cutoff unpredictably, causing a QR module to bleed into adjacent quiet-zone pixels and the printer to see a solid block. NEAREST at an integer scale factor maps every module to an exact N×N block of identical pixels; no grey is introduced.
+
+**Why hard-threshold after upscale**: The `qrcode` library emits pure B/W PNGs at box_size=1 today, but a belt-and-suspenders `.point()` guards against any future library change or edge case (e.g. the fallback path when the box is smaller than the natural QR size). Cost is negligible; the guarantee is absolute.
+
+**Extension keys wired through explicitly**: `labelforge_qr_error_correction` → `correction` param; `labelforge_barcode_symbology` → `symbology` param. Both helpers already had the right signatures; only the dispatch was missing.
+
+**Field substitution**: QR/barcode payloads go through `resolve_content()` (the same function used by the text branch) before rasterization. No second substitution path.
+
+**Two-color media**: QR/barcode ink is always black; on an RGB canvas the glyph is pasted with `rgb=(0,0,0)`, consistent with the black text path.
+
+**Would revisit if**: the qrcode or python-barcode library changes its default rendering mode in a way that introduces antialiasing at the native resolution; or if a new media type requires a non-black QR/barcode color.
+
+---
+
 ## 2026-06-07 — Tiered "What's New" format in README
 
 **Decision**: README `## What's New` uses two tiers: **feature releases** (PATCH == 0, i.e. a new minor or major) keep a full overview paragraph as before; **patch releases** (PATCH > 0) use a compact one-liner with a `[What's New](CHANGELOG.md#<anchor>)` link on the heading line. The link label is always `What's New`; the anchor is computed from the changelog section heading using GitHub's slug rule (lowercase, strip non-alphanumeric/space/hyphen including `.` `[` `]` `—`, spaces → hyphens). The `v0.1.1` and `v0.1.2` entries have been reformatted to the compact form; `v0.1.0` (the first feature release) keeps its full overview.

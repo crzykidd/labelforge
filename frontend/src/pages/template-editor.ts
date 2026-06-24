@@ -3,12 +3,15 @@ import { navigate } from '../router'
 import type { LabelEntry } from '../types'
 import {
   DEFAULT_CONTINUOUS_LENGTH_DOTS,
+  addQrElement,
   addTextElement,
   deleteSelected,
   getCanvasJSON,
   initCanvas,
+  isQrType,
   isTextType,
   loadCanvasJSON,
+  makeQrPlaceholderDataUrl,
 } from '../editor/canvas'
 import { loadServerFonts } from '../editor/fonts'
 import { mountLabelMediaSelect } from '../labels'
@@ -53,6 +56,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <code class="editor-media-badge" id="editor-media">${esc(isNew ? newMedia : '')}</code>
         <span class="toolbar-sep"></span>
         <button id="btn-add-text" title="Add a text element. Use {fieldname} placeholders (single braces) for variable fields.">Add Text</button>
+        <button id="btn-add-qr" title="Add a QR code element. QR preview is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads.">Add QR</button>
         <button id="btn-delete">Delete</button>
         <span class="toolbar-sep"></span>
         <select id="font-select" title="Font family" style="max-width:160px">
@@ -63,6 +67,14 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <select id="text-color" title="Text color">
           <option value="#000000">Black</option>
           <option value="#ff0000">Red</option>
+        </select>
+        <span class="toolbar-sep" id="sep-qr" hidden></span>
+        <input id="qr-payload" type="text" placeholder="QR payload or {field}" title="QR code payload. Use {fieldname} for variable fields." style="width:200px" hidden />
+        <select id="qr-ec" title="Error correction level" hidden>
+          <option value="L">EC: L (7%)</option>
+          <option value="M" selected>EC: M (15%)</option>
+          <option value="Q">EC: Q (25%)</option>
+          <option value="H">EC: H (30%)</option>
         </select>
         <span class="toolbar-sep"></span>
         <button id="btn-save-as">Save As</button>
@@ -83,6 +95,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
 
   const btnBack = root.querySelector<HTMLButtonElement>('#btn-back')!
   const btnAddText = root.querySelector<HTMLButtonElement>('#btn-add-text')!
+  const btnAddQr = root.querySelector<HTMLButtonElement>('#btn-add-qr')!
   const btnDelete = root.querySelector<HTMLButtonElement>('#btn-delete')!
   const btnSave = root.querySelector<HTMLButtonElement>('#btn-save')!
   const btnSaveAs = root.querySelector<HTMLButtonElement>('#btn-save-as')!
@@ -90,6 +103,9 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const fontSelect = root.querySelector<HTMLSelectElement>('#font-select')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
   const textColorSelect = root.querySelector<HTMLSelectElement>('#text-color')!
+  const sepQr = root.querySelector<HTMLSpanElement>('#sep-qr')!
+  const qrPayloadInput = root.querySelector<HTMLInputElement>('#qr-payload')!
+  const qrEcSelect = root.querySelector<HTMLSelectElement>('#qr-ec')!
   const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
   const statusEl = root.querySelector<HTMLDivElement>('#editor-status')!
   const canvasWrap = root.querySelector<HTMLDivElement>('#canvas-wrap')!
@@ -103,6 +119,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
   let defaultFont = 'DejaVuSans'
   let previewObjectUrl: string | null = null
   let cachedLabels: LabelEntry[] = []
+
+  // Text and QR controls are only relevant when those element types are selected.
+  // Start hidden; selection events reveal them. QR controls are already hidden via
+  // HTML `hidden` attribute; text controls need an explicit JS hide since they were
+  // previously always visible.
+  fontSelect.style.display = 'none'
+  fontSizeInput.style.display = 'none'
+  root.querySelector<HTMLElement>('#sep-color')!.hidden = true
+  textColorSelect.style.display = 'none'
 
   function showStatus(msg: string, kind: 'success' | 'error' | ''): void {
     if (!msg) { statusEl.hidden = true; return }
@@ -133,24 +158,59 @@ export function mountTemplateEditor(root: HTMLElement): void {
     redOpt.disabled = !labelColorCapable
     if (!labelColorCapable) redOpt.title = 'Requires a two-color label (e.g. 62red)'
 
-    // Track selection to drive font controls
-    canvas.on('selection:created', updateFontControls)
-    canvas.on('selection:updated', updateFontControls)
-    canvas.on('selection:cleared', () => {})
+    // Track selection to drive per-type toolbar controls
+    canvas.on('selection:created', updateSelectionControls)
+    canvas.on('selection:updated', updateSelectionControls)
+    canvas.on('selection:cleared', () => {
+      showTextControls(false)
+      showQrControls(false)
+    })
   }
 
-  function updateFontControls(): void {
+  function showTextControls(visible: boolean): void {
+    fontSelect.style.display = visible ? '' : 'none'
+    fontSizeInput.style.display = visible ? '' : 'none'
+    const sepColor = root.querySelector<HTMLElement>('#sep-color')!
+    sepColor.hidden = !visible
+    textColorSelect.style.display = visible ? '' : 'none'
+  }
+
+  function showQrControls(visible: boolean): void {
+    sepQr.hidden = !visible
+    qrPayloadInput.hidden = !visible
+    qrEcSelect.hidden = !visible
+  }
+
+  function updateSelectionControls(): void {
     if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    const textSelected = obj ? isTextType(obj.type) : false
+    const qrSelected = isQrType(obj)
+
+    showTextControls(textSelected)
+    showQrControls(qrSelected)
+
+    if (textSelected) {
+      updateFontControls(obj)
+    }
+    if (qrSelected && obj) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const o = obj as any
+      qrPayloadInput.value = (o['labelforge_qr_payload'] as string) ?? ''
+      qrEcSelect.value = (o['labelforge_qr_error_correction'] as string) ?? 'M'
+    }
+  }
+
+  function updateFontControls(obj: import('fabric').FabricObject | null | undefined): void {
+    if (!obj) return
     type TextProps = { fontFamily?: string; fontSize?: number; fill?: string; type?: string }
-    const obj = fabricCanvas.getActiveObject() as unknown as TextProps | null
-    if (obj && isTextType(obj.type)) {
-      if (obj.fontFamily) fontSelect.value = obj.fontFamily
-      if (obj.fontSize) fontSizeInput.value = String(Math.round(obj.fontSize))
-      if (obj.fill) {
-        const f = (obj.fill as string).toLowerCase()
-        const wantRed = (f === '#ff0000' || f === 'red') && labelColorCapable
-        textColorSelect.value = wantRed ? '#ff0000' : '#000000'
-      }
+    const t = obj as unknown as TextProps
+    if (t.fontFamily) fontSelect.value = t.fontFamily
+    if (t.fontSize) fontSizeInput.value = String(Math.round(t.fontSize))
+    if (t.fill) {
+      const f = (t.fill as string).toLowerCase()
+      const wantRed = (f === '#ff0000' || f === 'red') && labelColorCapable
+      textColorSelect.value = wantRed ? '#ff0000' : '#000000'
     }
   }
 
@@ -184,6 +244,30 @@ export function mountTemplateEditor(root: HTMLElement): void {
     }
   })
 
+  qrPayloadInput.addEventListener('change', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (!isQrType(obj) || !obj) return
+    const newPayload = qrPayloadInput.value
+    obj.set('labelforge_qr_payload', newPayload)
+    // Regenerate placeholder so visible text matches the new payload
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const px = Math.round(((obj as any).width ?? 150) * ((obj as any).scaleX ?? 1))
+    const dataUrl = makeQrPlaceholderDataUrl(newPayload, Math.max(50, Math.min(px, 600)))
+    // FabricImage.setSrc is async; render after it resolves
+    void (obj as import('fabric').FabricImage).setSrc(dataUrl).then(() => {
+      fabricCanvas?.renderAll()
+    })
+  })
+
+  qrEcSelect.addEventListener('change', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (!isQrType(obj) || !obj) return
+    obj.set('labelforge_qr_error_correction', qrEcSelect.value)
+    fabricCanvas.renderAll()
+  })
+
   btnBack.addEventListener('click', () => {
     document.getElementById('app')?.classList.remove('editor-mode')
     navigate('/templates')
@@ -193,6 +277,11 @@ export function mountTemplateEditor(root: HTMLElement): void {
     if (!fabricCanvas) return
     const fill = textColorSelect.value  // Red is disabled on mono media; always safe to read
     addTextElement(fabricCanvas, fontSelect.value || defaultFont, fill)
+  })
+
+  btnAddQr.addEventListener('click', () => {
+    if (!fabricCanvas) return
+    void addQrElement(fabricCanvas)
   })
 
   btnDelete.addEventListener('click', () => {

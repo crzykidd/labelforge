@@ -1,6 +1,10 @@
-import { Canvas, FabricObject, IText } from 'fabric'
+import { Canvas, FabricImage, FabricObject, IText } from 'fabric'
 
-export const CUSTOM_PROPS = ['labelforge_raw_content'] as const
+export const CUSTOM_PROPS = [
+  'labelforge_raw_content',
+  'labelforge_qr_payload',
+  'labelforge_qr_error_correction',
+] as const
 
 // Continuous media report a printable length of 0 (endless roll). The editor
 // still needs a finite working canvas, so continuous templates open at this
@@ -12,8 +16,10 @@ export const CUSTOM_PROPS = ['labelforge_raw_content'] as const
 // See docs/features/templates.md.
 export const DEFAULT_CONTINUOUS_LENGTH_DOTS = 1000
 
-// Register the custom prop so canvas.toJSON() includes it on every object automatically.
-FabricObject.customProperties.push('labelforge_raw_content')
+// Register all custom props so canvas.toJSON() includes them on every object automatically.
+for (const prop of CUSTOM_PROPS) {
+  FabricObject.customProperties.push(prop)
+}
 
 /**
  * True for any Fabric text object. Fabric v6 reports `type` as the PascalCase
@@ -23,6 +29,71 @@ FabricObject.customProperties.push('labelforge_raw_content')
 export function isTextType(type: string | undefined): boolean {
   const t = (type ?? '').toLowerCase().replace(/-/g, '')
   return t === 'itext' || t === 'text' || t === 'textbox'
+}
+
+/**
+ * True for a Fabric Image that carries the QR custom prop.
+ * QR elements serialize as type "Image" (same as real image elements), so
+ * they must be distinguished by the custom prop — exactly as the backend does.
+ */
+export function isQrType(obj: FabricObject | null | undefined): boolean {
+  if (!obj) return false
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (obj as any)['labelforge_qr_payload'] !== undefined
+}
+
+/**
+ * Generate a placeholder data URL for a QR element so users can see where the
+ * element sits on the canvas. The actual QR bitmap is generated server-side at
+ * preview/print time — this is purely a positioning aid.
+ *
+ * Returns a data URL of a square PNG with a bordered box, "QR" label, and
+ * truncated payload text. Size is `px` × `px`.
+ */
+export function makeQrPlaceholderDataUrl(payload: string, px = 150): string {
+  const c = document.createElement('canvas')
+  c.width = px
+  c.height = px
+  const ctx = c.getContext('2d')!
+
+  // White background
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, px, px)
+
+  // Border
+  ctx.strokeStyle = '#888888'
+  ctx.lineWidth = 2
+  ctx.strokeRect(2, 2, px - 4, px - 4)
+
+  // Corner decorators to evoke a QR feel
+  const cSize = Math.max(10, Math.round(px * 0.18))
+  ctx.fillStyle = '#333333'
+  for (const [cx, cy] of [[4, 4], [px - 4 - cSize, 4], [4, px - 4 - cSize]] as [number, number][]) {
+    ctx.fillRect(cx, cy, cSize, cSize)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(cx + 3, cy + 3, cSize - 6, cSize - 6)
+    ctx.fillStyle = '#333333'
+    ctx.fillRect(cx + 6, cy + 6, cSize - 12, cSize - 12)
+    ctx.fillStyle = '#333333'
+  }
+
+  // "QR" label
+  const labelSize = Math.max(12, Math.round(px * 0.18))
+  ctx.fillStyle = '#333333'
+  ctx.font = `bold ${labelSize}px sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('QR', px / 2, px / 2 - labelSize * 0.4)
+
+  // Truncated payload text below label
+  const maxPayload = 20
+  const display = payload.length > maxPayload ? payload.slice(0, maxPayload - 1) + '…' : payload
+  const payloadSize = Math.max(8, Math.round(px * 0.09))
+  ctx.font = `${payloadSize}px sans-serif`
+  ctx.fillStyle = '#555555'
+  ctx.fillText(display, px / 2, px / 2 + labelSize * 0.9)
+
+  return c.toDataURL('image/png')
 }
 
 /** Create a Fabric Canvas sized to label pixels, displayed scaled to fit the container. */
@@ -78,6 +149,67 @@ export function addTextElement(canvas: Canvas, defaultFont: string, fill = '#000
   canvas.renderAll()
 }
 
+/**
+ * Add a QR placeholder element to the canvas.
+ *
+ * The element is a Fabric Image carrying labelforge_qr_payload and
+ * labelforge_qr_error_correction as custom props. Fabric serializes Image as
+ * type "Image", which the backend normalizes to "image" and dispatches to the
+ * QR renderer — so this must be Image, not Rect or Group.
+ *
+ * The visible bitmap is a client-generated placeholder; the real QR is rendered
+ * server-side on Preview/print. Tooltip on the button makes this clear.
+ */
+export async function addQrElement(
+  canvas: Canvas,
+  payload = 'https://example.com',
+  errorCorrection = 'M',
+): Promise<void> {
+  const vp = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0]
+  const scale = vp[0]
+  const canvasVirtualW = (canvas.width ?? 400) / scale
+  const canvasVirtualH = (canvas.height ?? 200) / scale
+
+  const size = 150  // default square in label pixels
+  const left = Math.round(canvasVirtualW * 0.05)
+  const top = Math.round(canvasVirtualH * 0.05)
+
+  const dataUrl = makeQrPlaceholderDataUrl(payload, size)
+
+  const img = await FabricImage.fromURL(dataUrl)
+  img.set({
+    left,
+    top,
+    // scaleX/scaleY stay 1; width/height come from the native image dimensions.
+    // Backend uses width*scaleX × height*scaleY for QR size, so natural size = size px.
+    originX: 'left',
+    originY: 'top',
+  })
+  img.set('labelforge_qr_payload', payload)
+  img.set('labelforge_qr_error_correction', errorCorrection)
+
+  canvas.add(img)
+  canvas.setActiveObject(img)
+  canvas.renderAll()
+}
+
+/**
+ * Regenerate the placeholder bitmap for a loaded QR Image object.
+ * Called after loadFromJSON so the stored data URL (if any) is replaced with a
+ * freshly generated one — avoids bloating canvas_json with a stored data URL
+ * and ensures the visible payload text is always current.
+ */
+async function refreshQrPlaceholder(obj: FabricObject): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const o = obj as any
+  const payload: string = o['labelforge_qr_payload'] ?? 'https://example.com'
+  // Use the element's current pixel size for the placeholder bitmap
+  const px = Math.round((o.width ?? 150) * (o.scaleX ?? 1))
+  const clampedPx = Math.max(50, Math.min(px, 600))
+  const dataUrl = makeQrPlaceholderDataUrl(payload, clampedPx)
+  await (obj as FabricImage).setSrc(dataUrl)
+}
+
 export function deleteSelected(canvas: Canvas): void {
   const active = canvas.getActiveObjects()
   if (active.length === 0) return
@@ -87,7 +219,7 @@ export function deleteSelected(canvas: Canvas): void {
 }
 
 export function getCanvasJSON(canvas: Canvas): Record<string, unknown> {
-  // customProperties registered above ensures labelforge_raw_content is included.
+  // customProperties registered above ensures all labelforge_* props are included.
   return canvas.toJSON() as Record<string, unknown>
 }
 
@@ -96,14 +228,20 @@ export async function loadCanvasJSON(
   json: Record<string, unknown>,
 ): Promise<void> {
   await canvas.loadFromJSON(json)
-  // Re-attach raw content sync to each loaded text object
+  // Re-attach raw content sync to each loaded text object; regenerate QR placeholders.
+  const refreshes: Promise<void>[] = []
   canvas.getObjects().forEach(obj => {
     if (isTextType(obj.type)) {
       const t = obj as IText
       t.on('changed', () => {
         t.set('labelforge_raw_content', t.text ?? '')
       })
+    } else if (isQrType(obj)) {
+      refreshes.push(refreshQrPlaceholder(obj))
     }
   })
+  if (refreshes.length > 0) {
+    await Promise.all(refreshes)
+  }
   canvas.renderAll()
 }

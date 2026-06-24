@@ -10,7 +10,11 @@ isolated unit test stays green. CI had no such guard before this test.
 def test_app_imports_and_core_routes_registered():
     from labelforge.main import app
 
-    paths = {route.path for route in app.routes}
+    # Read paths from the OpenAPI schema rather than walking app.routes: newer
+    # Starlette wraps included routers in `_IncludedRouter` mounts that have no
+    # `.path`, so iterating app.routes raises. openapi() is version-stable and
+    # still exercises route registration.
+    paths = set(app.openapi()["paths"])
     assert "/api/health" in paths
     assert "/api/printer/status" in paths
 

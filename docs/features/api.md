@@ -14,15 +14,24 @@ Every template is callable from anywhere in the homelab. A Home Assistant automa
 
 **Optional, default-on (see ADR 2026-06-02).** Setting `DISABLE_AUTH=true` runs the app with no app-level auth — every `/api/*` route is open, intended for deployments fronted by a reverse proxy (e.g. Traefik) that authenticates at the edge. With auth disabled, `GET /api/health` returns `"auth_required": false` and the SPA skips its token gate. The rest of this section describes the default (auth enabled) mode.
 
-Single shared secret in `.env` as `API_TOKEN` (required unless `DISABLE_AUTH=true`; the app refuses to start otherwise). Required as `Authorization: Bearer <token>` on:
+Single shared secret in `.env` as `API_TOKEN` (required unless `DISABLE_AUTH=true`; the app refuses to start otherwise). The token is sent as `Authorization: Bearer <token>` and enforced by a single FastAPI dependency (`require_auth` in `backend/labelforge/routes/auth.py`) applied at the router level.
 
-- All `POST`, `PUT`, `DELETE` endpoints
-- `GET /api/admin/*`
-- The UI obtains the token from a same-origin cookie set by an unauthenticated login page (LAN access only)
+**Almost every `/api/*` route requires the token** — all of `templates`, `labels`, `history`, `settings`, `fonts`, `print`, `preview`, and `admin`, on *every* method including `GET`. The only **unauthenticated** routes are:
 
-`GET` endpoints (templates list, label catalog, history read) are unauthenticated on the LAN. For external access via `labels.crzynet.com`, all endpoints require the token — enforced by Cloudflare Tunnel access policy plus an app-level `require_token` middleware when the request comes through Cloudflare (detected by header).
+- `GET /api/health` — liveness + `auth_required` flag
+- `GET /api/printer/status` — loaded media / ready state
+- `GET /api/version` — version + update-check info
+- FastAPI's `/docs`, `/redoc`, `/openapi.json`, and the SPA static files
 
-See [`decisions.md`](decisions.md) for why this is the v1 model.
+Auth outcomes:
+
+- **Missing or non-Bearer** `Authorization` header → **401** ("Authorization header required" / "must use Bearer scheme")
+- **Wrong token** → **403** ("Invalid API token")
+- Valid token → the request proceeds
+
+The web UI stores the token in the browser (localStorage) and attaches it to every request — there is no cookie login page. External access via `labels.crzynet.com` is fronted by a Cloudflare Tunnel (deployment infrastructure); the app itself does not detect Cloudflare or run any extra auth middleware.
+
+See [`decisions.md`](decisions.md) (ADR 2026-06-02) for why this is the v1 model.
 
 ## Endpoint surface
 
@@ -35,6 +44,7 @@ POST   /api/templates                           Create
 PUT    /api/templates/{name}                    Update
 DELETE /api/templates/{name}                    Soft-delete
 POST   /api/templates/{name}/duplicate          Save As (new name, new label media)
+GET    /api/templates/{name}/last-values        Field values from this template's last print
 ```
 
 ### Printing
@@ -47,12 +57,20 @@ POST   /api/preview/{name}                      Render preview PNG without print
 POST   /api/preview/quick                       Preview a quick-print payload
 ```
 
+All three print endpoints accept an optional `?override=true` query param to print despite a media-mismatch 409 (see "Override media mismatch" below).
+
 ### Label catalog
 
 ```
 GET    /api/labels                              Merged catalog
-GET    /api/labels/{id}                         One label
+GET    /api/labels/{id}                          One label
+```
+
+### Admin (token required)
+
+```
 POST   /api/admin/reload-catalog                Reload labels.yml from disk
+POST   /api/admin/prune-history                 Run history retention pruning now
 ```
 
 ### History
@@ -69,8 +87,7 @@ DELETE /api/history/{job_id}                    Manual delete
 ### Printer
 
 ```
-GET    /api/printer/status                      Loaded media, ready state, errors
-GET    /api/printer/info                        Model, firmware (if available)
+GET    /api/printer/status                      Loaded media, ready state, errors (unauthenticated)
 ```
 
 ### Settings
@@ -84,6 +101,14 @@ PUT    /api/settings                            Update (partial OK)
 
 ```
 GET    /api/fonts                               Available fonts from the fonts volume
+GET    /api/fonts/{name}/file                   Raw font bytes (browser @font-face registration)
+```
+
+### System (unauthenticated)
+
+```
+GET    /api/health                              Liveness + auth_required flag
+GET    /api/version                             Version + update-check info
 ```
 
 ## Request / response examples
@@ -107,19 +132,22 @@ Response (200):
 ```json
 {
   "job_id": 1234,
-  "status": "printed",
+  "status": "sent",
   "template": "spool",
   "label_media": "62",
-  "preview_url": "/api/history/1234/preview.png",
-  "printed_at": "2026-05-19T14:23:11Z"
+  "overflow": false,
+  "preview_url": "/api/history/1234/preview.png"
 }
 ```
 
+`status` is the true send outcome — `"sent"` for the network printer backend (the job was handed to the printer over TCP), per ADR 2026-05-20, not `"printed"`. `overflow` is `true` when the rendered content exceeds a die-cut label's printable height (the job is still sent). There is no `printed_at` field.
+
 Errors:
-- 400 — validation failure with field details
-- 401 — missing/invalid token
+- 400 — validation failure with field details (missing required field, etc.)
+- 401 — missing or non-Bearer `Authorization` header
+- 403 — wrong API token
 - 404 — template doesn't exist
-- 409 — printer error (media mismatch without override, out of paper, etc.) with details
+- 409 — printer/media error (media mismatch without override, printer not ready); structured body, see below
 - 500 — internal failure
 
 ### Batch print
@@ -142,16 +170,16 @@ Response:
 {
   "batch_id": "uuid",
   "jobs": [
-    {"job_id": 1234, "status": "printed"},
-    {"job_id": 1235, "status": "printed"},
-    {"job_id": 1236, "status": "printed"}
+    {"job_id": 1234, "status": "sent"},
+    {"job_id": 1235, "status": "sent"},
+    {"job_id": -1, "status": "error: Printer has 29mm continuous loaded, template expects 62mm."}
   ],
-  "succeeded": 3,
-  "failed": 0
+  "succeeded": 2,
+  "failed": 1
 }
 ```
 
-Partial failure: each job has its own status. The batch endpoint returns 200 if at least one succeeded, 207 if mixed, 500 if all failed. (TBD — confirm during implementation; 207 may not be worth the complexity for v1.)
+Partial failure: each job carries its own status. A successful job has the real `job_id` and a status of `"sent"`; a failed job has `job_id: -1` and `status: "error: <message>"`. The endpoint returns **200** as long as at least one job succeeded (mixed success/failure included). If **every** job fails it returns **500**, with the same `BatchPrintResponse` body nested under FastAPI's `detail` key. There is no `207` — it was considered and dropped for v1.
 
 ### Quick print
 
@@ -186,15 +214,22 @@ When auto-detect detects the loaded media differs from what the template expects
 ```json
 HTTP/1.1 409 Conflict
 {
-  "error": "media_mismatch",
-  "expected": "62",
-  "loaded": "29",
-  "override_allowed": true,
-  "message": "Printer has 29mm continuous loaded, template expects 62mm. Pass override=true to print anyway."
+  "detail": {
+    "error": "media_mismatch",
+    "expected": "62",
+    "loaded": "29",
+    "override_allowed": true,
+    "message": "Printer has 29mm continuous loaded, template expects 62mm. Pass override=true to print anyway."
+  }
 }
 ```
 
-Client retries with `?override=true` to print regardless.
+Client retries with `?override=true` to print regardless. Note these structured bodies are raised via `HTTPException(detail=...)`, so on the wire they are nested under a top-level `detail` key (as shown), not returned as a bare object.
+
+Two other structured errors follow the same `{"detail": {...}}` envelope:
+
+- **409 printer error** (non-media) — `{"error": "printer_error", "code": ..., "message": ..., "raw": ...}` when the printer rejects the job for a reason other than media mismatch.
+- **503 from `GET /api/printer/status`** — `{"error": "status_unavailable", "message": "Printer status is currently unavailable."}` when the printer can't be reached (this one is a plain `JSONResponse`, not wrapped in `detail`).
 
 ## Validation
 
@@ -218,9 +253,9 @@ Sticky points:
 
 ## OpenAPI
 
-FastAPI generates `/openapi.json` and serves Swagger UI at `/docs`. Both unauthenticated on the LAN, both require the token via Cloudflare.
+FastAPI generates `/openapi.json` and serves Swagger UI at `/docs` (and ReDoc at `/redoc`). All three are unauthenticated — there is no app-level auth on the docs routes. (External exposure is governed by the Cloudflare Tunnel in front of the deployment, not by app code.)
 
-The spec is the documentation. We do not maintain a separate API doc.
+The spec is the auto-generated reference; this document is the human-facing design/reference and is kept in sync by hand.
 
 ## Out of scope for v1
 

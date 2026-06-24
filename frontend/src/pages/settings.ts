@@ -1,9 +1,20 @@
-import { getPrinterStatus, getSettings, pruneHistory, putSettings } from '../api'
+import { getPrinterStatus, getSettings, handleAuthFailure, isAuthRequired, pruneHistory, putSettings } from '../api'
 
 export function mountSettings(root: HTMLElement): void {
+  // "Change token" section is only meaningful when auth is enforced.
+  const authSection = isAuthRequired() ? `
+      <section class="settings-section">
+        <h3>API Token</h3>
+        <p class="setting-hint">Clear the stored token to return to the token entry screen.</p>
+        <div class="setting-actions">
+          <button id="btn-change-token">Sign out / change API token</button>
+        </div>
+      </section>` : ''
+
   root.innerHTML = `
     <div class="settings-page">
       <h2>Settings</h2>
+      ${authSection}
       <section class="settings-section">
         <h3>Printer</h3>
         <div id="printer-settings"><p>Loading…</p></div>
@@ -23,6 +34,11 @@ export function mountSettings(root: HTMLElement): void {
       </section>
     </div>
   `
+
+  const btnChangeToken = root.querySelector<HTMLButtonElement>('#btn-change-token')
+  if (btnChangeToken) {
+    btnChangeToken.addEventListener('click', () => { handleAuthFailure() })
+  }
 
   const statusEl = root.querySelector<HTMLDivElement>('#retention-status')!
   const formEl = root.querySelector<HTMLDivElement>('#retention-form')!
