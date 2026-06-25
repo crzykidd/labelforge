@@ -4,6 +4,8 @@ export const CUSTOM_PROPS = [
   'labelforge_raw_content',
   'labelforge_qr_payload',
   'labelforge_qr_error_correction',
+  'labelforge_barcode_payload',
+  'labelforge_barcode_symbology',
 ] as const
 
 // Continuous media report a printable length of 0 (endless roll). The editor
@@ -40,6 +42,16 @@ export function isQrType(obj: FabricObject | null | undefined): boolean {
   if (!obj) return false
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (obj as any)['labelforge_qr_payload'] !== undefined
+}
+
+/**
+ * True for a Fabric Image that carries the barcode custom prop.
+ * Mirrors isQrType — same Fabric Image type, distinguished only by the prop.
+ */
+export function isBarcodeType(obj: FabricObject | null | undefined): boolean {
+  if (!obj) return false
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (obj as any)['labelforge_barcode_payload'] !== undefined
 }
 
 /**
@@ -92,6 +104,67 @@ export function makeQrPlaceholderDataUrl(payload: string, px = 150): string {
   ctx.font = `${payloadSize}px sans-serif`
   ctx.fillStyle = '#555555'
   ctx.fillText(display, px / 2, px / 2 + labelSize * 0.9)
+
+  return c.toDataURL('image/png')
+}
+
+/**
+ * Generate a placeholder data URL for a barcode element. Barcodes are wide, not
+ * square — the placeholder draws a bordered rectangle with a few vertical bars, a
+ * "BARCODE" label, and the truncated payload text. Width and height are separate
+ * so the placeholder can match the element's landscape aspect ratio.
+ *
+ * The actual barcode is generated server-side at preview/print time.
+ */
+export function makeBarcodePlaceholderDataUrl(payload: string, w = 300, h = 100): string {
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+
+  // White background
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, w, h)
+
+  // Border
+  ctx.strokeStyle = '#888888'
+  ctx.lineWidth = 2
+  ctx.strokeRect(2, 2, w - 4, h - 4)
+
+  // Vertical bars to evoke a barcode — draw in middle 60% of width, upper 55% of height
+  const barAreaX = Math.round(w * 0.20)
+  const barAreaW = Math.round(w * 0.60)
+  const barAreaY = Math.round(h * 0.10)
+  const barAreaH = Math.round(h * 0.55)
+  const barWidths = [3, 1, 2, 1, 3, 1, 2, 1, 3, 1, 2, 1, 3]
+  const totalBarW = barWidths.reduce((a, b) => a + b, 0)
+  const barScale = barAreaW / totalBarW
+  let bx = barAreaX
+  let drawBlack = true
+  for (const bw of barWidths) {
+    if (drawBlack) {
+      ctx.fillStyle = '#222222'
+      ctx.fillRect(Math.round(bx), barAreaY, Math.max(1, Math.round(bw * barScale)), barAreaH)
+    }
+    bx += bw * barScale
+    drawBlack = !drawBlack
+  }
+
+  // "BARCODE" label below bars
+  const labelSize = Math.max(8, Math.round(h * 0.18))
+  ctx.fillStyle = '#333333'
+  ctx.font = `bold ${labelSize}px sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillText('BARCODE', w / 2, barAreaY + barAreaH + Math.round(h * 0.05))
+
+  // Truncated payload text
+  const maxPayload = 24
+  const display = payload.length > maxPayload ? payload.slice(0, maxPayload - 1) + '…' : payload
+  const payloadSize = Math.max(7, Math.round(h * 0.13))
+  ctx.font = `${payloadSize}px sans-serif`
+  ctx.fillStyle = '#555555'
+  ctx.fillText(display, w / 2, barAreaY + barAreaH + labelSize + Math.round(h * 0.08))
 
   return c.toDataURL('image/png')
 }
@@ -194,6 +267,45 @@ export async function addQrElement(
 }
 
 /**
+ * Add a barcode placeholder element to the canvas.
+ *
+ * Mirrors addQrElement — Fabric Image with custom props. The backend dispatches
+ * image elements to the barcode renderer when labelforge_barcode_payload is
+ * present. Default box is landscape (300×100 label px) since barcodes are wide.
+ */
+export async function addBarcodeElement(
+  canvas: Canvas,
+  payload = '12345678',
+  symbology = 'code128',
+): Promise<void> {
+  const vp = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0]
+  const scale = vp[0]
+  const canvasVirtualW = (canvas.width ?? 400) / scale
+  const canvasVirtualH = (canvas.height ?? 200) / scale
+
+  const defaultW = 300
+  const defaultH = 100
+  const left = Math.round(canvasVirtualW * 0.05)
+  const top = Math.round(canvasVirtualH * 0.05)
+
+  const dataUrl = makeBarcodePlaceholderDataUrl(payload, defaultW, defaultH)
+
+  const img = await FabricImage.fromURL(dataUrl)
+  img.set({
+    left,
+    top,
+    originX: 'left',
+    originY: 'top',
+  })
+  img.set('labelforge_barcode_payload', payload)
+  img.set('labelforge_barcode_symbology', symbology)
+
+  canvas.add(img)
+  canvas.setActiveObject(img)
+  canvas.renderAll()
+}
+
+/**
  * Regenerate the placeholder bitmap for a loaded QR Image object.
  * Called after loadFromJSON so the stored data URL (if any) is replaced with a
  * freshly generated one — avoids bloating canvas_json with a stored data URL
@@ -207,6 +319,21 @@ async function refreshQrPlaceholder(obj: FabricObject): Promise<void> {
   const px = Math.round((o.width ?? 150) * (o.scaleX ?? 1))
   const clampedPx = Math.max(50, Math.min(px, 600))
   const dataUrl = makeQrPlaceholderDataUrl(payload, clampedPx)
+  await (obj as FabricImage).setSrc(dataUrl)
+}
+
+/**
+ * Regenerate the placeholder bitmap for a loaded barcode Image object.
+ * Mirrors refreshQrPlaceholder — called from loadCanvasJSON so the bitmap
+ * matches the element's current size and payload without storing a data URL.
+ */
+async function refreshBarcodePlaceholder(obj: FabricObject): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const o = obj as any
+  const payload: string = o['labelforge_barcode_payload'] ?? '12345678'
+  const w = Math.max(50, Math.min(Math.round((o.width ?? 300) * (o.scaleX ?? 1)), 1200))
+  const h = Math.max(20, Math.min(Math.round((o.height ?? 100) * (o.scaleY ?? 1)), 600))
+  const dataUrl = makeBarcodePlaceholderDataUrl(payload, w, h)
   await (obj as FabricImage).setSrc(dataUrl)
 }
 
@@ -228,7 +355,7 @@ export async function loadCanvasJSON(
   json: Record<string, unknown>,
 ): Promise<void> {
   await canvas.loadFromJSON(json)
-  // Re-attach raw content sync to each loaded text object; regenerate QR placeholders.
+  // Re-attach raw content sync to each loaded text object; regenerate QR/barcode placeholders.
   const refreshes: Promise<void>[] = []
   canvas.getObjects().forEach(obj => {
     if (isTextType(obj.type)) {
@@ -238,6 +365,8 @@ export async function loadCanvasJSON(
       })
     } else if (isQrType(obj)) {
       refreshes.push(refreshQrPlaceholder(obj))
+    } else if (isBarcodeType(obj)) {
+      refreshes.push(refreshBarcodePlaceholder(obj))
     }
   })
   if (refreshes.length > 0) {
