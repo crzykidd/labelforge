@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-06-24
+
 ### Added
 
 - "Add Barcode" button in the template editor toolbar lets you place a barcode element on the canvas. A client-generated placeholder shows the element's position; the real barcode is rendered server-side on Preview/print using `python-barcode`. Supported symbologies: Code 128 (default), Code 39, EAN-13, EAN-8, UPC-A. Use `{fieldname}` placeholders in the payload for variable barcodes. Note that fixed-length symbologies (EAN-13, EAN-8, UPC-A) require a correctly-sized digit string — an invalid payload reports an error on Preview/print rather than printing. Requires a container image rebuild.
