@@ -3,14 +3,17 @@ import { navigate } from '../router'
 import type { LabelEntry } from '../types'
 import {
   DEFAULT_CONTINUOUS_LENGTH_DOTS,
+  addBarcodeElement,
   addQrElement,
   addTextElement,
   deleteSelected,
   getCanvasJSON,
   initCanvas,
+  isBarcodeType,
   isQrType,
   isTextType,
   loadCanvasJSON,
+  makeBarcodePlaceholderDataUrl,
   makeQrPlaceholderDataUrl,
 } from '../editor/canvas'
 import { loadServerFonts } from '../editor/fonts'
@@ -57,6 +60,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <span class="toolbar-sep"></span>
         <button id="btn-add-text" title="Add a text element. Use {fieldname} placeholders (single braces) for variable fields.">Add Text</button>
         <button id="btn-add-qr" title="Add a QR code element. QR preview is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads.">Add QR</button>
+        <button id="btn-add-barcode" title="Add a barcode element. Real barcode is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads. Note: some symbologies require specific digit counts (e.g. EAN-13 needs 12–13 digits, EAN-8 needs 7–8, UPC-A needs 11–12).">Add Barcode</button>
         <button id="btn-delete">Delete</button>
         <span class="toolbar-sep"></span>
         <select id="font-select" title="Font family" style="max-width:160px">
@@ -75,6 +79,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
           <option value="M" selected>EC: M (15%)</option>
           <option value="Q">EC: Q (25%)</option>
           <option value="H">EC: H (30%)</option>
+        </select>
+        <span class="toolbar-sep" id="sep-barcode" hidden></span>
+        <input id="barcode-payload" type="text" placeholder="Barcode payload or {field}" title="Barcode payload. Use {fieldname} for variable fields. Some symbologies require specific digit counts (e.g. EAN-13 = 12–13 digits). The backend falls back to Code 128 on an invalid symbology." style="width:200px" hidden />
+        <select id="barcode-symbology" title="Barcode symbology" hidden>
+          <option value="code128" selected>Code 128</option>
+          <option value="code39">Code 39</option>
+          <option value="ean13">EAN-13</option>
+          <option value="ean8">EAN-8</option>
+          <option value="upca">UPC-A</option>
         </select>
         <span class="toolbar-sep"></span>
         <button id="btn-save-as">Save As</button>
@@ -96,6 +109,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const btnBack = root.querySelector<HTMLButtonElement>('#btn-back')!
   const btnAddText = root.querySelector<HTMLButtonElement>('#btn-add-text')!
   const btnAddQr = root.querySelector<HTMLButtonElement>('#btn-add-qr')!
+  const btnAddBarcode = root.querySelector<HTMLButtonElement>('#btn-add-barcode')!
   const btnDelete = root.querySelector<HTMLButtonElement>('#btn-delete')!
   const btnSave = root.querySelector<HTMLButtonElement>('#btn-save')!
   const btnSaveAs = root.querySelector<HTMLButtonElement>('#btn-save-as')!
@@ -106,6 +120,9 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const sepQr = root.querySelector<HTMLSpanElement>('#sep-qr')!
   const qrPayloadInput = root.querySelector<HTMLInputElement>('#qr-payload')!
   const qrEcSelect = root.querySelector<HTMLSelectElement>('#qr-ec')!
+  const sepBarcode = root.querySelector<HTMLSpanElement>('#sep-barcode')!
+  const barcodePayloadInput = root.querySelector<HTMLInputElement>('#barcode-payload')!
+  const barcodeSymbologySelect = root.querySelector<HTMLSelectElement>('#barcode-symbology')!
   const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
   const statusEl = root.querySelector<HTMLDivElement>('#editor-status')!
   const canvasWrap = root.querySelector<HTMLDivElement>('#canvas-wrap')!
@@ -164,6 +181,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
     canvas.on('selection:cleared', () => {
       showTextControls(false)
       showQrControls(false)
+      showBarcodeControls(false)
     })
   }
 
@@ -181,14 +199,22 @@ export function mountTemplateEditor(root: HTMLElement): void {
     qrEcSelect.hidden = !visible
   }
 
+  function showBarcodeControls(visible: boolean): void {
+    sepBarcode.hidden = !visible
+    barcodePayloadInput.hidden = !visible
+    barcodeSymbologySelect.hidden = !visible
+  }
+
   function updateSelectionControls(): void {
     if (!fabricCanvas) return
     const obj = fabricCanvas.getActiveObject()
     const textSelected = obj ? isTextType(obj.type) : false
     const qrSelected = isQrType(obj)
+    const barcodeSelected = isBarcodeType(obj)
 
     showTextControls(textSelected)
     showQrControls(qrSelected)
+    showBarcodeControls(barcodeSelected)
 
     if (textSelected) {
       updateFontControls(obj)
@@ -198,6 +224,12 @@ export function mountTemplateEditor(root: HTMLElement): void {
       const o = obj as any
       qrPayloadInput.value = (o['labelforge_qr_payload'] as string) ?? ''
       qrEcSelect.value = (o['labelforge_qr_error_correction'] as string) ?? 'M'
+    }
+    if (barcodeSelected && obj) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const o = obj as any
+      barcodePayloadInput.value = (o['labelforge_barcode_payload'] as string) ?? ''
+      barcodeSymbologySelect.value = (o['labelforge_barcode_symbology'] as string) ?? 'code128'
     }
   }
 
@@ -268,6 +300,31 @@ export function mountTemplateEditor(root: HTMLElement): void {
     fabricCanvas.renderAll()
   })
 
+  barcodePayloadInput.addEventListener('change', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (!isBarcodeType(obj) || !obj) return
+    const newPayload = barcodePayloadInput.value
+    obj.set('labelforge_barcode_payload', newPayload)
+    // Regenerate placeholder so visible text matches the new payload
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const o = obj as any
+    const w = Math.max(50, Math.min(Math.round((o.width ?? 300) * (o.scaleX ?? 1)), 1200))
+    const h = Math.max(20, Math.min(Math.round((o.height ?? 100) * (o.scaleY ?? 1)), 600))
+    const dataUrl = makeBarcodePlaceholderDataUrl(newPayload, w, h)
+    void (obj as import('fabric').FabricImage).setSrc(dataUrl).then(() => {
+      fabricCanvas?.renderAll()
+    })
+  })
+
+  barcodeSymbologySelect.addEventListener('change', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (!isBarcodeType(obj) || !obj) return
+    obj.set('labelforge_barcode_symbology', barcodeSymbologySelect.value)
+    fabricCanvas.renderAll()
+  })
+
   btnBack.addEventListener('click', () => {
     document.getElementById('app')?.classList.remove('editor-mode')
     navigate('/templates')
@@ -282,6 +339,11 @@ export function mountTemplateEditor(root: HTMLElement): void {
   btnAddQr.addEventListener('click', () => {
     if (!fabricCanvas) return
     void addQrElement(fabricCanvas)
+  })
+
+  btnAddBarcode.addEventListener('click', () => {
+    if (!fabricCanvas) return
+    void addBarcodeElement(fabricCanvas)
   })
 
   btnDelete.addEventListener('click', () => {

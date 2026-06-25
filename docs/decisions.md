@@ -4,6 +4,28 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-06-24 — Barcode editor element mirrors QR exactly (Fabric Image + custom props + client placeholder + server-side render); fixes latent CUSTOM_PROPS bug
+
+**Decision**: The barcode editor element follows the exact same pattern as QR: a Fabric `FabricImage` (serializes as `type: "Image"`) carrying two custom props — `labelforge_barcode_payload` and `labelforge_barcode_symbology` (default `"code128"`). A rectangular placeholder PNG (300×100 default, landscape to evoke a barcode form factor) is drawn client-side. No JS barcode library is added. The real barcode is rendered server-side at Preview/print time by `_render_barcode_element` in `render/template.py`.
+
+**Latent bug fixed**: `labelforge_barcode_payload` and `labelforge_barcode_symbology` were absent from `CUSTOM_PROPS` in `canvas.ts`. Fabric's `toJSON()` strips unknown properties by default; without registration in `FabricObject.customProperties`, any barcode element added via raw canvas JSON would lose its props on the next save/load cycle. Both props are now registered alongside the QR props.
+
+**Why rectangular placeholder**: QR codes are square by definition; barcodes are wide. The placeholder uses a distinct 300×100 (landscape) default canvas and draws a few vertical bars so users can immediately distinguish a barcode element from a QR element on the canvas.
+
+**Why symbology dropdown, not error-correction**: Barcode symbologies differ in character set and digit-count constraints (EAN-13 needs 12–13 digits, EAN-8 needs 7–8, UPC-A needs 11–12). The user must choose explicitly; the backend falls back to Code 128 on an invalid symbology. Error correction doesn't apply to linear barcodes.
+
+**`updateSelectionControls` is now a three-way switch**: text controls / QR controls / barcode controls. Selecting a barcode element hides the text and QR controls, shows the barcode controls, and pre-fills them from the object's custom props. `selection:cleared` hides all three groups.
+
+**`refreshBarcodePlaceholder` on load**: mirrors `refreshQrPlaceholder` — called from `loadCanvasJSON` for objects carrying `labelforge_barcode_payload`, so the placeholder bitmap is regenerated at the element's current `width*scaleX × height*scaleY` without storing the data URL in `canvas_json`.
+
+**Considered**:
+- Adding a JS barcode library (`jsbarcode`, etc.) for a real client-side preview — rejected; no new runtime dependencies per project rules; the placeholder is a positioning aid, not a proof of barcode correctness.
+- A single generic "add element" flow instead of separate Add QR / Add Barcode buttons — rejected; the element types have different defaults (square vs. landscape), different props, and different constraints; separate buttons are clearer.
+
+**Would revisit if**: a client-side barcode preview becomes important enough to justify a dependency; or if the symbology set needs to expand significantly (the backend `python-barcode` library supports more than the five offered in the UI).
+
+---
+
 ## 2026-06-22 — QR editor element is a Fabric Image with custom props; placeholder bitmap generated client-side; no client QR library
 
 **Decision**: The in-editor QR element is a Fabric `FabricImage` (serializes as `type: "Image"`) carrying two custom props: `labelforge_qr_payload` and `labelforge_qr_error_correction`. A placeholder PNG is drawn on an offscreen `<canvas>` (bordered box with corner decorators and truncated payload text) and set as the image `src` via `FabricImage.fromURL(dataUrl)`. No client-side QR library is added. The real QR bitmap is generated server-side at Preview/print time.
