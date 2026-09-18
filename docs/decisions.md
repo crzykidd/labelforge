@@ -4,6 +4,53 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-18 — Markdown is excluded from ruff; `ruff` is pinned to a compatible range
+
+**Decision**: `[tool.ruff] extend-exclude = ["*.md"]` in `pyproject.toml`, and the `ruff` dev
+dependency moves from `>=0.7` to `>=0.16.8,<0.17`.
+
+**Problem**: CI (`.github/workflows/ci.yml`) runs `ruff format --check .` and installs whatever
+`pip install -e .[dev]` resolves. `ruff>=0.7` resolved to 0.16.x, and ruff 0.14 added formatting
+of Python code blocks *inside Markdown files*. Four files — `docs/decisions.md`,
+`docs/features/label-catalog.md`, and two archived prompts under `prompts/done/` — contain
+hand-written Python snippets the formatter wanted to rewrite, so `ruff format --check` exited 1.
+This failed the `python` job on every pull request regardless of its contents (observed on
+dependabot PR #41, run 33476806899), which blocked all seven open dependency PRs and therefore
+the next release.
+
+**Why exclude rather than reformat**: Running `ruff format .` once would make CI green today, but
+Markdown here is prose. ADRs are historical records and `prompts/done/` is an archive — rewriting
+code samples inside them edits the record to satisfy a linter. It also recurs: every future ADR or
+handoff prompt containing a Python block would have to be formatter-clean, which is a papercut on
+exactly the documentation the workflow requires on every change. The formatter's job in this repo
+is the 42 files under `backend/`.
+
+**Why an upper bound on `ruff` specifically**: This failure was pure toolchain drift — nothing in
+the repo changed, CI simply resolved a newer ruff with a wider scope. Every other dependency here
+uses a bare `>=`, and this is a deliberate deviation for the one tool whose output is a pass/fail
+gate. With `<0.17`, a ruff release that changes formatting behavior arrives as a dependabot PR that
+can be reviewed and merged, instead of silently reddening an unrelated PR. The bound is on the dev
+extra only and has no runtime effect.
+
+**Considered**:
+- `ruff format .` and commit the reformatted Markdown — rejected, see above.
+- Excluding only `prompts/**` — rejected; it does not fix it. Two of the four failing files are in
+  `docs/`, so the problem is Markdown generally, not the prompt archive.
+- Dropping `ruff format --check` from CI — rejected; formatting consistency on the Python source is
+  worth keeping, and it is the Markdown scope that is unwanted, not the gate.
+- Pinning without the exclusion (merging dependabot #37, `ruff>=0.15.20`) — rejected; 0.15 already
+  has the Markdown behavior, so this alone leaves CI red.
+
+**Note**: dependabot PR #37 (`ruff>=0.7` → `>=0.15.20`) is superseded by this change and can be
+closed. `extend-exclude` predates the pin and works on older ruff, so the exclusion is not dependent
+on the version bump.
+
+**Would revisit if**: ruff gains a setting to disable embedded-Markdown formatting specifically (the
+exclusion could then narrow to that knob, restoring linting of Markdown for other rules); or if
+keeping the upper bound in sync becomes more friction than the drift it prevents.
+
+---
+
 ## 2026-06-24 — Barcode editor element mirrors QR exactly (Fabric Image + custom props + client placeholder + server-side render); fixes latent CUSTOM_PROPS bug
 
 **Decision**: The barcode editor element follows the exact same pattern as QR: a Fabric `FabricImage` (serializes as `type: "Image"`) carrying two custom props — `labelforge_barcode_payload` and `labelforge_barcode_symbology` (default `"code128"`). A rectangular placeholder PNG (300×100 default, landscape to evoke a barcode form factor) is drawn client-side. No JS barcode library is added. The real barcode is rendered server-side at Preview/print time by `_render_barcode_element` in `render/template.py`.
