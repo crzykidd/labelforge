@@ -8,6 +8,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 - CI no longer fails on unrelated pull requests. The `ruff format --check` gate reformatted Python code blocks embedded in Markdown (a behavior ruff added in 0.14), so documentation and archived handoff prompts failed the check and blocked every PR. Markdown is now excluded from ruff, and the `ruff` dev dependency is pinned to a compatible range so the toolchain no longer changes under CI without a dependency bump. No runtime change.
 
+### Changed
+
+- Rolled in three months of pending dependency updates. Runtime: FastAPI 0.141.1, pydantic-settings 2.15.0, qrcode 8.2. Build and test tooling: pytest 9.1.1, Vite 8.3.0, and the pinned GitHub Actions (checkout v7, setup-python v7, setup-node v7, codeql-action v4). No API, rendering, or printing behavior changes; the full test suite passes on the new versions.
+
 ## [0.1.5] — 2026-06-24
 
 ### Added
