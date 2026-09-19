@@ -30,6 +30,9 @@ Single Docker container, deployed on `docker10` via Dockhand. External access vi
 - Named templates with a freeform canvas layout (text, QR, barcode, image, line, rect)
 - Two-color (black + red) text in templates on two-color media; red maps to black on mono media
 - Variable fields auto-detected from `{placeholder}` syntax in element content
+- A variable field can be restricted to a named, user-managed list of allowed values shared
+  across every template that uses it (e.g. `{room}` recalls as a dropdown from a global "room"
+  list, editable from the template editor)
 - Template recall: form auto-generated from field schema, fill, preview, print
 - One-off print of a template on a different label media at recall time (stored media unchanged)
 - Increment / batch printing for numeric fields

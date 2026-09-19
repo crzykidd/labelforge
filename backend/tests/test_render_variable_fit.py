@@ -266,8 +266,9 @@ def test_wrap_single_word_wider_than_box_is_not_broken_mid_word():
     assert font_path is not None
     font = ImageFont.truetype(font_path, _FONT_SIZE)
 
-    wrapped = _wrap_text("Bedroom", font, 200)
+    wrapped, truncated = _wrap_text("Bedroom", font, 200)
     assert wrapped == "Bedroom", "a single over-wide word must not be split"
+    assert truncated is False
 
 
 def test_wrap_multiline_result_is_narrower_than_unwrapped():
@@ -283,8 +284,9 @@ def test_wrap_multiline_result_is_narrower_than_unwrapped():
     # but not the whole phrase (~1399) — the phrase must wrap, but each word
     # is not itself over-wide, so every wrapped line must fit.
     target = 800
-    wrapped = _wrap_text("Master Bedroom", font, target)
+    wrapped, truncated = _wrap_text("Master Bedroom", font, target)
     assert "\n" in wrapped, "expected a line break at the space"
+    assert truncated is False
     scratch = ImageDraw.Draw(Image.new("L", (1, 1)))
     for line in wrapped.split("\n"):
         assert scratch.textlength(line, font=font) <= target + 1  # rounding slack

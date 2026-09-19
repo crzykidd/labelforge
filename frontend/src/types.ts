@@ -60,10 +60,12 @@ export interface BatchPrintResponse {
 
 export interface FieldSpec {
   name: string;
-  type: 'text' | 'number' | 'date' | 'enum';
+  type: 'text' | 'number' | 'date' | 'enum' | 'list';
   required: boolean;
   default: string | null;
   increment: boolean;
+  // Per-template fixed options — only meaningful when type === 'enum'.
+  // type === 'list' resolves its options from the global FieldList of the same name instead.
   enum_values: string[];
 }
 
@@ -84,6 +86,14 @@ export interface TemplateCreate {
   label_media: string;
   canvas_json: Record<string, unknown>;
   orientation?: 'standard' | 'rotated';
+  field_schema?: FieldSpec[];
+}
+
+// A named, reusable list of values for a `type: "list"` field. Global — keyed
+// by field name and shared by every template that declares that field.
+export interface FieldList {
+  name: string;
+  values: string[];
 }
 
 export interface TemplateLastValues {

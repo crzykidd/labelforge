@@ -16,6 +16,7 @@ from labelforge.config import settings
 from labelforge.db import init_db
 from labelforge.render.fonts import load_fonts
 from labelforge.routes import admin as admin_router
+from labelforge.routes import field_lists as field_lists_router
 from labelforge.routes import fonts, health, labels
 from labelforge.routes import history as history_router
 from labelforge.routes import preview as preview_router
@@ -145,6 +146,7 @@ app.include_router(preview_router.router, prefix="/api")
 app.include_router(printer_router.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(templates_router.router, prefix="/api")
+app.include_router(field_lists_router.router, prefix="/api")
 app.include_router(template_print_router.router, prefix="/api")
 app.include_router(history_router.router, prefix="/api")
 app.include_router(version_router.router, prefix="/api")

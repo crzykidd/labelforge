@@ -16,7 +16,7 @@ Every template is callable from anywhere in the homelab. A Home Assistant automa
 
 Single shared secret in `.env` as `API_TOKEN` (required unless `DISABLE_AUTH=true`; the app refuses to start otherwise). The token is sent as `Authorization: Bearer <token>` and enforced by a single FastAPI dependency (`require_auth` in `backend/labelforge/routes/auth.py`) applied at the router level.
 
-**Almost every `/api/*` route requires the token** — all of `templates`, `labels`, `history`, `settings`, `fonts`, `print`, `preview`, and `admin`, on *every* method including `GET`. The only **unauthenticated** routes are:
+**Almost every `/api/*` route requires the token** — all of `templates`, `field-lists`, `labels`, `history`, `settings`, `fonts`, `print`, `preview`, and `admin`, on *every* method including `GET`. The only **unauthenticated** routes are:
 
 - `GET /api/health` — liveness + `auth_required` flag
 - `GET /api/printer/status` — loaded media / ready state
@@ -50,6 +50,26 @@ GET    /api/templates/{name}/last-values        Field values from this template'
 Create/update bodies and the template response all carry `orientation: "standard" | "rotated"`
 (create/response default to `"standard"`; omit it on update to leave it unchanged). `duplicate`
 takes no `orientation` — Save As always inherits the source template's orientation.
+
+### Field lists
+
+```
+GET    /api/field-lists                         List every global value list
+GET    /api/field-lists/{name}                  Get one
+POST   /api/field-lists                         Create — body: {name, values}
+PUT    /api/field-lists/{name}                  Replace values — body: {values}
+DELETE /api/field-lists/{name}                  Delete
+```
+
+A field list is a named, ordered array of strings that a template's `type: "list"` field
+resolves its recall options from. It's **global**, keyed by name, and independent of any
+template row — `name` is always the field's own `{placeholder}` name (e.g. `room`), so every
+template with a `{room}` field shares the same list. `POST` 409s if the name already exists;
+`PUT`/`DELETE` 404 if it doesn't. Deleting a list is not retroactive: templates keep their
+`type: "list"` field spec (it just has nothing to resolve, so recall falls back to free text)
+and print history keeps the literal values it already printed. See
+[`templates.md`](templates.md#value-lists-list-vs-enum) for the full field-schema model,
+including how `list` differs from the per-template `enum` flavor.
 
 ### Printing
 
@@ -239,11 +259,15 @@ Two other structured errors follow the same `{"detail": {...}}` envelope:
 
 Pydantic models enforce:
 
-- Field types (text/number/date/enum)
+- Field types are one of `text`/`number`/`date`/`enum`/`list`
 - Required fields present
 - Defaults applied for missing optional fields
-- enum values in the allowed set
-- Number fields are actually numbers
+
+`type`, `enum_values`, and `list` are authoring/UI hints, not server-side value constraints:
+the print/preview endpoints accept any string for any field. Nothing on the server checks a
+submitted value against `enum_values` or a field list's current values — the recall page is
+what limits the input to a `<select>`, by construction, before the value ever reaches the API.
+A direct API caller can send anything.
 
 Validation errors return 400 with the standard FastAPI error envelope, which includes `loc` (field path) and `msg` per failed field.
 

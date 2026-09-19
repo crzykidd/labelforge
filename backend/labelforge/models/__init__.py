@@ -58,10 +58,12 @@ class PrintJobResponse(BaseModel):
 
 class FieldSpec(BaseModel):
     name: str
-    type: Literal["text", "number", "date", "enum"] = "text"
+    type: Literal["text", "number", "date", "enum", "list"] = "text"
     required: bool = True
     default: str | None = None
     increment: bool = False
+    # Per-template fixed options — only meaningful when type == "enum".
+    # type == "list" resolves its options from the global FieldList of the same name instead.
     enum_values: list[str] = []
 
 
@@ -91,6 +93,23 @@ class TemplateUpdate(BaseModel):
     canvas_json: dict | None = None
     field_schema: list[FieldSpec] | None = None
     orientation: Literal["standard", "rotated"] | None = None
+
+
+# ── Field lists (global, keyed by field name) ─────────────────────────────────
+
+
+class FieldList(BaseModel):
+    name: str
+    values: list[str] = []
+
+
+class FieldListCreate(BaseModel):
+    name: str
+    values: list[str] = []
+
+
+class FieldListUpdate(BaseModel):
+    values: list[str]
 
 
 # ── Print / batch ─────────────────────────────────────────────────────────────

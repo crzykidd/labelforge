@@ -236,7 +236,7 @@ def test_unrotated_continuous_length_matches_independent_computation():
     _font_cache.clear()
     _font_cache.append(font_info)
     try:
-        sub = _render_text_element(obj, {}, obj["width"], obj["height"])
+        sub, _truncated = _render_text_element(obj, {}, obj["width"], obj["height"])
     finally:
         _font_cache.clear()
         _font_cache.extend(original_cache)

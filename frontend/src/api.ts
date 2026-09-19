@@ -1,4 +1,4 @@
-import type { BatchPrintResponse, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate, TemplateLastValues, VersionInfo } from './types'
+import type { BatchPrintResponse, FieldList, FontInfo, HistoryDetail, HistoryItem, LabelEntry, PrintJobResponse, PrinterStatus, QuickPrintRequest, ReprintResponse, Template, TemplateCreate, TemplateLastValues, VersionInfo } from './types'
 import { navigate } from './router'
 
 export const TOKEN_KEY = 'labelforge_token'
@@ -194,6 +194,34 @@ export function duplicateTemplate(source: string, body: { name: string; label_me
 
 export function getLastValues(name: string): Promise<TemplateLastValues> {
   return apiFetch<TemplateLastValues>(`/api/templates/${encodeURIComponent(name)}/last-values`)
+}
+
+// Global field-value lists (for `type: "list"` fields). Keyed by field name —
+// see docs/features/templates.md.
+export function listFieldLists(): Promise<FieldList[]> {
+  return apiFetch<FieldList[]>('/api/field-lists')
+}
+
+export function getFieldList(name: string): Promise<FieldList> {
+  return apiFetch<FieldList>(`/api/field-lists/${encodeURIComponent(name)}`)
+}
+
+export function createFieldList(name: string, values: string[]): Promise<FieldList> {
+  return apiFetch<FieldList>('/api/field-lists', {
+    method: 'POST',
+    body: JSON.stringify({ name, values }),
+  })
+}
+
+export function updateFieldList(name: string, values: string[]): Promise<FieldList> {
+  return apiFetch<FieldList>(`/api/field-lists/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ values }),
+  })
+}
+
+export function deleteFieldList(name: string): Promise<void> {
+  return apiFetch<void>(`/api/field-lists/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
 
 export async function previewTemplate(

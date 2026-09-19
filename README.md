@@ -6,11 +6,14 @@
 
 <p align="center">Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.</p>
 
-**Status**: Released (v0.1.8) — all v1 features are working and the app is packaged as a single Docker image.
+**Status**: Released (v0.1.9) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.1.8
+**Version:** 0.1.9
 
 ## What's New
+
+### v0.1.9 (2026-09-19) — [What's New](CHANGELOG.md#019--2026-09-19)
+Adds a FIELDS panel for editing a template's variables, including reusable value lists shared across templates and the increment setting that batch printing always needed. Text wrap gains a line cap, and several overflow warnings that stayed silent now show.
 
 ### v0.1.8 (2026-09-19) — [What's New](CHANGELOG.md#018--2026-09-19)
 Fixes field values longer than their placeholder printing silently cut off on continuous labels, adds an opt-in text Wrap option, and reports overflow based on the value actually being printed.

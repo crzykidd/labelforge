@@ -470,16 +470,28 @@ button:disabled {
   border-color: #1a6fdb;
 }
 
-.editor-elements-panel {
-  flex: 0 0 240px;
-  max-width: 260px;
+.editor-side-panels {
+  flex: 0 0 260px;
+  max-width: 280px;
   border-left: 1px solid #ddd;
   background: #fafafa;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-elements-panel,
+.editor-fields-panel {
   padding: 0.75rem;
   box-sizing: border-box;
 }
 
-.editor-elements-panel h3 {
+.editor-fields-panel {
+  border-top: 1px solid #ddd;
+}
+
+.editor-elements-panel h3,
+.editor-fields-panel h3 {
   margin: 0;
   font-size: 0.85rem;
   text-transform: uppercase;
@@ -555,6 +567,199 @@ button:disabled {
 }
 
 .elements-panel-fix:hover { background: #a5311f; }
+
+/* Fields panel */
+
+.fields-panel-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.fields-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fields-panel-empty {
+  padding: 0.75rem;
+  color: #888;
+  font-size: 0.85rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.field-row-name {
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.field-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.field-row-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.field-row-item select,
+.field-row-item input {
+  width: auto;
+  font-size: 0.8rem;
+}
+
+.field-row-item-wide {
+  flex: 1 1 100%;
+}
+
+.field-row-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #555;
+  white-space: nowrap;
+}
+
+.field-list-edit-btn {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  font-weight: 700;
+  width: 1.6rem;
+  height: 1.6rem;
+  line-height: 1;
+  padding: 0;
+  border-radius: 3px;
+  border: 1px solid #1a6fdb;
+  color: #1a6fdb;
+  background: #eef4fd;
+  cursor: pointer;
+}
+
+.field-list-edit-btn:hover {
+  background: #1a6fdb;
+  color: #fff;
+}
+
+/* Field list drawer — a right-anchored panel over the canvas, distinct from
+   the centered .modal used elsewhere, since editing here always affects every
+   template that shares this field name (not just the one being edited). */
+
+.field-list-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 110;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.field-list-drawer {
+  background: #fff;
+  width: 340px;
+  max-width: 90vw;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+}
+
+.field-list-drawer h3 {
+  margin: 0;
+}
+
+.field-list-drawer-warning {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #7a5a14;
+  background: #fdf3e0;
+  border: 1px solid #f0dca4;
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+}
+
+.field-list-drawer-status {
+  font-size: 0.8rem;
+  color: #c0392b;
+}
+
+.field-list-drawer-values {
+  flex: 1;
+  min-height: 100px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.field-list-drawer-empty {
+  padding: 0.75rem;
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.field-list-drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.85rem;
+}
+
+.field-list-drawer-row:last-child { border-bottom: none; }
+
+.field-list-drawer-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-list-drawer-row-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex: none;
+}
+
+.field-list-drawer-row-actions button {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.field-list-drawer-add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.field-list-drawer-add input {
+  flex: 1;
+}
 
 .editor-status {
   padding: 0.4rem 0.75rem;

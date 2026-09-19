@@ -16,7 +16,10 @@ The core feature. A template is a saved, named label design with a freeform canv
 5. Add elements from a toolbar (text, QR, barcode, image, line, rect)
 6. Position, resize, rotate, layer
 7. Edit element content; use `{field_name}` syntax inside text/qr/barcode content to declare a variable
-8. Field list updates live in a side panel as placeholders are added/removed
+8. A **FIELDS** panel (below **ELEMENTS**) lists every field currently in the schema — set its
+   type, required, default, and increment there. It refreshes from the server's response after
+   each Save, since field detection itself is a backend concern (see Field detection, below) —
+   it does not re-scan the canvas live as you type
 9. Click **Save** → template persisted
 
 ### Edit an existing template
@@ -81,7 +84,8 @@ templates
   display_name    text                -- human label, default = name
   label_media     text                -- e.g. "62", "62red", "29x90"
   canvas_json     text                -- serialized Fabric.js scene
-  field_schema    text (json)         -- list of {name, type, required, default, increment}
+  field_schema    text (json)         -- list of {name, type, required, default, increment, enum_values}
+                                       -- type: text | number | date | enum | list — see "Value lists" below
   orientation     text                -- "standard" (default) or "rotated"
   created_at      timestamp
   updated_at      timestamp
@@ -100,6 +104,7 @@ Standard Fabric.js objects with extensions:
 - Text: `text`, `fontFamily`, `fontSize`, `fontWeight`, `fontStyle`, `textAlign`
   - Extension: `labelforge_raw_content` — original string with `{placeholders}`, used to re-derive fields on edit
   - Extension: `labelforge_wrap` (boolean, default `false`/absent) — word-wrap at spaces to fit the element's box width; see Wrap, below
+  - Extension: `labelforge_wrap_max_lines` (integer, default `0` = no limit) — caps wrapped output at this many lines, truncating and flagging overflow beyond it; see Wrap, below
 - QR code: stored as Fabric `Image` with extension `labelforge_qr_payload` (string with placeholders) and `labelforge_qr_error_correction` (`L`/`M`/`Q`/`H`)
 - Barcode: same pattern with `labelforge_barcode_payload` and `labelforge_barcode_symbology`
 - Image: standard Fabric image with extension `labelforge_image_id` pointing to an entry in an `images` table
@@ -239,17 +244,34 @@ which would silently lose both.
 
 ### Wrap
 
-Every text element has an opt-in **Wrap** checkbox in the contextual control row (default
-off — existing templates are unaffected). When enabled, the *resolved* text (after field
-substitution) is word-wrapped at spaces to fit the element's own box width
-(`width × scaleX`), clamped to the print head width — the one axis that's always physically
-fixed regardless of media type or template orientation. This makes the wrap width something
-the user controls directly by sizing the box.
+Every text element has an opt-in **Wrap** control in the contextual control row: a select
+with **Off / No limit / 2 / 3 / 4 / 5 lines** (default Off — existing templates are
+unaffected). When enabled, the *resolved* text (after field substitution) is word-wrapped at
+spaces to fit the element's own box width (`width × scaleX`). "No limit" wraps to as many
+lines as needed (the v0.1.8 behavior — a template saved before the cap existed, with
+`labelforge_wrap: true` and no `labelforge_wrap_max_lines`, keeps rendering exactly as it
+did, byte-for-byte). Choosing 2–5 sets `labelforge_wrap_max_lines`: each line is still
+greedily filled first (as much text as fits before breaking), and once the content needs
+more lines than the cap, the remainder is **truncated** — not shrunk to fit — and the print
+and preview responses' existing `overflow` flag is set, surfacing the same warning the
+recall page already shows for any other kind of overflow. Truncation is a deliberate
+operator choice over auto-shrinking text to fit: it keeps font size predictable and pairs a
+visible warning with the one case it can't avoid. See docs/decisions.md.
+
+The wrap target width is orientation-aware: text runs along whichever axis the element's
+local width actually maps onto once its own `angle` composes with the template's
+`orientation`. On a **standard** (unrotated) template with an axis-aligned element, that's
+still the print-head width — a hard, physical ceiling, exactly as before. On a **rotated**
+template, the design canvas is transposed and text normally runs along the free (tape)
+length axis instead, which is effectively unbounded — clamping to the print-head width there
+wrapped far too early. The element's own `angle` can flip this again (a 90°-rotated element
+inside a rotated template lands back on the head-width axis) — the renderer composes both
+rotations rather than special-casing orientation alone.
 
 Wrapping only ever breaks at a space; it never hyphenates or splits a word mid-character. A
 single word wider than the target width is left on its own line, overflowing — the overflow
-warning (above) catches this case, since wrap can't fix it. A value that already fits on one
-line renders identically whether Wrap is on or off.
+warning (above) catches this case too, since wrap can't fix it. A value that already fits on
+one line, or within its line cap, renders identically whether Wrap is on or off.
 
 Wrap is a per-element choice, not automatic, because auto-wrapping every text element would
 silently change the layout of templates that currently rely on a fixed one-line box (e.g. a
@@ -291,11 +313,47 @@ Right: properties panel for selected element + global panels (fields, label info
 
 ### Field detection
 
-On every canvas change (debounced), parse text/qr/barcode element content for `{name}` matches. Maintain a set of detected field names.
+Detection itself is server-side (`detect_fields` in `backend/labelforge/templates/fields.py`),
+run on every `POST`/`PUT /api/templates/{name}` that carries `canvas_json`: parse text/qr/barcode
+element content for `{name}` matches and merge with the current schema
+(`merge_schema`) — previously-known specs are kept for names still detected (preserving user
+edits: type, required, default, increment, enum_values), newly-detected names are added with
+defaults (`type: text, required: true`), and names no longer detected are dropped.
 
-Field schema = previously-known schema + newly-detected names (added with defaults: `type: text, required: true`) - names no longer detected (removed).
+The editor's FIELDS panel is the authoring UI for this: it edits an in-memory copy of the
+schema, and Save sends it alongside `canvas_json` in the same request so the two are merged
+together server-side — then the panel replaces its schema with whatever the response returns,
+which is why it only updates on Save, not as you type a new `{placeholder}`.
 
-User can edit field properties in the right panel (change type, set default, mark increment, mark not-required).
+### Value lists (list vs enum)
+
+Two ways to restrict a field to a fixed set of options at recall, instead of free text:
+
+- **`type: "list"`** — resolves its options from a **global**, named value list (`GET/PUT
+  /api/field-lists/{name}` — see [`api.md`](api.md#field-lists)). The list is keyed by the
+  field's name and shared by *every* template that has a field with that name: editing the
+  `room` list once changes what every `{room}` field, in every template, offers at recall from
+  then on. There's no per-field "which list" setting — the field name **is** the list's
+  identity. To give a differently-scoped variable its own set of options, use a different field
+  name (e.g. `{room}` vs `{room1list}`), not a rename or alias of an existing list.
+  Authored via the FIELDS panel's **E** button, which opens a drawer to add, remove, and
+  reorder the list's values and save them — the drawer is explicit that this is a *global* edit,
+  not scoped to the template you're in.
+- **`type: "enum"`** — keeps the original per-template `enum_values` array: a fixed, one-off set
+  that belongs to this field in this template only, authored inline in the FIELDS panel as a
+  comma-separated list. Use this when the set of options is genuinely specific to one template
+  and reuse isn't the point.
+
+**Deletion is not retroactive.** Deleting a global list (`DELETE /api/field-lists/{name}`)
+doesn't touch any template's `field_schema` and doesn't touch print history — history rows
+already store the literal resolved `field_values`, not a reference to the list. A `type: "list"`
+field whose named list doesn't exist (never created, or since deleted) is not an error: recall
+renders it as a plain free-text input instead of a `<select>`, exactly as if the field had no
+options at all.
+
+Neither flavor is validated server-side: `enum_values` and the field-list's values are consulted
+by the recall page to build a `<select>`, not enforced by the print/preview API — see
+[`api.md`](api.md#validation).
 
 ### Save validation
 
@@ -307,7 +365,10 @@ User can edit field properties in the right panel (change type, set default, mar
 
 ## Batch / increment
 
-Any field with `type: number` can be toggled `increment: true` in the field schema.
+Any field, regardless of its declared `type`, can be toggled `increment: true` in the field
+schema (set via the FIELDS panel's Increment checkbox — see Field detection, above). Nothing
+restricts it to `type: number`; `advance()` just operates on whatever trailing digits are in the
+field's current string value, so it's only meaningful on values that actually have some.
 
 In the recall form:
 - If any field is incrementable, a **Batch** toggle appears
@@ -351,6 +412,9 @@ See [`api.md`](api.md) for the full API surface. Template endpoints:
 - `POST /api/print/{name}` — print one
 - `POST /api/print/{name}/batch` — print N with increment
 - `POST /api/preview/{name}` — render preview without printing
+
+Global value lists for `type: "list"` fields (see "Value lists", above) live under
+`/api/field-lists` — a separate resource, not nested under a template.
 
 ## Out of scope for v1
 

@@ -32,6 +32,18 @@ CREATE TABLE IF NOT EXISTS templates (
     updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
     deleted_at   TEXT NULL
 );
+
+-- Named, reusable value lists for `type: "list"` fields. Keyed by field name
+-- and global across every template — there is no per-template ownership row.
+-- A brand-new table needs no _migrate_* function: CREATE TABLE IF NOT EXISTS
+-- already upgrades an existing database in place on the next startup, the
+-- same as when `settings` and `templates` themselves were first added.
+CREATE TABLE IF NOT EXISTS field_lists (
+    name        TEXT PRIMARY KEY,
+    values_json TEXT NOT NULL DEFAULT '[]',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 

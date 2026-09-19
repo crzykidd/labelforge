@@ -59,9 +59,19 @@ async def update_template(name: str, data: TemplateUpdate) -> Template:
     if data.label_media is not None and get_label(data.label_media) is None:
         raise HTTPException(status_code=400, detail=f"Unknown label media: {data.label_media!r}")
 
-    if data.canvas_json is not None:
-        detected = detect_fields(data.canvas_json)
-        data.field_schema = merge_schema(detected, existing.field_schema)
+    if data.canvas_json is not None or data.field_schema is not None:
+        # Re-detect against whichever canvas is in effect, and merge onto
+        # whichever schema the caller sent (preserving their edits — type,
+        # required, default, increment) rather than always the stored one.
+        # Previously this discarded any field_schema edits sent alongside
+        # canvas_json (the editor's Save always sends both), silently
+        # reverting type/increment changes made in the same request.
+        effective_canvas = (
+            data.canvas_json if data.canvas_json is not None else existing.canvas_json
+        )
+        detected = detect_fields(effective_canvas)
+        base_schema = data.field_schema if data.field_schema is not None else existing.field_schema
+        data.field_schema = merge_schema(detected, base_schema)
 
     result = store.update_template(name, data)
     if result is None:

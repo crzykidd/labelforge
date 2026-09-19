@@ -4,6 +4,108 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Global value lists are keyed by field name (not a separate list id); `list` and `enum` coexist; list deletion is never retroactive
+
+**Decision**: `prompts/done/2026-09-19-field-lists.md` — the editor had `FieldSpec.type` and
+`enum_values` since early on, and recall already rendered a `<select>` for `type: "enum"`, but
+there was no UI to ever set `field_schema` from the editor at all, and no way to reuse a set of
+options across templates without copy-pasting `enum_values` into each one. Three decisions,
+settled by the operator, not re-litigated here:
+
+1. **A global list's identity is the field name it belongs to — there is no separate "list
+   name" the user picks.** The operator's own framing: *"if I select room as my variable it is
+   global, so if I wanted a different list I could do room1list or something."* Marking a field
+   `type: "list"` always resolves it against `GET /api/field-lists/{that field's name}`. This
+   was chosen over a list-id/reference model (where a field points at an arbitrarily-named list)
+   because it needs zero extra UI — no "pick a list" dropdown, no create-list dialog — and it
+   makes the sharing behavior obvious from the placeholder alone: every `{room}` in every
+   template is the same list, by construction, and a template that wants different options just
+   uses a different field name. The cost is that renaming a list means renaming the field (and
+   every placeholder using it), which was judged acceptable — it mirrors how renaming any other
+   field already works (edit the `{placeholder}` text).
+2. **`type: "list"` (global) and `type: "enum"` (per-template `enum_values`, unchanged from
+   before this session) coexist as two distinct flavors** rather than migrating enum into lists
+   or vice versa. A field that's genuinely one-off to a single template (e.g. a fixed set of
+   internal SKU codes only "spool-label" ever prints) shouldn't force a global list into
+   existence just to get a dropdown; a field like `room` that's the same concept everywhere
+   should not require re-typing its options into every template that uses it. Removing enum
+   would have broken nothing existing (no template used it yet, since there was no authoring UI)
+   but would have removed a genuinely useful "just this template" option for no benefit.
+3. **Deleting a global list is never retroactive.** `DELETE /api/field-lists/{name}` does not
+   touch any template's `field_schema` and does not touch print history. This falls out of two
+   things already true before this feature: print history stores literal `field_values` (not a
+   reference to anything), and `type: "list"` is resolved at *recall time*, not baked into the
+   template. So a template keeps its `type: "list"` field spec forever regardless of whether the
+   list exists — the alternative (a validation sweep over every template on delete, or a hard
+   FK-style constraint refusing the delete) would have added real complexity for a single-user
+   app where the owner deleting a list they're actively using is self-inflicted and immediately
+   visible (the field just recalls as free text, no data loss, nothing silently breaks).
+
+**Also fixed as a dependency, not a re-litigated decision**: `PUT /api/templates/{name}` was
+recomputing `field_schema` from the *stored* schema whenever `canvas_json` was also present,
+discarding whatever `field_schema` the caller sent in the same request. Every Save from the
+editor sends both, so this made the FIELDS panel's edits impossible to persist — not a
+pre-existing edge case, but the feature's blocking bug. Fixed by merging onto whichever schema
+the caller actually sent (falling back to the stored one only when the caller didn't send one),
+re-detecting against whichever canvas is in effect either way.
+
+**Would revisit if**: a future need arises for a template-scoped override of a handful of values
+from an otherwise-shared list (today it's all-or-nothing: `list` = fully shared, `enum` = fully
+private) — no such request has come up, and the two-flavor model covers everything asked for so
+far.
+
+---
+
+## 2026-09-19 — Wrap gets a line cap that truncates-with-warning (not shrink-to-fit); wrap width becomes orientation-aware, superseding the head-width clamp
+
+**Decision**: `prompts/done/2026-09-19-wrap-max-lines.md` — wrap shipped in v0.1.8 (entry
+below) as an uncapped on/off checkbox, so a long field value could balloon a label to six or
+more lines with no ceiling. Two related changes:
+
+1. **`labelforge_wrap_max_lines` (integer, default `0` = no limit) caps wrapped output at a
+   chosen line count (editor control: Off / No limit / 2 / 3 / 4 / 5).** The operator chose
+   **truncate-with-warning over shrink-to-fit**: when content needs more lines than the cap,
+   the excess is dropped rather than the font auto-shrinking to make it fit. Shrink-to-fit was
+   considered and rejected — it makes font size unpredictable across prints of the same
+   template with different field values, which defeats the point of a fixed-size label
+   design the operator laid out by eye. Truncation's downside (lost content) is mitigated the
+   same way every other overflow in this app already is: `detect_overflow` returns `True`
+   whenever `_wrap_text` truncates, riding the existing `overflow` flag on the print/preview
+   responses rather than adding new API surface. This was **deliberately not silent** — the
+   operator has spent this session's other two fixes (this file's next-oldest entry) closing
+   exactly this failure mode for other causes of clipped content, so a new truncation path
+   that didn't report itself would have reintroduced the same bug in a new shape. Each line
+   is still greedily filled before breaking ("go to the first break that uses all the
+   space" — the operator's words) — the cap only decides how many of those greedily-filled
+   lines survive, not how they're built. **Regression bar**: `labelforge_wrap_max_lines` is a
+   new, independent key alongside the existing `labelforge_wrap` boolean specifically so a
+   v0.1.8 template (`labelforge_wrap: true`, key absent) keeps wrapping unlimited,
+   byte-identically — the alternative (inferring a default cap, or treating a missing key as
+   0-meaning-something-else) would have silently changed already-saved templates' output.
+2. **Wrap target width is now orientation-aware, superseding the "clamp to head width
+   always" simplification** recorded in this file's next-oldest entry. That entry already
+   named the fix needed and why it wasn't done then: "the *fully* correct clamp would need to
+   know, per element, which of its local axes maps to the fixed head-width axis under the
+   combination of template orientation and the element's own `angle`." This entry does that:
+   a new `_wrap_target_width` helper composes the element's `angle` with `template.orientation`
+   (via the same cos/sin radians math `_rotated_aabb` already uses, rather than a second,
+   divergent formula) to decide whether the element's local box-width axis lands on the
+   print head's fixed ceiling or the free length axis, and only clamps to `head_width` in the
+   former case. Verified end-to-end: a wide box on a rotated template that used to force so
+   many lines its stacked height genuinely overflowed the 696-dot head width (793 dots, at
+   the old clamp) now wraps to far fewer, wider lines that fit comfortably (177 dots) — see
+   `test_rotated_template_wrap_width_follows_free_axis_not_head_width`. The angle=0 /
+   standard-orientation case is untouched byte-for-byte (same `min(box_w, head_width)`
+   result), so this is additive, not a behavior change for the common case.
+
+**Would revisit if**: a future need for non-90°-multiple element angles turns out to need a
+smoother (non-binary) axis blend rather than the current "which axis dominates" cosine/sine
+comparison — today's per-element rotation only snaps to exact multiples of 90 by default (see
+`ROTATION_SNAP_ANGLE` in `frontend/src/editor/canvas.ts`), so this hasn't been observed in
+practice.
+
+---
+
 ## 2026-09-19 — Continuous auto-length grows in both directions; wrap is opt-in and clamps to print-head width; overflow detection measures resolved values
 
 **Decision**: Three related fixes for the operator report *"a template designed around
@@ -92,11 +194,15 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
    returned byte-for-byte unchanged) specifically so "wrap on, content already fits" renders
    byte-identically to wrap off — required by the regression bar for this whole change.
 
-**Would revisit if**: a future request wants wrap to use the true per-orientation/per-angle
-available width instead of the head-width clamp (fix #3's cross-cutting complexity would
-need solving generally, not just for wrap), or if the combined-rotation case (#3) turns out
-to be common enough in practice to warrant a dedicated editor-side warning instead of relying
-on `detect_overflow` at print/preview time.
+**Superseded (wrap target width only)**: the "clamp to head width always" simplification in
+point 5 was replaced by the 2026-09-19 orientation-aware `_wrap_target_width` entry above —
+the *fully correct clamp* this entry said wasn't worth building yet turned out to be needed
+sooner than expected. Points 1–4 (bidirectional auto-length, the rotation-pivot fix, and
+resolved-value overflow detection) are unaffected and still current.
+
+**Would revisit if**: if the combined-rotation case (#3) turns out to be common enough in
+practice to warrant a dedicated editor-side warning instead of relying on `detect_overflow`
+at print/preview time.
 
 ---
 

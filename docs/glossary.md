@@ -35,12 +35,23 @@ Element types in v1:
 A `{placeholder}` reference inside any text, qrcode, or barcode element. Auto-detected on template save. Each field has:
 
 - `name` — the placeholder name (`number`, `color`, `weight`)
-- `type` — `text` (default), `number`, `date`, `enum`
+- `type` — `text` (default), `number`, `date`, `enum`, `list`
 - `required` — bool, default true
 - `default` — optional default value
-- `increment` — for `number` fields, marks the field as auto-incrementable in batch print
+- `increment` — marks the field as auto-incrementable in batch print (any `type`, not just `number` — it just advances whatever trailing digits the current value has)
+- `enum_values` — fixed, per-template option list; only meaningful when `type` is `enum`
 
-Field schema is derived from element content but can be edited (to set types, defaults, etc.) in the template editor.
+Field schema is derived from element content but can be edited (type, required, default,
+increment, enum values) in the template editor's FIELDS panel.
+
+### Field list
+
+A named, ordered list of allowed values for a `type: "list"` field, stored independently of any
+template and keyed by field name — every template with a `{room}` field shares the one `room`
+field list. Editing it (via the FIELDS panel's **E** drawer, or the `/api/field-lists` API)
+changes what every one of those templates offers at recall from then on. Contrast with a
+`type: "enum"` field's `enum_values`, which is a one-off list owned by a single template. See
+[`features/templates.md`](features/templates.md#value-lists-list-vs-enum).
 
 ### Print job
 
