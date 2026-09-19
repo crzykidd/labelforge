@@ -227,7 +227,11 @@ def _render_barcode_element(payload: str, symbology: str, box_w: int, box_h: int
 
 
 def detect_overflow(template: Template, media_id: str) -> bool:
-    """True when any element's bottom edge exceeds the printable height for a die-cut media.
+    """True when any element falls outside the printable area for a die-cut media.
+
+    Bounds are taken in *design space*, which is transposed for a rotated template —
+    the same swap render_template applies — so a rotated design is checked against
+    the axes it was actually authored on.
 
     Continuous media never overflows (canvas length is content-driven). Returns False
     for continuous media or when the media is unknown.
@@ -237,13 +241,18 @@ def detect_overflow(template: Template, media_id: str) -> bool:
         return False
     if label.form_factor in _CONTINUOUS_FORM_FACTORS:
         return False
-    max_h = label.dots_printable[1]
+    head_width, length = label.dots_printable
+    if template.orientation == "rotated":
+        max_w, max_h = length, head_width
+    else:
+        max_w, max_h = head_width, length
     for obj in template.canvas_json.get("objects", []):
+        raw_left = int(obj.get("left", 0))
         raw_top = int(obj.get("top", 0))
-        box_w = int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
+        w = int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
         h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
-        _, top = _origin_top_left(obj, 0, raw_top, box_w, h)
-        if top + h > max_h:
+        left, top = _origin_top_left(obj, raw_left, raw_top, w, h)
+        if top + h > max_h or left + w > max_w:
             return True
     return False
 

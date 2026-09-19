@@ -34,13 +34,18 @@ def _make_label(
     )
 
 
-def _make_template(label_media: str = "62red", canvas_json: dict | None = None) -> Template:
+def _make_template(
+    label_media: str = "62red",
+    canvas_json: dict | None = None,
+    orientation: str = "standard",
+) -> Template:
     return Template(
         name="test-tmpl",
         display_name="Test Template",
         label_media=label_media,
         canvas_json=canvas_json or {"objects": []},
         field_schema=[],
+        orientation=orientation,
         created_at="2026-01-01T00:00:00",
         updated_at="2026-01-01T00:00:00",
     )
@@ -150,6 +155,64 @@ def test_detect_overflow_die_cut_exceeds_bounds():
 
     # top=200 + height=200 = 400 > 271 printable dots
     canvas = {"objects": [{"type": "Rect", "top": 200, "height": 200, "scaleY": 1.0}]}
+    tmpl = _make_template(canvas_json=canvas)
+
+    with patch("labelforge.render.template.get_label", side_effect=_get_label):
+        from labelforge.render.template import detect_overflow
+
+        assert detect_overflow(tmpl, "62x29") is True
+
+
+def test_detect_overflow_rotated_uses_transposed_bounds():
+    """A rotated die-cut design is checked against the transposed axes.
+
+    On 62x29 the design canvas is 271 wide x 696 tall. An element at top=400
+    with height=200 fits the rotated design (600 <= 696) but would have been
+    flagged against the standard bound of 271.
+    """
+    label_62x29 = _make_label("62x29", form_factor=1, dots_printable=(696, 271), tape_size=(62, 29))
+
+    def _get_label(id_: str) -> LabelEntry | None:
+        return {"62x29": label_62x29}.get(id_)
+
+    canvas = {"objects": [{"type": "Rect", "top": 400, "height": 200, "scaleY": 1.0}]}
+
+    with patch("labelforge.render.template.get_label", side_effect=_get_label):
+        from labelforge.render.template import detect_overflow
+
+        assert (
+            detect_overflow(_make_template(canvas_json=canvas, orientation="rotated"), "62x29")
+            is False
+        )
+        assert detect_overflow(_make_template(canvas_json=canvas), "62x29") is True
+
+
+def test_detect_overflow_rotated_exceeds_transposed_height():
+    """Rotated design height is the print-head width (696 on 62x29)."""
+    label_62x29 = _make_label("62x29", form_factor=1, dots_printable=(696, 271), tape_size=(62, 29))
+
+    def _get_label(id_: str) -> LabelEntry | None:
+        return {"62x29": label_62x29}.get(id_)
+
+    # top=600 + height=200 = 800 > 696 design height
+    canvas = {"objects": [{"type": "Rect", "top": 600, "height": 200, "scaleY": 1.0}]}
+    tmpl = _make_template(canvas_json=canvas, orientation="rotated")
+
+    with patch("labelforge.render.template.get_label", side_effect=_get_label):
+        from labelforge.render.template import detect_overflow
+
+        assert detect_overflow(tmpl, "62x29") is True
+
+
+def test_detect_overflow_flags_horizontal_overflow():
+    """An element running off the right edge is flagged, not just the bottom."""
+    label_62x29 = _make_label("62x29", form_factor=1, dots_printable=(696, 271), tape_size=(62, 29))
+
+    def _get_label(id_: str) -> LabelEntry | None:
+        return {"62x29": label_62x29}.get(id_)
+
+    # left=600 + width=200 = 800 > 696 printable width; vertically it fits.
+    canvas = {"objects": [{"type": "Rect", "left": 600, "width": 200, "top": 10, "height": 50}]}
     tmpl = _make_template(canvas_json=canvas)
 
     with patch("labelforge.render.template.get_label", side_effect=_get_label):

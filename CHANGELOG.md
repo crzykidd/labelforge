@@ -10,6 +10,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Fixed
 
+- The "content may be clipped" warning shown when recalling a template now checks both edges of the label and understands rotated templates. Previously it only looked at the bottom edge, so an element running off the right of a die-cut label was never flagged, and a rotated template was measured against the wrong axis.
 - CI no longer fails on unrelated pull requests. The `ruff format --check` gate reformatted Python code blocks embedded in Markdown (a behavior ruff added in 0.14), so documentation and archived handoff prompts failed the check and blocked every PR. Markdown is now excluded from ruff, and the `ruff` dev dependency is pinned to a compatible range so the toolchain no longer changes under CI without a dependency bump. No runtime change.
 
 ### Changed

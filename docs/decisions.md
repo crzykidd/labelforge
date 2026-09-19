@@ -36,10 +36,12 @@ that visibly wrong (unchanged coordinates, now possibly out of bounds) beats mys
 rearranged. The editor instead resizes the live canvas in place (`setDimensions`/`setZoom`,
 preserving every object) and shows a one-time status message that the layout will need adjusting.
 
-**Known gap**: `detect_overflow` (used for the die-cut "content may be clipped" recall warning)
-was not updated to account for the transposed axis on a rotated die-cut template, so it compares
-against the wrong bound and under-warns. Out of scope for this change (not touched by the
-orientation prompt); flagged here for a follow-up.
+**Known gap (resolved in follow-up)**: `detect_overflow` (the die-cut "content may be clipped"
+recall warning) compared against the standard-orientation bound, so it under-warned on a rotated
+die-cut template. It now takes its bounds in design space, applying the same transposition
+`render_template` does. The same change also made it check the horizontal edge, which it had
+never done — an element running off the right of a die-cut label was previously unflagged
+regardless of orientation.
 
 **Considered**: mirroring Quick Print's `rotate(90)` literally, per the prompt's initial framing —
 rejected once the pixel trace showed it inverts feed order relative to the standard orientation's
