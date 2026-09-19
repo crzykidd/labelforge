@@ -93,21 +93,25 @@ def test_field_list_crud_round_trips(client):
     r = client.delete("/api/field-lists/room")
     assert r.status_code == 204
 
-    assert client.get("/api/field-lists/room").status_code == 404
+    resp = client.get("/api/field-lists/room")
+    assert resp.status_code == 404
 
 
 def test_field_list_create_duplicate_conflicts(client):
-    assert client.post("/api/field-lists", json={"name": "room", "values": []}).status_code == 201
+    resp = client.post("/api/field-lists", json={"name": "room", "values": []})
+    assert resp.status_code == 201
     r = client.post("/api/field-lists", json={"name": "room", "values": []})
     assert r.status_code == 409
 
 
 def test_field_list_update_missing_404s(client):
-    assert client.put("/api/field-lists/nope", json={"values": ["a"]}).status_code == 404
+    resp = client.put("/api/field-lists/nope", json={"values": ["a"]})
+    assert resp.status_code == 404
 
 
 def test_field_list_delete_missing_404s(client):
-    assert client.delete("/api/field-lists/nope").status_code == 404
+    resp = client.delete("/api/field-lists/nope")
+    assert resp.status_code == 404
 
 
 def test_field_list_invalid_name_rejected(client):
@@ -118,7 +122,8 @@ def test_field_list_invalid_name_rejected(client):
 def test_field_lists_require_auth_when_enabled(client, monkeypatch):
     monkeypatch.setattr(config.settings, "disable_auth", False)
     monkeypatch.setattr(config.settings, "api_token", "secret")
-    assert client.get("/api/field-lists").status_code == 401
+    resp = client.get("/api/field-lists")
+    assert resp.status_code == 401
 
 
 # ── The whole point: editing a global list changes every template's options ─
@@ -150,7 +155,8 @@ def test_two_templates_share_edits_to_the_same_global_list(client):
     assert r.status_code == 200
     assert r.json()["values"] == ["Kitchen", "Office", "Garage"]
 
-    assert client.get("/api/field-lists/room").json()["values"] == [
+    resp = client.get("/api/field-lists/room")
+    assert resp.json()["values"] == [
         "Kitchen",
         "Office",
         "Garage",
@@ -174,7 +180,8 @@ def test_list_field_with_no_matching_global_list_is_not_an_error(client):
     )
     assert r.status_code == 201, r.text
     assert r.json()["field_schema"] == [_default_list_spec("nonexistent")]
-    assert client.get("/api/field-lists/nonexistent").status_code == 404
+    resp = client.get("/api/field-lists/nonexistent")
+    assert resp.status_code == 404
 
 
 def test_deleting_a_list_does_not_affect_existing_template_or_history(client):
@@ -201,7 +208,8 @@ def test_deleting_a_list_does_not_affect_existing_template_or_history(client):
         field_values={"room": "Kitchen"},
     )
 
-    assert client.delete("/api/field-lists/room").status_code == 204
+    resp = client.delete("/api/field-lists/room")
+    assert resp.status_code == 204
 
     tmpl = client.get("/api/templates/spool3").json()
     assert tmpl["field_schema"] == [_default_list_spec("room")]

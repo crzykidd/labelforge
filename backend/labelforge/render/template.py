@@ -483,9 +483,9 @@ def render_template(
                 # Truncation (if any) is surfaced separately by detect_overflow's own
                 # call to this function — the print/preview routes always re-run it
                 # against the same values, so it's the single source of the warning.
-                text_subs[i], _truncated = _render_text_element(
+                text_subs[i] = _render_text_element(
                     obj, values, box_w, box_h, head_width=head_width, rotated=rotated
-                )
+                )[0]
             except RenderError:
                 raise
             except Exception as exc:
