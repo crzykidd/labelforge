@@ -6,6 +6,7 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ### Added
 
+- Template editor: elements panel, drag/resize clamping, grid + snap, keyboard shortcuts, and undo/redo. An elements list beside the canvas shows every object (type + content snippet) and flags any that lie off the visible label — click a row to select it, or use the new "Bring all on-canvas" button to pull every off-canvas element back inside in one click. This recovers elements that were previously invisible, unselectable, and (on continuous media) silently inflating the printed length. Dragging and resizing now clamp to the label bounds and snap to the label edges, horizontal/vertical centerlines, and an optional grid (toggle in the toolbar; remembered per browser). Arrow keys nudge the selected element by 1 label pixel (Shift: 10), Delete/Backspace removes it, and Escape deselects — all suspended while editing text inline. Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo/redo up to 50 steps.
 - Templates support a rotated orientation, matching Quick Print. Set it in the editor toolbar (Standard / Rotated 90°): the design canvas transposes to the label's length axis so you type upright, and Preview/print shows the label rotated a quarter turn — what you'd get if you turned the finished label sideways. Continuous media's auto-length still grows correctly under rotation. Toggling orientation on an existing template never moves or resizes its elements; a status message warns that the layout may need adjusting. Requires a container image rebuild.
 
 ### Fixed

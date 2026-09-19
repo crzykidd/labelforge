@@ -4,6 +4,66 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-18 — Template editor usability: CSS-background grid, translation-only clamp, load-path-gated undo
+
+**Decision**: Three implementation choices for the elements-panel/clamp/grid/snap/undo work
+(`frontend/src/editor/canvas.ts`, `grid-snap.ts`, `history.ts`, `keyboard.ts`,
+`elements-panel.ts`):
+
+1. **The grid is a CSS `background-image` on `.editor-canvas-inner`, never Fabric objects.**
+   Fabric's DOM manager replaces the mounted `<canvas>` element with a wrapper div sized to the
+   canvas's display (post-zoom) pixels, and `.editor-canvas-inner` shrinks to exactly that
+   wrapper's size (it has no other children and no padding) — so painting the grid on it lines
+   up with the canvas pixel-for-pixel without any extra offset bookkeeping. The grid cell size is
+   `gridSizeLabelPx * canvas.getZoom()`, i.e. converted to display pixels at paint time; nothing
+   grid-related ever touches `canvas.add()`, so it can never appear in `canvas.toJSON()`.
+
+2. **Clamp is translation-only, not resize-only, and reads `obj.getBoundingRect()`.** Verified
+   against Fabric's `ObjectGeometry` source that `aCoords`/`getBoundingRect()` are in the object's
+   scene (label-pixel) coordinate plane and explicitly "do not depend on viewport changes" — so
+   they're already unaffected by the display zoom, and using them meant clamp/snap math needed no
+   scale conversion at all (canvas.width/height, by contrast, are the display pixel dimensions set
+   via `setDimensions`, and would have been wrong to compare against). Because a translation delta
+   is invariant under origin, rotation and scale, clamping is just `obj.left/top += dx/dy` derived
+   from the bounding-rect overflow — no per-origin-case branching needed despite centered
+   origins being common in this codebase (`_origin_top_left` on the backend exists for the same
+   reason). An object larger than the canvas on an axis is centered on that axis rather than
+   pinned to one edge, to avoid the clamp fighting itself as the object is dragged past both edges.
+
+3. **Resize snapping is edge-aware via `transform.corner`, and re-pins the anchor with
+   `getPositionByOrigin`/`setPositionByOrigin`, not `obj.left`/`top` arithmetic.**
+   `object:scaling`'s event carries which handle is being dragged (`tl`/`br`/`ml`/…), so the
+   edge(s) actually moving can be snapped to the canvas edge or grid. The first pass tried
+   translating `obj.left`/`top` by the same delta used for move-clamp, but that's only correct
+   when combined with a scale change if the object's origin is `left`/`top` — for a centered
+   origin (Fabric's `ActiveSelection`, used for a multi-object selection, is anchored at its
+   center) the two edges would drift apart from the true anchor by half the size delta. Capturing
+   the anchor corner's position with `getPositionByOrigin` before the scale change and re-applying
+   it with `setPositionByOrigin` after is origin-agnostic — it's the same primitive Fabric's own
+   `rotate()` uses to preserve a centered-rotation anchor — so it holds regardless of what origin
+   the target object (or an active selection) has. This is an approximation for `angle === 0`;
+   clamping afterwards still catches the axis-aligned bounding box for a rotated object, but
+   resize-snap itself doesn't attempt anchor-correct math under rotation. Centerline snapping was
+   deliberately *not* extended to resize (only to move) — snapping a resize edge to the canvas's
+   centerline is not an operation users reach for, unlike centering a whole element.
+
+4. **Undo/redo history listeners are attached only after the initial canvas load completes**
+   (`finalizeEditorBootstrap` in `template-editor.ts`), not from `initEditor`. `loadCanvasJSON`
+   fires `object:added` per loaded element exactly like an interactive add, so wiring the
+   history-push listener earlier would record opening an existing template as 50 potential
+   undoable "edits" and burn through the bounded stack before the user touches anything.
+   Restores go through `loadCanvasJSON` (not a bare `loadFromJSON`), and a `restoring` flag on
+   `EditorHistory` — checked and set synchronously before the first `await`, guaranteeing no
+   interleaving from a rapid second Ctrl+Z — both suppresses re-entrant pushes during a restore
+   and no-ops a redundant undo/redo call outright.
+
+**What would cause us to revisit**: if a future element type needs a bounding box that isn't
+axis-aligned in scene space (Fabric's `getBoundingRect()` always is), or if resize handles grow
+beyond Fabric's default 8-corner/side set (the `corner.includes('l'|'r'|'t'|'b')` parsing assumes
+that naming).
+
+---
+
 ## 2026-09-18 — Template orientation: rotate the finished canvas 270°, not 90°; no auto-reflow on toggle
 
 **Decision**: `render_template` draws every element on a canvas transposed to the label's length

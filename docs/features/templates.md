@@ -129,6 +129,57 @@ auto-reflow: a one-time status message says the layout will likely need adjustin
 deliberate — a design that's visibly wrong after toggling is easier to fix than one silently
 rearranged to some guessed-at "correct" layout.
 
+### Elements panel, bounds, grid/snap, keyboard, undo
+
+The canvas has no scrollbars past its own edges, so an element dragged off it is
+otherwise invisible and unselectable — and not merely a display nuisance: it
+still renders server-side at its off-canvas position, and on continuous media a
+stray element inflates the auto-derived print length. The following exist to
+make that unrecoverable state impossible to reach, and recoverable when it's
+already happened (e.g. a template edited before this existed).
+
+**Elements panel** — a list beside the canvas (right of it at normal widths;
+wraps below the canvas on narrow windows so the canvas is never squeezed) shows
+every object on the canvas regardless of position: its type (Text / QR /
+Barcode / Line / Rect / Image) and a short content snippet. Clicking a row
+selects that object. Rows for an object currently outside the canvas bounds are
+flagged. The list re-renders on every add/remove/modify and on text edits.
+
+**Clamping** — dragging or resizing an element keeps its bounding box inside
+the canvas; you cannot drag or grow an element out of bounds. This only
+prevents new breakage. To repair a template that already has an off-canvas
+element (e.g. one created before this existed, or edited via raw API calls),
+use **Bring all on-canvas** in the toolbar: it clamps every out-of-bounds
+object back inside and selects the first one it moved.
+
+Bounds checks and clamping compare against the label's pixel dimensions (the
+same axis-swap `orientation` applies to the design canvas), not the on-screen
+display size — the two differ whenever the canvas is zoomed to fit the
+viewport.
+
+**Grid and snap** — the **Grid** toggle (remembered per browser) overlays a
+10-label-pixel grid, drawn as a CSS background on the canvas element itself,
+never as objects on the canvas — anything added to the canvas serializes into
+`canvas_json` and would print. Independent of the grid toggle, dragging an
+element always snaps to the canvas edges and to the horizontal/vertical
+centerlines (with a brief guide line) within a few pixels; enabling the grid
+additionally snaps to its lines. Resizing snaps the edge being dragged the same
+way.
+
+**Keyboard** — with an element selected: arrow keys nudge it 1 label pixel,
+Shift+arrow nudges 10, Delete/Backspace removes it, Escape deselects.
+Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z redoes (also available as toolbar buttons).
+None of this fires while inline-editing a text element's content, or while a
+toolbar input/select has focus — otherwise typing would move or delete the
+element being edited.
+
+**Undo/redo** — a 50-entry snapshot stack. A snapshot is taken after every
+add/remove/modify, and once per text-editing session (debounced, not per
+keystroke). Restoring a snapshot goes through the same load path used to open a
+saved template, so QR/barcode placeholder bitmaps and the text raw-content sync
+are regenerated exactly as on initial load — not a bare Fabric deserialize,
+which would silently lose both.
+
 ### Toolbar
 
 Top: undo, redo, zoom, fit, save, save-as, preview, print
