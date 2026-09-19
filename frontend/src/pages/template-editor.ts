@@ -20,6 +20,8 @@ import {
 } from '../editor/canvas'
 import { mountElementsPanel } from '../editor/elements-panel'
 import type { ElementsPanelHandle } from '../editor/elements-panel'
+import { mountFieldsPanel } from '../editor/fields-panel'
+import type { FieldsPanelHandle } from '../editor/fields-panel'
 import { loadServerFonts } from '../editor/fonts'
 import {
   applyMoveSnap,
@@ -145,12 +147,21 @@ export function mountTemplateEditor(root: HTMLElement): void {
             <canvas id="fabric-canvas"></canvas>
           </div>
         </div>
-        <div class="editor-elements-panel">
-          <div class="elements-panel-header">
-            <h3>Elements</h3>
-            <button id="btn-bring-on-canvas" title="Move every off-canvas element back inside the label" hidden>Bring all on-canvas</button>
+        <div class="editor-side-panels">
+          <div class="editor-elements-panel">
+            <div class="elements-panel-header">
+              <h3>Elements</h3>
+              <button id="btn-bring-on-canvas" title="Move every off-canvas element back inside the label" hidden>Bring all on-canvas</button>
+            </div>
+            <div class="elements-panel-list" id="elements-panel-list"></div>
           </div>
-          <div class="elements-panel-list" id="elements-panel-list"></div>
+          <div class="editor-fields-panel">
+            <div class="fields-panel-header">
+              <h3>Fields</h3>
+            </div>
+            <p class="fields-panel-hint">One row per <code>{placeholder}</code> found in the design. Updates after Save.</p>
+            <div class="fields-panel-list" id="fields-panel-list"></div>
+          </div>
         </div>
       </div>
       <div id="preview-area" class="preview-area" hidden style="padding:1rem">
@@ -187,6 +198,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const btnGridToggle = root.querySelector<HTMLButtonElement>('#btn-grid-toggle')!
   const btnBringOnCanvas = root.querySelector<HTMLButtonElement>('#btn-bring-on-canvas')!
   const elementsPanelListEl = root.querySelector<HTMLDivElement>('#elements-panel-list')!
+  const fieldsPanelListEl = root.querySelector<HTMLDivElement>('#fields-panel-list')!
   const contextHint = root.querySelector<HTMLElement>('#context-hint')!
   const btnRotate90 = root.querySelector<HTMLButtonElement>('#btn-rotate-90')!
   const contextControlsText = root.querySelector<HTMLElement>('#context-controls-text')!
@@ -210,6 +222,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   let gridEnabled = isGridEnabled()
   let history: EditorHistory | null = null
   let elementsPanel: ElementsPanelHandle | null = null
+  const fieldsPanel: FieldsPanelHandle = mountFieldsPanel(fieldsPanelListEl, () => {})
   let textHistoryDebounce: number | undefined
   let detachKeyboard: (() => void) | null = null
 
@@ -681,12 +694,18 @@ export function mountTemplateEditor(root: HTMLElement): void {
     showStatus('', '')
     try {
       const canvasJson = getCanvasJSON(fabricCanvas)
+      const field_schema = fieldsPanel.getSchema()
+      let saved: Template
       if (existsOnServer) {
-        await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation })
+        saved = await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation, field_schema })
       } else {
-        await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation })
+        saved = await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation, field_schema })
         existsOnServer = true
       }
+      // The server is the source of truth for which fields exist (it re-runs
+      // detect_fields against the saved canvas) — refresh from its response
+      // rather than trusting whatever the panel already had.
+      fieldsPanel.setSchema(saved.field_schema)
       showStatus('Saved.', 'success')
     } catch (err) {
       showStatus((err as Error).message, 'error')
@@ -712,12 +731,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
       const objs = fabricCanvas.getObjects()
       if (objs.length > 0) {
         const canvasJson = getCanvasJSON(fabricCanvas)
+        const field_schema = fieldsPanel.getSchema()
+        let saved: Template
         if (existsOnServer) {
-          await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation })
+          saved = await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation, field_schema })
         } else {
-          await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation })
+          saved = await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation, field_schema })
           existsOnServer = true
         }
+        fieldsPanel.setSchema(saved.field_schema)
       }
       // Build a fields dict: use field name as its own placeholder value for preview
       const fields: Record<string, string> = {}
@@ -770,6 +792,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
         const label = labels.find(l => l.id === tmpl.label_media)
         if (!label) { showStatus(`Unknown label media: ${tmpl.label_media}`, 'error'); return }
         await initEditor(label)
+        fieldsPanel.setSchema(tmpl.field_schema ?? [])
         if (fabricCanvas && tmpl.canvas_json && Object.keys(tmpl.canvas_json).length > 0) {
           await loadCanvasJSON(fabricCanvas, tmpl.canvas_json)
           // Re-render after fonts are guaranteed registered so text elements

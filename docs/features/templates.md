@@ -16,7 +16,10 @@ The core feature. A template is a saved, named label design with a freeform canv
 5. Add elements from a toolbar (text, QR, barcode, image, line, rect)
 6. Position, resize, rotate, layer
 7. Edit element content; use `{field_name}` syntax inside text/qr/barcode content to declare a variable
-8. Field list updates live in a side panel as placeholders are added/removed
+8. A **FIELDS** panel (below **ELEMENTS**) lists every field currently in the schema — set its
+   type, required, default, and increment there. It refreshes from the server's response after
+   each Save, since field detection itself is a backend concern (see Field detection, below) —
+   it does not re-scan the canvas live as you type
 9. Click **Save** → template persisted
 
 ### Edit an existing template
@@ -81,7 +84,8 @@ templates
   display_name    text                -- human label, default = name
   label_media     text                -- e.g. "62", "62red", "29x90"
   canvas_json     text                -- serialized Fabric.js scene
-  field_schema    text (json)         -- list of {name, type, required, default, increment}
+  field_schema    text (json)         -- list of {name, type, required, default, increment, enum_values}
+                                       -- type: text | number | date | enum | list — see "Value lists" below
   orientation     text                -- "standard" (default) or "rotated"
   created_at      timestamp
   updated_at      timestamp
@@ -309,11 +313,47 @@ Right: properties panel for selected element + global panels (fields, label info
 
 ### Field detection
 
-On every canvas change (debounced), parse text/qr/barcode element content for `{name}` matches. Maintain a set of detected field names.
+Detection itself is server-side (`detect_fields` in `backend/labelforge/templates/fields.py`),
+run on every `POST`/`PUT /api/templates/{name}` that carries `canvas_json`: parse text/qr/barcode
+element content for `{name}` matches and merge with the current schema
+(`merge_schema`) — previously-known specs are kept for names still detected (preserving user
+edits: type, required, default, increment, enum_values), newly-detected names are added with
+defaults (`type: text, required: true`), and names no longer detected are dropped.
 
-Field schema = previously-known schema + newly-detected names (added with defaults: `type: text, required: true`) - names no longer detected (removed).
+The editor's FIELDS panel is the authoring UI for this: it edits an in-memory copy of the
+schema, and Save sends it alongside `canvas_json` in the same request so the two are merged
+together server-side — then the panel replaces its schema with whatever the response returns,
+which is why it only updates on Save, not as you type a new `{placeholder}`.
 
-User can edit field properties in the right panel (change type, set default, mark increment, mark not-required).
+### Value lists (list vs enum)
+
+Two ways to restrict a field to a fixed set of options at recall, instead of free text:
+
+- **`type: "list"`** — resolves its options from a **global**, named value list (`GET/PUT
+  /api/field-lists/{name}` — see [`api.md`](api.md#field-lists)). The list is keyed by the
+  field's name and shared by *every* template that has a field with that name: editing the
+  `room` list once changes what every `{room}` field, in every template, offers at recall from
+  then on. There's no per-field "which list" setting — the field name **is** the list's
+  identity. To give a differently-scoped variable its own set of options, use a different field
+  name (e.g. `{room}` vs `{room1list}`), not a rename or alias of an existing list.
+  Authored via the FIELDS panel's **E** button, which opens a drawer to add, remove, and
+  reorder the list's values and save them — the drawer is explicit that this is a *global* edit,
+  not scoped to the template you're in.
+- **`type: "enum"`** — keeps the original per-template `enum_values` array: a fixed, one-off set
+  that belongs to this field in this template only, authored inline in the FIELDS panel as a
+  comma-separated list. Use this when the set of options is genuinely specific to one template
+  and reuse isn't the point.
+
+**Deletion is not retroactive.** Deleting a global list (`DELETE /api/field-lists/{name}`)
+doesn't touch any template's `field_schema` and doesn't touch print history — history rows
+already store the literal resolved `field_values`, not a reference to the list. A `type: "list"`
+field whose named list doesn't exist (never created, or since deleted) is not an error: recall
+renders it as a plain free-text input instead of a `<select>`, exactly as if the field had no
+options at all.
+
+Neither flavor is validated server-side: `enum_values` and the field-list's values are consulted
+by the recall page to build a `<select>`, not enforced by the print/preview API — see
+[`api.md`](api.md#validation).
 
 ### Save validation
 
@@ -325,7 +365,10 @@ User can edit field properties in the right panel (change type, set default, mar
 
 ## Batch / increment
 
-Any field with `type: number` can be toggled `increment: true` in the field schema.
+Any field, regardless of its declared `type`, can be toggled `increment: true` in the field
+schema (set via the FIELDS panel's Increment checkbox — see Field detection, above). Nothing
+restricts it to `type: number`; `advance()` just operates on whatever trailing digits are in the
+field's current string value, so it's only meaningful on values that actually have some.
 
 In the recall form:
 - If any field is incrementable, a **Batch** toggle appears
@@ -369,6 +412,9 @@ See [`api.md`](api.md) for the full API surface. Template endpoints:
 - `POST /api/print/{name}` — print one
 - `POST /api/print/{name}/batch` — print N with increment
 - `POST /api/preview/{name}` — render preview without printing
+
+Global value lists for `type: "list"` fields (see "Value lists", above) live under
+`/api/field-lists` — a separate resource, not nested under a template.
 
 ## Out of scope for v1
 

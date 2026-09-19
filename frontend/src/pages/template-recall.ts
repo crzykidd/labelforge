@@ -1,4 +1,4 @@
-import { ApiError, batchPrint, getLabels, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
+import { ApiError, batchPrint, getFieldList, getLabels, getLastValues, getTemplate, previewTemplate, printTemplate } from '../api'
 import type { FieldSpec, LabelEntry, Template, TemplateLastValues } from '../types'
 import { mountLabelMediaSelect } from '../labels'
 import { navigate } from '../router'
@@ -80,6 +80,22 @@ function buildRecallOptionsHtml(sameWidth: LabelEntry[], other: LabelEntry[], wi
          (ot ? `<optgroup label="Other media">${ot}</optgroup>` : '')
 }
 
+/** Fetch the current values of every global list a `type: "list"` field needs.
+ * A field whose named list doesn't exist (never created, or since deleted)
+ * degrades to free text — never an error — so a 404 just yields no entry. */
+async function loadFieldLists(fields: FieldSpec[]): Promise<Map<string, string[]>> {
+  const names = fields.filter(f => f.type === 'list').map(f => f.name)
+  const results = await Promise.all(
+    names.map(n => getFieldList(n).then(fl => fl.values).catch(() => null)),
+  )
+  const map = new Map<string, string[]>()
+  names.forEach((n, i) => {
+    const values = results[i]
+    if (values) map.set(n, values)
+  })
+  return map
+}
+
 export function mountTemplateRecall(root: HTMLElement): void {
   const name = nameFromPath()
   root.innerHTML = `<div class="template-recall"><p>Loading…</p></div>`
@@ -89,7 +105,10 @@ export function mountTemplateRecall(root: HTMLElement): void {
     getLastValues(name).catch(() => ({ values: null, printed_at: null } satisfies TemplateLastValues)),
     getLabels(),
   ])
-    .then(([tpl, lastVals, allLabels]) => renderRecall(root, tpl, lastVals, allLabels))
+    .then(async ([tpl, lastVals, allLabels]) => {
+      const fieldLists = await loadFieldLists(tpl.field_schema ?? [])
+      renderRecall(root, tpl, lastVals, allLabels, fieldLists)
+    })
     .catch((err: Error) => {
       root.innerHTML = `
         <div class="template-recall">
@@ -104,7 +123,7 @@ export function mountTemplateRecall(root: HTMLElement): void {
     })
 }
 
-function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastValues, allLabels: LabelEntry[]): void {
+function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastValues, allLabels: LabelEntry[], fieldLists: Map<string, string[]>): void {
   const fields = tpl.field_schema ?? []
   const hasFields = fields.length > 0
   const incrementFields = fields.filter(f => f.increment)
@@ -132,7 +151,7 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
       </div>
 
       <form id="recall-form" autocomplete="off">
-        ${hasFields ? fields.map(fieldInput).join('') : '<p class="recall-meta">This template has no variable fields.</p>'}
+        ${hasFields ? fields.map(f => fieldInput(f, fieldLists.get(f.name))).join('') : '<p class="recall-meta">This template has no variable fields.</p>'}
 
         ${canBatch ? `
           <fieldset class="batch-box">
@@ -426,21 +445,26 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
   updateButtons()
 }
 
-function fieldInput(f: FieldSpec): string {
+/** listValues is only present for type: "list" fields whose named global list
+ * currently exists — absent means the list was never created (or has since
+ * been deleted), which is not an error: the field just degrades to text. */
+function fieldInput(f: FieldSpec, listValues?: string[]): string {
   const id = `field-${f.name}`
   const req = f.required ? 'required' : ''
   const star = f.required ? ' <span class="req-star">*</span>' : ''
   const def = f.default ?? ''
   let control: string
-  if (f.type === 'enum') {
-    const opts = (f.enum_values ?? [])
+  if (f.type === 'enum' || (f.type === 'list' && listValues)) {
+    const options = f.type === 'enum' ? (f.enum_values ?? []) : listValues!
+    const opts = options
       .map(v => `<option value="${esc(v)}"${v === def ? ' selected' : ''}>${esc(v)}</option>`)
       .join('')
     const placeholder = f.required ? '' : '<option value=""></option>'
     control = `<select id="${esc(id)}" name="${esc(f.name)}" ${req}>${placeholder}${opts}</select>`
   } else {
-    // text / number / date all use a plain text input (per spec) — avoids native
-    // date-picker silently rejecting non-ISO default values.
+    // text / number / date, and a list field whose global list doesn't exist,
+    // all use a plain text input (per spec) — avoids native date-picker
+    // silently rejecting non-ISO default values.
     control = `<input id="${esc(id)}" name="${esc(f.name)}" type="text" value="${esc(def)}" ${req} />`
   }
   return `

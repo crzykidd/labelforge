@@ -4,6 +4,14 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Template fields can now be edited from the editor: a new **FIELDS** panel (below Elements) lets you set each field's type, required, default, and — for the first time — **increment**, closing a gap where batch/increment printing was fully wired at recall but had no way to turn it on. Two new field types round this out: **List** resolves its recall options from a named, reusable value list shared by every template that uses a field with that name (e.g. `{room}` on any template offers the same "room" list, edited once from an **E** drawer next to the field); **Enum** keeps a one-off set of options scoped to just that template. Deleting a shared list doesn't affect existing templates or print history — a field pointing at a missing list just recalls as free text.
+
+### Fixed
+
+- Saving a template's field schema (via the new FIELDS panel) no longer gets silently discarded. `PUT /api/templates/{name}` was recomputing the schema from the *previously stored* one whenever `canvas_json` was also present in the request — which it always is on a normal Save — so any field-property edit sent in that same request was reverted immediately.
+
 ### Changed
 
 - Wrap is now capped at a chosen number of lines instead of wrapping unlimited: the editor's Wrap checkbox is replaced with a select (**Off / No limit / 2 / 3 / 4 / 5 lines**). Content that needs more lines than the cap is truncated, and the same "content may be clipped" overflow warning used elsewhere flags it — never silent. Existing templates saved with wrap on and no cap keep wrapping unlimited, unchanged.

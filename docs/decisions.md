@@ -4,6 +4,58 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Global value lists are keyed by field name (not a separate list id); `list` and `enum` coexist; list deletion is never retroactive
+
+**Decision**: `prompts/done/2026-09-19-field-lists.md` — the editor had `FieldSpec.type` and
+`enum_values` since early on, and recall already rendered a `<select>` for `type: "enum"`, but
+there was no UI to ever set `field_schema` from the editor at all, and no way to reuse a set of
+options across templates without copy-pasting `enum_values` into each one. Three decisions,
+settled by the operator, not re-litigated here:
+
+1. **A global list's identity is the field name it belongs to — there is no separate "list
+   name" the user picks.** The operator's own framing: *"if I select room as my variable it is
+   global, so if I wanted a different list I could do room1list or something."* Marking a field
+   `type: "list"` always resolves it against `GET /api/field-lists/{that field's name}`. This
+   was chosen over a list-id/reference model (where a field points at an arbitrarily-named list)
+   because it needs zero extra UI — no "pick a list" dropdown, no create-list dialog — and it
+   makes the sharing behavior obvious from the placeholder alone: every `{room}` in every
+   template is the same list, by construction, and a template that wants different options just
+   uses a different field name. The cost is that renaming a list means renaming the field (and
+   every placeholder using it), which was judged acceptable — it mirrors how renaming any other
+   field already works (edit the `{placeholder}` text).
+2. **`type: "list"` (global) and `type: "enum"` (per-template `enum_values`, unchanged from
+   before this session) coexist as two distinct flavors** rather than migrating enum into lists
+   or vice versa. A field that's genuinely one-off to a single template (e.g. a fixed set of
+   internal SKU codes only "spool-label" ever prints) shouldn't force a global list into
+   existence just to get a dropdown; a field like `room` that's the same concept everywhere
+   should not require re-typing its options into every template that uses it. Removing enum
+   would have broken nothing existing (no template used it yet, since there was no authoring UI)
+   but would have removed a genuinely useful "just this template" option for no benefit.
+3. **Deleting a global list is never retroactive.** `DELETE /api/field-lists/{name}` does not
+   touch any template's `field_schema` and does not touch print history. This falls out of two
+   things already true before this feature: print history stores literal `field_values` (not a
+   reference to anything), and `type: "list"` is resolved at *recall time*, not baked into the
+   template. So a template keeps its `type: "list"` field spec forever regardless of whether the
+   list exists — the alternative (a validation sweep over every template on delete, or a hard
+   FK-style constraint refusing the delete) would have added real complexity for a single-user
+   app where the owner deleting a list they're actively using is self-inflicted and immediately
+   visible (the field just recalls as free text, no data loss, nothing silently breaks).
+
+**Also fixed as a dependency, not a re-litigated decision**: `PUT /api/templates/{name}` was
+recomputing `field_schema` from the *stored* schema whenever `canvas_json` was also present,
+discarding whatever `field_schema` the caller sent in the same request. Every Save from the
+editor sends both, so this made the FIELDS panel's edits impossible to persist — not a
+pre-existing edge case, but the feature's blocking bug. Fixed by merging onto whichever schema
+the caller actually sent (falling back to the stored one only when the caller didn't send one),
+re-detecting against whichever canvas is in effect either way.
+
+**Would revisit if**: a future need arises for a template-scoped override of a handful of values
+from an otherwise-shared list (today it's all-or-nothing: `list` = fully shared, `enum` = fully
+private) — no such request has come up, and the two-flavor model covers everything asked for so
+far.
+
+---
+
 ## 2026-09-19 — Wrap gets a line cap that truncates-with-warning (not shrink-to-fit); wrap width becomes orientation-aware, superseding the head-width clamp
 
 **Decision**: `prompts/done/2026-09-19-wrap-max-lines.md` — wrap shipped in v0.1.8 (entry
