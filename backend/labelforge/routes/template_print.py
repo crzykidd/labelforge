@@ -154,7 +154,7 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
         field_values=values,
     )
 
-    overflow = detect_overflow(tmpl, effective_media)
+    overflow = detect_overflow(tmpl, effective_media, values)
 
     return {
         "job_id": job_id,
@@ -188,7 +188,7 @@ async def preview_template(name: str, body: PrintRequest) -> Response:
     preview = image if image.mode == "RGB" else to_print_bitmap(image)
     preview.save(buf, format="PNG")
 
-    overflow = detect_overflow(tmpl, effective_media)
+    overflow = detect_overflow(tmpl, effective_media, values)
     headers: dict[str, str] = {}
     if overflow:
         headers["X-Label-Overflow"] = "true"

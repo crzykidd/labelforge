@@ -6,6 +6,7 @@ export const CUSTOM_PROPS = [
   'labelforge_qr_error_correction',
   'labelforge_barcode_payload',
   'labelforge_barcode_symbology',
+  'labelforge_wrap',
 ] as const
 
 // Continuous media report a printable length of 0 (endless roll). The editor

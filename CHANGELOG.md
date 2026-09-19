@@ -4,6 +4,16 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-09-19
+
+### Added
+
+- Text elements have an opt-in **Wrap** checkbox in the template editor. When enabled, resolved text wraps at spaces to fit the element's own box width instead of running past it; a single word too wide to wrap is left on its own line, unbroken (still reported by the overflow warning). Off by default, so existing templates are unaffected.
+
+### Fixed
+
+- A field value longer than the placeholder it was designed around (e.g. `{name}` at 150pt with `name = "Master Bedroom"`) no longer prints silently clipped. On continuous media the label now grows in whichever direction the content actually needs — previously a centre-anchored element could grow the label the wrong way and lose everything that overflowed the front. The "content may be clipped" warning also now checks the real value being printed, not just the stored placeholder, and catches a line too wide for the print head on continuous media, not just die-cut labels.
+
 ## [0.1.7] — 2026-09-19
 
 ### Fixed

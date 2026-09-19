@@ -178,7 +178,45 @@ def _paste_onto(
         canvas.paste(sub, (left, top), mask=mask)
 
 
-def _render_text_element(obj: dict, values: dict[str, str], box_w: int, box_h: int) -> Image.Image:
+def _wrap_text(text: str, font: ImageFont.FreeTypeFont, target_width: int) -> str:
+    """Word-wrap *text* at spaces so each line's rendered width fits target_width.
+
+    A paragraph (an existing "\\n"-delimited segment) that already fits is returned
+    completely unchanged — exact original spacing preserved — so wrap-on-but-fitting
+    content renders byte-identically to wrap-off (see docs/decisions.md). Only a
+    paragraph that needs wrapping is rebuilt, joining words with a single space. A
+    single word wider than target_width is never split — it is left on its own line,
+    overflowing, for overflow detection to report.
+    """
+    scratch = ImageDraw.Draw(Image.new("L", (1, 1)))
+    out_paragraphs: list[str] = []
+    for paragraph in text.split("\n"):
+        if scratch.textlength(paragraph, font=font) <= target_width:
+            out_paragraphs.append(paragraph)
+            continue
+        words = paragraph.split(" ")
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}" if current else word
+            if current and scratch.textlength(candidate, font=font) > target_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        lines.append(current)
+        out_paragraphs.append("\n".join(lines))
+    return "\n".join(out_paragraphs)
+
+
+def _render_text_element(
+    obj: dict,
+    values: dict[str, str],
+    box_w: int,
+    box_h: int,
+    *,
+    head_width: int | None = None,
+) -> Image.Image:
     raw = obj.get("labelforge_raw_content") or obj.get("text", "")
     text = resolve_content(raw, values)
 
@@ -196,6 +234,13 @@ def _render_text_element(obj: dict, values: dict[str, str], box_w: int, box_h: i
     align = obj.get("textAlign", "left")
     if align not in ("left", "center", "right"):
         align = "left"
+
+    if obj.get("labelforge_wrap"):
+        # Wrap target is the element's own box width, clamped to the print head
+        # width — the one axis that's always physically fixed regardless of
+        # media type or orientation. See docs/decisions.md.
+        target_w = box_w if head_width is None else min(box_w, head_width)
+        text = _wrap_text(text, pil_font, max(target_w, 1))
 
     # Measure actual PIL text extent — browser font metrics in Fabric differ from PIL's.
     scratch = Image.new("L", (1, 1))
@@ -269,35 +314,60 @@ def _render_barcode_element(payload: str, symbology: str, box_w: int, box_h: int
     return bw.resize((max(box_w, 1), max(box_h, 1)), Image.Resampling.NEAREST)
 
 
-def detect_overflow(template: Template, media_id: str) -> bool:
-    """True when any element falls outside the printable area for a die-cut media.
+def detect_overflow(
+    template: Template, media_id: str, values: dict[str, str] | None = None
+) -> bool:
+    """True when any element's *printed* content falls outside the printable area.
+
+    values: resolved field values. When given, text elements are measured at their
+    actual rendered size (same as render_template) rather than the stored
+    placeholder box — this is what catches a value longer than the placeholder it
+    was designed around. When omitted, text is measured by its stored box only
+    (legacy behavior).
 
     Bounds are taken in *design space*, which is transposed for a rotated template —
     the same swap render_template applies — so a rotated design is checked against
     the axes it was actually authored on.
 
-    Continuous media never overflows (canvas length is content-driven). Returns False
-    for continuous media or when the media is unknown.
+    Die-cut: any element extending past the far edge on either axis is flagged.
+    (A negative-origin excursion from element rotation is not flagged here — that's
+    an editor/off-canvas concern, not a print-overflow one; see docs/decisions.md.)
+
+    Continuous: length never overflows (the label prints longer — see
+    render_template). The print-head-width axis is still fixed, though — that's the
+    x axis normally, or y in a rotated template's transposed design frame — so a
+    line wider than the head is flagged even on continuous media.
     """
     label = get_label(media_id)
     if label is None:
         return False
-    if label.form_factor in _CONTINUOUS_FORM_FACTORS:
-        return False
-    head_width, length = label.dots_printable
-    if template.orientation == "rotated":
-        max_w, max_h = length, head_width
-    else:
-        max_w, max_h = head_width, length
+    rotated = template.orientation == "rotated"
+    head_width, die_length = label.dots_printable
+    is_continuous = label.form_factor in _CONTINUOUS_FORM_FACTORS
+    if not is_continuous:
+        max_w, max_h = (die_length, head_width) if rotated else (head_width, die_length)
+
     for obj in template.canvas_json.get("objects", []):
         raw_left = int(obj.get("left", 0))
         raw_top = int(obj.get("top", 0))
+        angle = float(obj.get("angle", 0))
+        norm_type = obj.get("type", "").lower().replace("-", "")
         w = int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
         h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
-        angle = float(obj.get("angle", 0))
+        if values is not None and norm_type in ("itext", "text", "textbox"):
+            try:
+                sub = _render_text_element(obj, values, max(w, 1), max(h, 1), head_width=head_width)
+                w, h = sub.width, sub.height
+            except RenderError:
+                pass  # fall back to the stored box; render_template will raise properly
         _, _, x1, y1 = _rotated_aabb(raw_left, raw_top, obj, w, h, angle)
-        if y1 > max_h or x1 > max_w:
-            return True
+        if is_continuous:
+            head_edge = y1 if rotated else x1
+            if head_edge > head_width:
+                return True
+        else:
+            if y1 > max_h or x1 > max_w:
+                return True
     return False
 
 
@@ -346,19 +416,34 @@ def render_template(
             box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
             box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
             try:
-                text_subs[i] = _render_text_element(obj, values, box_w, box_h)
+                text_subs[i] = _render_text_element(
+                    obj, values, box_w, box_h, head_width=head_width
+                )
             except RenderError:
                 raise
             except Exception as exc:
                 raise RenderError(f"Failed to render element 'text': {exc}") from exc
 
+    shift = 0
     if is_continuous:
         # Standard: length grows downward, tracked via the bottommost extent.
         # Rotated: the design canvas is transposed, so length is the design's
         # rightmost extent instead. Either way, a rotated *element* can push
         # extent along either design axis, so the full rotated AABB is needed —
         # not just the element's unrotated height (standard) or width (rotated).
-        extent = 0.0
+        #
+        # A centre-origin (or right/bottom-origin) element whose *resolved* value
+        # is wider than the placeholder it was designed around grows backwards
+        # past the start of the label too, not just forwards — so both the
+        # nearest and farthest edges are tracked. If the nearest edge is
+        # negative, the label wasn't long enough to hold what grew off its
+        # start: grow the canvas to cover it and shift every element forward by
+        # the same amount so nothing is lost off the front. This is a no-op
+        # (shift stays 0) whenever nothing goes negative, which is every
+        # template that already fit — see docs/decisions.md.
+        min_lo = 0.0
+        max_hi = 0.0
+        seen_any = False
         for i, obj in enumerate(objects):
             angle = float(obj.get("angle", 0))
             raw_left = int(obj.get("left", 0))
@@ -369,13 +454,29 @@ def render_template(
             else:
                 ext_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
                 ext_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
-            _, _, ext_x1, ext_y1 = _rotated_aabb(raw_left, raw_top, obj, ext_w, ext_h, angle)
-            extent = max(extent, ext_x1 if rotated else ext_y1)
-        length = max(int(math.ceil(extent)) + _PADDING, 1)
+            ext_x0, ext_y0, ext_x1, ext_y1 = _rotated_aabb(
+                raw_left, raw_top, obj, ext_w, ext_h, angle
+            )
+            lo, hi = (ext_x0, ext_x1) if rotated else (ext_y0, ext_y1)
+            if not seen_any:
+                min_lo, max_hi = lo, hi
+                seen_any = True
+            else:
+                min_lo = min(min_lo, lo)
+                max_hi = max(max_hi, hi)
+        if seen_any and min_lo < 0:
+            shift = int(math.ceil(-min_lo))
+        length = max(int(math.ceil(max_hi)) + shift + _PADDING, 1)
     else:
         length = label.dots_printable[1]
 
     canvas_w, canvas_h = (length, head_width) if rotated else (head_width, length)
+    # The shift (if any) always applies to the free/growing axis: x when the
+    # template's design frame is transposed (rotated), y otherwise. Die-cut
+    # media never shifts (shift is 0 there) — it can't grow, so an out-of-bounds
+    # element is reported by detect_overflow instead of silently repositioned.
+    shift_x = shift if rotated else 0
+    shift_y = 0 if rotated else shift
 
     if two_color:
         canvas: Image.Image = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
@@ -388,11 +489,22 @@ def render_template(
         # Fabric v6 serializes `type` as the PascalCase class name (IText, Line,
         # Rect, Image); v5 used lowercase/hyphenated (i-text). Normalize both.
         norm_type = obj_type.lower().replace("-", "")
-        anchor_x = int(obj.get("left", 0))
-        anchor_y = int(obj.get("top", 0))
+        anchor_x = int(obj.get("left", 0)) + shift_x
+        anchor_y = int(obj.get("top", 0)) + shift_y
         angle = float(obj.get("angle", 0))
         box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
         box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
+        if i in text_subs:
+            # Grow (never shrink) to the actual rendered size for origin-relative
+            # placement (center/right/bottom) — a resolved value wider/taller than
+            # the placeholder must be centered on what's really being pasted,
+            # matching the extent calc above. Real text height routinely differs
+            # (usually smaller) from the arbitrary design box height even when
+            # everything fits, so this is a max, not a replace: shrinking the
+            # effective box would shift already-fitting center/right/bottom-origin
+            # text and break byte-identical output for the common case.
+            box_w = max(box_w, text_subs[i].width)
+            box_h = max(box_h, text_subs[i].height)
         left, top = _origin_top_left(obj, anchor_x, anchor_y, box_w, box_h)
 
         try:
