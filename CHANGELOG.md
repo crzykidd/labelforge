@@ -4,6 +4,24 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-09-19
+
+### Added
+
+- Template editor: elements panel, bounds clamping, grid + snap, keyboard shortcuts, and undo/redo. An elements list beside the canvas shows every object (type + content snippet) and flags any that lie off the visible label — click a row to select it, or click its red "off canvas" flag to pull just that element back inside. When anything is off the label, a "Bring all on-canvas" button appears above the list to recover everything at once. This rescues elements that were previously invisible, unselectable, and (on continuous media) silently inflating the printed length. Dragging and resizing clamp to the label bounds and snap to the label edges, horizontal/vertical centerlines, and an optional grid (toggle in the toolbar; remembered per browser). Arrow keys nudge the selected element by 1 label pixel (Shift: 10), Delete/Backspace removes it, and Escape deselects — all suspended while editing text inline. Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo/redo up to 50 steps.
+- Element rotation snaps to 0/90/180/270° when dragged within about 8° of one of them, with a "Rotate 90°" button for a one-click quarter turn and a brief angle readout while rotating. Free rotation still works everywhere else.
+- Templates support a rotated orientation, matching Quick Print. Set it in the editor toolbar (Standard / Rotated 90°): the design canvas transposes to the label's length axis so you type upright, and Preview/print shows the label rotated a quarter turn: the top of your design prints along the label's left edge, so turning the finished label clockwise reads it the same way up as the editor showed it. Continuous media's auto-length still grows correctly under rotation. Toggling orientation on an existing template never moves or resizes its elements; a status message warns that the layout may need adjusting. Requires a container image rebuild.
+
+### Fixed
+
+- Selecting a text, QR, or barcode element in the template editor no longer reflows the toolbar and shifts the canvas down the page. Per-element controls now live in a fixed-height row that swaps its contents instead of resizing the toolbar around them.
+- The "content may be clipped" warning shown when recalling a template now checks both edges of the label and understands rotated templates. Previously it only looked at the bottom edge, so an element running off the right of a die-cut label was never flagged, and a rotated template was measured against the wrong axis.
+- CI no longer fails on unrelated pull requests. The `ruff format --check` gate reformatted Python code blocks embedded in Markdown (a behavior ruff added in 0.14), so documentation and archived handoff prompts failed the check and blocked every PR. Markdown is now excluded from ruff, and the `ruff` dev dependency is pinned to a compatible range so the toolchain no longer changes under CI without a dependency bump. No runtime change.
+
+### Changed
+
+- Rolled in three months of pending dependency updates. Runtime: FastAPI 0.141.1, pydantic-settings 2.15.0, qrcode 8.2. Build and test tooling: pytest 9.1.1, Vite 8.3.0, and the pinned GitHub Actions (checkout v7, setup-python v7, setup-node v7, codeql-action v4). No API, rendering, or printing behavior changes; the full test suite passes on the new versions.
+
 ## [0.1.5] — 2026-06-24
 
 ### Added

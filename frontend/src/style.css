@@ -339,7 +339,12 @@ button:disabled {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid #ddd;
   background: #fafafa;
+  /* Wrapping is safe now that the per-selection controls live in their own
+     fixed-height row: this toolbar's content no longer changes with selection,
+     so a wrapped second row has a stable height and nothing shifts. Do NOT
+     switch this to nowrap+overflow — that scrolls Save/Preview off-screen. */
   flex-wrap: wrap;
+  overflow-y: hidden;
 }
 
 .editor-toolbar .toolbar-sep {
@@ -347,12 +352,63 @@ button:disabled {
   height: 1.25rem;
   background: #ddd;
   margin: 0 0.25rem;
+  flex: none;
 }
 
 .editor-toolbar .editor-title {
   font-weight: 600;
   font-size: 0.9rem;
   margin-right: 0.5rem;
+  white-space: nowrap;
+}
+
+.editor-toolbar > *,
+.editor-context-row > * {
+  flex: none;
+}
+
+/* The shared input/select rule elsewhere sets width:100%, which stretches an
+   inline toolbar control (e.g. the orientation select) to fill the whole
+   flex row. Toolbar/context-row controls always size to their content. */
+.editor-toolbar select,
+.editor-toolbar input,
+.editor-context-row select,
+.editor-context-row input {
+  width: auto;
+}
+
+/* Fixed-height row for per-selection controls (text/QR/barcode + rotate),
+   always present so its contents swapping never changes the layout above or
+   below it — this is what keeps the canvas from jumping on selection change.
+   See docs/decisions.md. */
+.editor-context-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid #ddd;
+  background: #f2f2f2;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.editor-context-row .context-hint {
+  font-size: 0.82rem;
+  color: #888;
+}
+
+.editor-context-row .context-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* display:flex above ties in specificity with the UA's [hidden]{display:none}
+   and author styles win that tie — so hidden spans would render anyway
+   without this explicit override. */
+.editor-context-row .context-controls[hidden] {
+  display: none;
 }
 
 .editor-media-badge {
@@ -363,6 +419,11 @@ button:disabled {
   padding: 0.1rem 0.4rem;
 }
 
+.editor-body {
+  display: flex;
+  flex-wrap: wrap;
+}
+
 .editor-canvas-wrap {
   overflow: auto;
   background: #e0e0e0;
@@ -371,12 +432,129 @@ button:disabled {
   justify-content: center;
   padding: 1.5rem;
   min-height: 400px;
+  flex: 1 1 480px;
+  min-width: 320px;
 }
 
 .editor-canvas-inner {
   position: relative;
   box-shadow: 0 2px 12px rgba(0,0,0,0.18);
 }
+
+.snap-guide {
+  position: absolute;
+  background: #1a6fdb;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.snap-guide-v { top: 0; bottom: 0; width: 1px; }
+.snap-guide-h { left: 0; right: 0; height: 1px; }
+
+.angle-readout {
+  position: absolute;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 6;
+  white-space: nowrap;
+}
+
+.editor-toolbar button.toolbar-toggle-active {
+  background: #1a6fdb;
+  color: #fff;
+  border-color: #1a6fdb;
+}
+
+.editor-elements-panel {
+  flex: 0 0 240px;
+  max-width: 260px;
+  border-left: 1px solid #ddd;
+  background: #fafafa;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+.editor-elements-panel h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+
+.elements-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.elements-panel-header button {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.elements-panel-list {
+  max-height: 600px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.elements-panel-empty {
+  padding: 0.75rem;
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.elements-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.elements-panel-row:last-child { border-bottom: none; }
+.elements-panel-row:hover { background: #f5f7fa; }
+.elements-panel-row.out-of-bounds { background: #fdecea; }
+
+.elements-panel-type {
+  font-weight: 600;
+  min-width: 56px;
+}
+
+.elements-panel-snippet {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #555;
+}
+
+.elements-panel-fix {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: #c0392b;
+  border: none;
+  border-radius: 3px;
+  padding: 0.15rem 0.4rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.elements-panel-fix:hover { background: #a5311f; }
 
 .editor-status {
   padding: 0.4rem 0.75rem;

@@ -73,6 +73,7 @@ export interface Template {
   label_media: string;
   canvas_json: Record<string, unknown>;
   field_schema: FieldSpec[];
+  orientation: 'standard' | 'rotated';
   created_at?: string;
   updated_at?: string;
 }
@@ -82,6 +83,7 @@ export interface TemplateCreate {
   display_name?: string;
   label_media: string;
   canvas_json: Record<string, unknown>;
+  orientation?: 'standard' | 'rotated';
 }
 
 export interface TemplateLastValues {

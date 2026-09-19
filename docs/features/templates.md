@@ -77,6 +77,7 @@ templates
   label_media     text                -- e.g. "62", "62red", "29x90"
   canvas_json     text                -- serialized Fabric.js scene
   field_schema    text (json)         -- list of {name, type, required, default, increment}
+  orientation     text                -- "standard" (default) or "rotated"
   created_at      timestamp
   updated_at      timestamp
   deleted_at      timestamp nullable
@@ -108,6 +109,105 @@ The canvas matches the label media at print DPI (300dpi for QL series). A 62×10
 
 For continuous media (62mm endless), the canvas has a fixed width and a user-settable initial length. The length can grow as elements are added beyond the bottom; print length matches the bottommost element's `top + height` plus padding.
 
+### Orientation
+
+Every template stores an `orientation`: `standard` (default) or `rotated`. This mirrors Quick
+Print's rotation concept (`orientation` on `QuickPrintRequest`), but templates store it per
+template rather than reading Settings' `default_orientation` — a template's orientation is a
+property of the design, not a global default, and the two are otherwise unrelated.
+
+When `rotated`, the editor canvas is **transposed**: its width is the label's length axis and its
+height is the fixed print-head width, so you design and type upright, in normal reading
+orientation. The rendered/printed output — what Preview shows and what actually prints — is that
+canvas rotated a quarter turn, i.e. sideways relative to how it was authored. Continuous media's
+auto-length still works under rotation; it just grows along the transposed axis (the design's
+width instead of its height).
+
+Toggling orientation on an existing template **never moves or resizes elements** — `left`/`top`
+coordinates are preserved exactly, even though the canvas they sit on changes shape. There is no
+auto-reflow: a one-time status message says the layout will likely need adjusting. This is
+deliberate — a design that's visibly wrong after toggling is easier to fix than one silently
+rearranged to some guessed-at "correct" layout.
+
+### Elements panel, bounds, grid/snap, keyboard, undo
+
+The canvas has no scrollbars past its own edges, so an element dragged off it is
+otherwise invisible and unselectable — and not merely a display nuisance: it
+still renders server-side at its off-canvas position, and on continuous media a
+stray element inflates the auto-derived print length. The following exist to
+make that unrecoverable state impossible to reach, and recoverable when it's
+already happened (e.g. a template edited before this existed).
+
+**Elements panel** — a list beside the canvas (right of it at normal widths;
+wraps below the canvas on narrow windows so the canvas is never squeezed) shows
+every object on the canvas regardless of position: its type (Text / QR /
+Barcode / Line / Rect / Image) and a short content snippet. Clicking a row
+selects that object. Rows for an object currently outside the canvas bounds are
+flagged. The list re-renders on every add/remove/modify and on text edits.
+
+An off-canvas row's flag is itself a button (**"off canvas"**, not just a
+label) — clicking it clamps that one element back inside and selects it,
+without touching any other element. The panel header additionally shows a
+**"Bring all on-canvas"** button, but only while at least one element actually
+is off canvas; it clamps every out-of-bounds object at once and selects the
+first one it moved. Both exist because the per-row fix reads as the obvious
+action right where a user notices the problem, while the bulk button is faster
+once several elements need it — see docs/decisions.md for why the bulk button
+lives here instead of the main toolbar.
+
+The status line also shows a one-line hint ("N elements are off the
+label — …") the moment the off-canvas count changes away from zero, naming
+both recovery paths; it clears itself once nothing is off canvas, without
+clobbering an unrelated Save/Preview message.
+
+**Clamping** — dragging or resizing an element keeps its bounding box inside
+the canvas; you cannot drag or grow an element out of bounds. A backstop clamp
+also runs on `object:modified` and `mouse:up`, so the position actually
+committed at the end of a drag is always back-checked against the bounds
+regardless of what happened mid-drag. This only prevents new breakage. To
+repair a template that already has an off-canvas element (e.g. one created
+before this existed, or edited via raw API calls), use the elements panel's
+recovery controls described above.
+
+Bounds checks and clamping compare against the label's pixel dimensions (the
+same axis-swap `orientation` applies to the design canvas), not the on-screen
+display size — the two differ whenever the canvas is zoomed to fit the
+viewport.
+
+**Grid and snap** — the **Grid** toggle (remembered per browser) overlays a
+10-label-pixel grid, drawn as a CSS background on the canvas element itself,
+never as objects on the canvas — anything added to the canvas serializes into
+`canvas_json` and would print. Independent of the grid toggle, dragging an
+element always snaps to the canvas edges and to the horizontal/vertical
+centerlines (with a brief guide line) within a few pixels; enabling the grid
+additionally snaps to its lines. Resizing snaps the edge being dragged the same
+way.
+
+**Keyboard** — with an element selected: arrow keys nudge it 1 label pixel,
+Shift+arrow nudges 10, Delete/Backspace removes it, Escape deselects.
+Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z redoes (also available as toolbar buttons).
+None of this fires while inline-editing a text element's content, or while a
+toolbar input/select has focus — otherwise typing would move or delete the
+element being edited.
+
+**Rotation** — every element (text, QR, barcode) has a standard Fabric rotate
+handle. Rotating within about 8° of 0/90/180/270 snaps exactly to that angle;
+outside that window rotation is free. This uses Fabric's built-in
+`snapAngle`/`snapThreshold` object properties, not custom event math. A brief
+"N°" readout appears near the element while rotating, and a **"Rotate 90°"**
+button in the contextual row (visible whenever an element is selected) turns
+the current selection by 90° per click, mod 360, for discoverability without
+needing to grab the handle. Per-element rotation (the `angle` property) is
+independent of the template's `orientation` (below) — rotating one element
+does not affect the label's orientation, and vice versa.
+
+**Undo/redo** — a 50-entry snapshot stack. A snapshot is taken after every
+add/remove/modify, and once per text-editing session (debounced, not per
+keystroke). Restoring a snapshot goes through the same load path used to open a
+saved template, so QR/barcode placeholder bitmaps and the text raw-content sync
+are regenerated exactly as on initial load — not a bare Fabric deserialize,
+which would silently lose both.
+
 ### Toolbar
 
 Top: undo, redo, zoom, fit, save, save-as, preview, print
@@ -115,6 +215,15 @@ Top: undo, redo, zoom, fit, save, save-as, preview, print
 The editor title shows the friendly `display_name` (falls back to the slug when they match).
 The current label media is shown as a read-only badge next to the template name so
 the user can see what they are editing without opening any menu.
+
+The main toolbar never wraps to a second row (it scrolls horizontally instead
+at narrow widths) — selecting an element used to reflow the toolbar and shift
+the canvas down; it can no longer do either. Per-selection controls (font,
+text color, QR/barcode payload, the rotate button) live in a separate,
+fixed-height row below the main toolbar, always present, whose *contents*
+swap by selection type. When nothing is selected it shows a short hint instead
+of collapsing. **Bring all on-canvas** is not in either toolbar row — it's in
+the elements panel header, described above.
 
 **Save As** opens a modal for entering a new slug name and picking a label media
 (pre-filled with the current media). It saves the current canvas first, then calls

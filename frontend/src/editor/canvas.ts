@@ -18,6 +18,19 @@ export const CUSTOM_PROPS = [
 // See docs/features/templates.md.
 export const DEFAULT_CONTINUOUS_LENGTH_DOTS = 1000
 
+// Element rotation snaps to 0/90/180/270 within this many degrees of them;
+// free rotation otherwise. Fabric's rotate control reads these two properties
+// directly off the object (see InteractiveObject) — no custom event math.
+// Single place to tune both. See docs/features/templates.md.
+export const ROTATION_SNAP_ANGLE = 90
+export const ROTATION_SNAP_THRESHOLD = 8
+
+/** Apply the standard rotation snap to an element. Call on every created/restored object. */
+export function applyRotationSnap(obj: FabricObject): void {
+  obj.snapAngle = ROTATION_SNAP_ANGLE
+  obj.snapThreshold = ROTATION_SNAP_THRESHOLD
+}
+
 // Register all custom props so canvas.toJSON() includes them on every object automatically.
 for (const prop of CUSTOM_PROPS) {
   FabricObject.customProperties.push(prop)
@@ -52,6 +65,97 @@ export function isBarcodeType(obj: FabricObject | null | undefined): boolean {
   if (!obj) return false
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (obj as any)['labelforge_barcode_payload'] !== undefined
+}
+
+/**
+ * Human label + short content snippet for an object, used by the elements panel.
+ * Reuses the same type checks the renderer/backend rely on rather than
+ * re-deriving type logic from obj.type.
+ */
+export function describeObject(obj: FabricObject): { label: string; snippet: string } {
+  if (isTextType(obj.type)) {
+    const text = (obj as unknown as { text?: string }).text ?? ''
+    return { label: 'Text', snippet: text }
+  }
+  if (isQrType(obj)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload = (obj as any)['labelforge_qr_payload'] ?? ''
+    return { label: 'QR', snippet: String(payload) }
+  }
+  if (isBarcodeType(obj)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload = (obj as any)['labelforge_barcode_payload'] ?? ''
+    return { label: 'Barcode', snippet: String(payload) }
+  }
+  const t = (obj.type ?? '').toLowerCase()
+  if (t === 'line') return { label: 'Line', snippet: '' }
+  if (t === 'rect') return { label: 'Rect', snippet: '' }
+  if (t === 'image') return { label: 'Image', snippet: '' }
+  return { label: obj.type ?? 'Object', snippet: '' }
+}
+
+/**
+ * True when any part of obj's bounding box lies outside [0,canvasW] x [0,canvasH].
+ *
+ * getBoundingRect() reports the axis-aligned box in the object's scene/label-pixel
+ * coordinate plane — it is NOT affected by the canvas's display zoom (verified
+ * against Fabric's ObjectGeometry source: aCoords "do not depend on viewport
+ * changes"). So canvasW/canvasH here must be label pixels (the design
+ * dimensions), never canvas.width/canvas.height, which are display-scaled.
+ */
+export function isObjectOutOfBounds(obj: FabricObject, canvasW: number, canvasH: number): boolean {
+  obj.setCoords()
+  const r = obj.getBoundingRect()
+  return r.left < 0 || r.top < 0 || r.left + r.width > canvasW || r.top + r.height > canvasH
+}
+
+/**
+ * Translate obj (origin, rotation and scale untouched) so its bounding box fits
+ * within the canvas. An object larger than the canvas on an axis is centered on
+ * that axis rather than left oscillating against both edges. Returns true if it
+ * moved.
+ */
+export function clampObjectToCanvas(obj: FabricObject, canvasW: number, canvasH: number): boolean {
+  obj.setCoords()
+  const r = obj.getBoundingRect()
+  let dx = 0
+  let dy = 0
+  if (r.width >= canvasW) {
+    dx = (canvasW - r.width) / 2 - r.left
+  } else if (r.left < 0) {
+    dx = -r.left
+  } else if (r.left + r.width > canvasW) {
+    dx = canvasW - (r.left + r.width)
+  }
+  if (r.height >= canvasH) {
+    dy = (canvasH - r.height) / 2 - r.top
+  } else if (r.top < 0) {
+    dy = -r.top
+  } else if (r.top + r.height > canvasH) {
+    dy = canvasH - (r.top + r.height)
+  }
+  if (dx === 0 && dy === 0) return false
+  obj.set({ left: obj.left + dx, top: obj.top + dy })
+  obj.setCoords()
+  return true
+}
+
+/**
+ * Clamp every out-of-bounds object back inside the canvas. Backs the "Bring all
+ * on-canvas" repair action. Fires object:modified for each moved object so the
+ * existing history/elements-panel listeners pick it up like any other edit.
+ * Returns the moved objects in canvas stacking order.
+ */
+export function clampAllObjects(canvas: Canvas, canvasW: number, canvasH: number): FabricObject[] {
+  const moved: FabricObject[] = []
+  for (const obj of canvas.getObjects()) {
+    if (clampObjectToCanvas(obj, canvasW, canvasH)) moved.push(obj)
+  }
+  if (moved.length > 0) {
+    canvas.renderAll()
+    moved.forEach(obj => canvas.fire('object:modified', { target: obj }))
+  }
+  return moved
 }
 
 /**
@@ -211,6 +315,7 @@ export function addTextElement(canvas: Canvas, defaultFont: string, fill = '#000
     fill,
   })
   text.set('labelforge_raw_content', 'Text')
+  applyRotationSnap(text)
 
   // Keep raw content in sync when text changes
   text.on('changed', () => {
@@ -260,6 +365,7 @@ export async function addQrElement(
   })
   img.set('labelforge_qr_payload', payload)
   img.set('labelforge_qr_error_correction', errorCorrection)
+  applyRotationSnap(img)
 
   canvas.add(img)
   canvas.setActiveObject(img)
@@ -299,6 +405,7 @@ export async function addBarcodeElement(
   })
   img.set('labelforge_barcode_payload', payload)
   img.set('labelforge_barcode_symbology', symbology)
+  applyRotationSnap(img)
 
   canvas.add(img)
   canvas.setActiveObject(img)
@@ -358,6 +465,7 @@ export async function loadCanvasJSON(
   // Re-attach raw content sync to each loaded text object; regenerate QR/barcode placeholders.
   const refreshes: Promise<void>[] = []
   canvas.getObjects().forEach(obj => {
+    applyRotationSnap(obj)
     if (isTextType(obj.type)) {
       const t = obj as IText
       t.on('changed', () => {

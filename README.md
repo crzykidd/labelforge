@@ -6,11 +6,14 @@
 
 <p align="center">Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.</p>
 
-**Status**: Released (v0.1.5) — all v1 features are working and the app is packaged as a single Docker image.
+**Status**: Released (v0.1.6) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.1.5
+**Version:** 0.1.6
 
 ## What's New
+
+### v0.1.6 (2026-09-19) — [What's New](CHANGELOG.md#016--2026-09-19)
+Template editor overhaul: an elements panel that finds and recovers elements dragged off the label, bounds clamping, grid and snapping, keyboard shortcuts, and undo/redo. Templates gain a rotated orientation, element rotation snaps to 90°, and selecting an element no longer shifts the page. Also rolls in three months of dependency updates.
 
 ### v0.1.5 (2026-06-24) — [What's New](CHANGELOG.md#015--2026-06-24)
 Adds an "Add Barcode" button to the template editor (Code 128, Code 39, EAN-13/8, UPC-A) alongside the existing QR support.

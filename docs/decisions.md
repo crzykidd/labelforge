@@ -4,6 +4,242 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Rotation direction: 90°, so the design's top edge prints on the label's left
+
+**Decision**: `render_template` rotates a finished rotated-orientation canvas with
+`img.rotate(90, expand=True, fillcolor=white)`, not the 270° chosen the day before. The design's
+top edge now lands on the printed label's **left** edge, so turning the label a quarter turn
+clockwise reads it the same way up as the editor showed it.
+
+**Why the reversal**: the operator tested a rotated template and reported that the preview came out
+inverted — "the top of the page should be the top of the label, but when I preview the top is the
+bottom." Measured it before changing anything: with 270°, a black band across the top of the design
+canvas rendered onto the **right** fifth of the output (dark fraction 0.43 right, 0.00 left). With
+90° it lands on the left. 90° and 270° differ by exactly 180°, which is precisely the flip
+described.
+
+**What this overrides**: the original 270° was chosen for *feed order* — it put the design's left
+edge (where the editor places new elements, and where continuous auto-length starts counting) at
+the top of the image, so content authored first is printed first. That reasoning was sound but
+weighted the wrong thing. Feed order only decides which end of a continuous label emerges from the
+printer first; it does not change how the finished label reads. Reading orientation is what the
+operator sees in every preview and on every printed label, so it wins. The consequence is accepted:
+on continuous media the design's left edge is now printed last.
+
+**Guarded by a test**: `test_rotated_direction_design_top_lands_on_label_left` in
+`backend/tests/test_render_orientation.py` asserts the band lands left. The pre-existing dimension
+tests could not catch this — 90° and 270° produce identical output sizes, so a flipped constant
+renders every rotated label upside down while every size assertion still passes.
+
+**Would revisit if**: continuous-media feed order turns out to matter in practice (e.g. long labels
+being torn off before the print completes), in which case the two goals genuinely conflict and the
+direction should become a per-template or per-media choice rather than a constant.
+
+---
+
+## 2026-09-19 — Editor polish: clamp backstop over root-cause fix, fixed-height contextual row, off-canvas recovery lives at the point of discovery
+
+**Decision**: Three implementation choices for the clamp-leak/toolbar-reflow/rotation-snap work
+(`frontend/src/editor/canvas.ts`, `grid-snap.ts`, `elements-panel.ts`, `pages/template-editor.ts`,
+`style.css`), plus a placement change made mid-session from direct user feedback on a running
+build:
+
+1. **The clamp leak (issue #42) is fixed with a backstop, not a proven root cause.** `clampObjectToCanvas`
+   and `isObjectOutOfBounds` now call `obj.setCoords()` before `getBoundingRect()`, matching the
+   issue's suspected frame-lag theory — but that theory was never independently confirmed, and the
+   fix that actually guarantees the invariant is the backstop: `object:modified` and `mouse:up` now
+   re-clamp whatever object was just transformed, regardless of what happened mid-drag. Verified via
+   a Playwright harness (10-step, 80/30px-per-step violent drags past both the bottom-right and
+   top-left corners) that the bounding box lands and stays inside the label, including after Save +
+   a full page reload. If the frame-lag theory is wrong, the backstop still holds; this is
+   deliberately not contingent on being right about the cause.
+
+2. **The contextual per-selection row is a real DOM row with a fixed CSS height, not a
+   conditionally-rendered one**, and its child groups are toggled via the existing `hidden`
+   attribute. This tripped a real bug during the session: `.context-controls { display: flex }`
+   has the same specificity as the browser's default `[hidden] { display: none }`, and author
+   styles win that tie regardless of source order — so the hidden font/QR/barcode control groups
+   rendered anyway until an explicit `.context-controls[hidden] { display: none }` override was
+   added. Caught by an actual screenshot during verification, not by the DOM assertions (which
+   only checked `.hidden` the JS property, not resulting layout) — a reminder that "reasoned from
+   the code" and "observed in the browser" can disagree even when the JS logic is correct.
+
+3. **"Bring all on-canvas" moved out of the main toolbar into the elements panel header, and only
+   renders when at least one element is actually off canvas; each flagged row's "off canvas" badge
+   is itself a clickable per-element fix, not a passive label.** The original plan kept the bulk
+   button permanently in the main toolbar. The user tried the shipped build, found the button
+   before this change ("it is in a weird spot"), and proposed exactly this instead — the recovery
+   action should appear where the problem is noticed, not filed under generic edit actions. A
+   `mountElementsPanel` render-count callback (`onFlaggedChange`) drives both the panel header
+   button's visibility and a one-line status-bar hint, transitioning only when the count actually
+   changes so it doesn't fight a Save/Preview message already showing.
+
+**What would cause us to revisit**: if a future element type's bounding box isn't well-approximated
+by `getBoundingRect()` (e.g. a path with concave geometry), the backstop clamp would still square it
+off to an axis-aligned box, which may look wrong even though it's technically in-bounds — evaluate
+per-shape clamping if that type is added. If Fabric ever changes how `snapAngle`/`snapThreshold`
+interact with a non-uniform canvas zoom, re-verify the rotate-handle geometry math used only in the
+QA harness (not shipped code) — it assumes a uniform, unpanned viewport transform.
+
+---
+
+## 2026-09-18 — Template editor usability: CSS-background grid, translation-only clamp, load-path-gated undo
+
+**Decision**: Three implementation choices for the elements-panel/clamp/grid/snap/undo work
+(`frontend/src/editor/canvas.ts`, `grid-snap.ts`, `history.ts`, `keyboard.ts`,
+`elements-panel.ts`):
+
+1. **The grid is a CSS `background-image` on `.editor-canvas-inner`, never Fabric objects.**
+   Fabric's DOM manager replaces the mounted `<canvas>` element with a wrapper div sized to the
+   canvas's display (post-zoom) pixels, and `.editor-canvas-inner` shrinks to exactly that
+   wrapper's size (it has no other children and no padding) — so painting the grid on it lines
+   up with the canvas pixel-for-pixel without any extra offset bookkeeping. The grid cell size is
+   `gridSizeLabelPx * canvas.getZoom()`, i.e. converted to display pixels at paint time; nothing
+   grid-related ever touches `canvas.add()`, so it can never appear in `canvas.toJSON()`.
+
+2. **Clamp is translation-only, not resize-only, and reads `obj.getBoundingRect()`.** Verified
+   against Fabric's `ObjectGeometry` source that `aCoords`/`getBoundingRect()` are in the object's
+   scene (label-pixel) coordinate plane and explicitly "do not depend on viewport changes" — so
+   they're already unaffected by the display zoom, and using them meant clamp/snap math needed no
+   scale conversion at all (canvas.width/height, by contrast, are the display pixel dimensions set
+   via `setDimensions`, and would have been wrong to compare against). Because a translation delta
+   is invariant under origin, rotation and scale, clamping is just `obj.left/top += dx/dy` derived
+   from the bounding-rect overflow — no per-origin-case branching needed despite centered
+   origins being common in this codebase (`_origin_top_left` on the backend exists for the same
+   reason). An object larger than the canvas on an axis is centered on that axis rather than
+   pinned to one edge, to avoid the clamp fighting itself as the object is dragged past both edges.
+
+3. **Resize snapping is edge-aware via `transform.corner`, and re-pins the anchor with
+   `getPositionByOrigin`/`setPositionByOrigin`, not `obj.left`/`top` arithmetic.**
+   `object:scaling`'s event carries which handle is being dragged (`tl`/`br`/`ml`/…), so the
+   edge(s) actually moving can be snapped to the canvas edge or grid. The first pass tried
+   translating `obj.left`/`top` by the same delta used for move-clamp, but that's only correct
+   when combined with a scale change if the object's origin is `left`/`top` — for a centered
+   origin (Fabric's `ActiveSelection`, used for a multi-object selection, is anchored at its
+   center) the two edges would drift apart from the true anchor by half the size delta. Capturing
+   the anchor corner's position with `getPositionByOrigin` before the scale change and re-applying
+   it with `setPositionByOrigin` after is origin-agnostic — it's the same primitive Fabric's own
+   `rotate()` uses to preserve a centered-rotation anchor — so it holds regardless of what origin
+   the target object (or an active selection) has. This is an approximation for `angle === 0`;
+   clamping afterwards still catches the axis-aligned bounding box for a rotated object, but
+   resize-snap itself doesn't attempt anchor-correct math under rotation. Centerline snapping was
+   deliberately *not* extended to resize (only to move) — snapping a resize edge to the canvas's
+   centerline is not an operation users reach for, unlike centering a whole element.
+
+4. **Undo/redo history listeners are attached only after the initial canvas load completes**
+   (`finalizeEditorBootstrap` in `template-editor.ts`), not from `initEditor`. `loadCanvasJSON`
+   fires `object:added` per loaded element exactly like an interactive add, so wiring the
+   history-push listener earlier would record opening an existing template as 50 potential
+   undoable "edits" and burn through the bounded stack before the user touches anything.
+   Restores go through `loadCanvasJSON` (not a bare `loadFromJSON`), and a `restoring` flag on
+   `EditorHistory` — checked and set synchronously before the first `await`, guaranteeing no
+   interleaving from a rapid second Ctrl+Z — both suppresses re-entrant pushes during a restore
+   and no-ops a redundant undo/redo call outright.
+
+**What would cause us to revisit**: if a future element type needs a bounding box that isn't
+axis-aligned in scene space (Fabric's `getBoundingRect()` always is), or if resize handles grow
+beyond Fabric's default 8-corner/side set (the `corner.includes('l'|'r'|'t'|'b')` parsing assumes
+that naming).
+
+---
+
+## 2026-09-18 — Template orientation: rotate the finished canvas; no auto-reflow on toggle
+
+> **Superseded in part on 2026-09-19 — the rotation is now 90°, not 270°.** See the
+> "Rotation direction" entry at the top of this log. The reasoning below about the
+> transposed canvas, the print-head-width invariant and no-auto-reflow all still stand;
+> only the direction constant changed.
+
+**Decision**: `render_template` draws every element on a canvas transposed to the label's length
+axis when `orientation == "rotated"` (mirroring the editor, which transposes the same way), then
+rotates the *finished* canvas once with `img.rotate(270, expand=True, fillcolor=white)` —
+**270, not the 90 that Quick Print's text renderer uses** (`render/text.py:90-91`). Toggling
+orientation on an existing template preserves element `left`/`top` exactly; nothing is reflowed to
+compensate, and the editor shows a one-time inline warning instead.
+
+**Why 270, not 90**: Quick Print's rotation and this one solve different geometry problems. Quick
+Print rotates an already-finished, correctly-invariant image as a cosmetic flourish. Templates
+instead *build* the design on a deliberately transposed canvas (width = length axis, height =
+head width) and must rotate it back to restore the print-head-width invariant `printer/client.py`
+relies on (`rotate="0"`, confirmed against `brother_ql`'s own `convert()`: for die-cut media it
+raises `ValueError` on any size mismatch, and for continuous media it silently rescales, so the
+final size must be exact, not approximately right). Tracing pixels through both rotations
+(`Image.rotate(90/270, expand=True)` on a marked test image) showed that only 270° maps the design's
+left edge — where the editor places new elements, and where continuous auto-length starts counting
+— to the top of the final image (printed/fed first). 90° maps the design's left edge to the
+*bottom* of the final image, i.e. printed last, which would make content authored first come out
+of the printer last. Both directions produce upright, non-mirrored text (a pure rotation, not a
+reflection); 270 was chosen for this feed-order consistency, not glyph orientation. Verified with
+`backend/tests/test_render_orientation.py`, including the continuous-media case where length must
+grow along the flipped axis.
+
+**Why no auto-reflow on toggling orientation**: Once elements are transposed onto swapped axes,
+there is no single mechanically "correct" repositioning that preserves design intent — reflowing
+would silently rearrange a user's layout based on a guess. The prompt for this feature was explicit
+that visibly wrong (unchanged coordinates, now possibly out of bounds) beats mysteriously
+rearranged. The editor instead resizes the live canvas in place (`setDimensions`/`setZoom`,
+preserving every object) and shows a one-time status message that the layout will need adjusting.
+
+**Known gap (resolved in follow-up)**: `detect_overflow` (the die-cut "content may be clipped"
+recall warning) compared against the standard-orientation bound, so it under-warned on a rotated
+die-cut template. It now takes its bounds in design space, applying the same transposition
+`render_template` does. The same change also made it check the horizontal edge, which it had
+never done — an element running off the right of a die-cut label was previously unflagged
+regardless of orientation.
+
+**Considered**: mirroring Quick Print's `rotate(90)` literally, per the prompt's initial framing —
+rejected once the pixel trace showed it inverts feed order relative to the standard orientation's
+existing top-to-bottom convention. Auto-reflowing element positions on toggle — rejected, see above.
+
+---
+
+## 2026-09-18 — Markdown is excluded from ruff; `ruff` is pinned to a compatible range
+
+**Decision**: `[tool.ruff] extend-exclude = ["*.md"]` in `pyproject.toml`, and the `ruff` dev
+dependency moves from `>=0.7` to `>=0.16.8,<0.17`.
+
+**Problem**: CI (`.github/workflows/ci.yml`) runs `ruff format --check .` and installs whatever
+`pip install -e .[dev]` resolves. `ruff>=0.7` resolved to 0.16.x, and ruff 0.14 added formatting
+of Python code blocks *inside Markdown files*. Four files — `docs/decisions.md`,
+`docs/features/label-catalog.md`, and two archived prompts under `prompts/done/` — contain
+hand-written Python snippets the formatter wanted to rewrite, so `ruff format --check` exited 1.
+This failed the `python` job on every pull request regardless of its contents (observed on
+dependabot PR #41, run 33476806899), which blocked all seven open dependency PRs and therefore
+the next release.
+
+**Why exclude rather than reformat**: Running `ruff format .` once would make CI green today, but
+Markdown here is prose. ADRs are historical records and `prompts/done/` is an archive — rewriting
+code samples inside them edits the record to satisfy a linter. It also recurs: every future ADR or
+handoff prompt containing a Python block would have to be formatter-clean, which is a papercut on
+exactly the documentation the workflow requires on every change. The formatter's job in this repo
+is the 42 files under `backend/`.
+
+**Why an upper bound on `ruff` specifically**: This failure was pure toolchain drift — nothing in
+the repo changed, CI simply resolved a newer ruff with a wider scope. Every other dependency here
+uses a bare `>=`, and this is a deliberate deviation for the one tool whose output is a pass/fail
+gate. With `<0.17`, a ruff release that changes formatting behavior arrives as a dependabot PR that
+can be reviewed and merged, instead of silently reddening an unrelated PR. The bound is on the dev
+extra only and has no runtime effect.
+
+**Considered**:
+- `ruff format .` and commit the reformatted Markdown — rejected, see above.
+- Excluding only `prompts/**` — rejected; it does not fix it. Two of the four failing files are in
+  `docs/`, so the problem is Markdown generally, not the prompt archive.
+- Dropping `ruff format --check` from CI — rejected; formatting consistency on the Python source is
+  worth keeping, and it is the Markdown scope that is unwanted, not the gate.
+- Pinning without the exclusion (merging dependabot #37, `ruff>=0.15.20`) — rejected; 0.15 already
+  has the Markdown behavior, so this alone leaves CI red.
+
+**Note**: dependabot PR #37 (`ruff>=0.7` → `>=0.15.20`) is superseded by this change and can be
+closed. `extend-exclude` predates the pin and works on older ruff, so the exclusion is not dependent
+on the version bump.
+
+**Would revisit if**: ruff gains a setting to disable embedded-Markdown formatting specifically (the
+exclusion could then narrow to that knob, restoring linting of Markdown for other rules); or if
+keeping the upper bound in sync becomes more friction than the drift it prevents.
+
+---
+
 ## 2026-06-24 — Barcode editor element mirrors QR exactly (Fabric Image + custom props + client placeholder + server-side render); fixes latent CUSTOM_PROPS bug
 
 **Decision**: The barcode editor element follows the exact same pattern as QR: a Fabric `FabricImage` (serializes as `type: "Image"`) carrying two custom props — `labelforge_barcode_payload` and `labelforge_barcode_symbology` (default `"code128"`). A rectangular placeholder PNG (300×100 default, landscape to evoke a barcode form factor) is drawn client-side. No JS barcode library is added. The real barcode is rendered server-side at Preview/print time by `_render_barcode_element` in `render/template.py`.

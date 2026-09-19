@@ -71,6 +71,7 @@ class Template(BaseModel):
     label_media: str
     canvas_json: dict
     field_schema: list[FieldSpec]
+    orientation: Literal["standard", "rotated"] = "standard"
     created_at: str
     updated_at: str
 
@@ -81,6 +82,7 @@ class TemplateCreate(BaseModel):
     label_media: str
     canvas_json: dict
     field_schema: list[FieldSpec] = []
+    orientation: Literal["standard", "rotated"] = "standard"
 
 
 class TemplateUpdate(BaseModel):
@@ -88,6 +90,7 @@ class TemplateUpdate(BaseModel):
     label_media: str | None = None
     canvas_json: dict | None = None
     field_schema: list[FieldSpec] | None = None
+    orientation: Literal["standard", "rotated"] | None = None
 
 
 # ── Print / batch ─────────────────────────────────────────────────────────────
