@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-09-19
+
 ### Added
 
 - Template fields can now be edited from the editor: a new **FIELDS** panel (below Elements) lets you set each field's type, required, default, and — for the first time — **increment**, closing a gap where batch/increment printing was fully wired at recall but had no way to turn it on. Two new field types round this out: **List** resolves its recall options from a named, reusable value list shared by every template that uses a field with that name (e.g. `{room}` on any template offers the same "room" list, edited once from an **E** drawer next to the field); **Enum** keeps a one-off set of options scoped to just that template. Deleting a shared list doesn't affect existing templates or print history — a field pointing at a missing list just recalls as free text.
@@ -11,12 +13,12 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 ### Fixed
 
 - Saving a template's field schema (via the new FIELDS panel) no longer gets silently discarded. `PUT /api/templates/{name}` was recomputing the schema from the *previously stored* one whenever `canvas_json` was also present in the request — which it always is on a normal Save — so any field-property edit sent in that same request was reverted immediately.
+- Wrap's target width is now orientation-aware. On a rotated template, text runs along the free length axis instead of the fixed print-head width, so it no longer wraps prematurely there — it only clamps to the print-head width when the element's own rotation actually puts it on that axis.
+- Printing a template no longer stays silent about overflow when no preview was run first — the print confirmation now shows the same overflow warning the preview does.
 
 ### Changed
 
 - Wrap is now capped at a chosen number of lines instead of wrapping unlimited: the editor's Wrap checkbox is replaced with a select (**Off / No limit / 2 / 3 / 4 / 5 lines**). Content that needs more lines than the cap is truncated, and the same "content may be clipped" overflow warning used elsewhere flags it — never silent. Existing templates saved with wrap on and no cap keep wrapping unlimited, unchanged.
-- Wrap's target width is now orientation-aware. On a rotated template, text runs along the free length axis instead of the fixed print-head width, so it no longer wraps prematurely there — it only clamps to the print-head width when the element's own rotation actually puts it on that axis.
-- Printing a template no longer stays silent about overflow when no preview was run first — the print confirmation now shows the same overflow warning the preview does.
 
 ## [0.1.8] — 2026-09-19
 
