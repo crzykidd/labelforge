@@ -178,7 +178,9 @@ def _paste_onto(
         canvas.paste(sub, (left, top), mask=mask)
 
 
-def _wrap_text(text: str, font: ImageFont.FreeTypeFont, target_width: int) -> str:
+def _wrap_text(
+    text: str, font: ImageFont.FreeTypeFont, target_width: int, max_lines: int = 0
+) -> tuple[str, bool]:
     """Word-wrap *text* at spaces so each line's rendered width fits target_width.
 
     A paragraph (an existing "\\n"-delimited segment) that already fits is returned
@@ -187,12 +189,29 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, target_width: int) -> st
     paragraph that needs wrapping is rebuilt, joining words with a single space. A
     single word wider than target_width is never split — it is left on its own line,
     overflowing, for overflow detection to report.
+
+    max_lines: 0 (default) means unlimited — the v0.1.8 behavior, and the code path
+    below is untouched byte-for-byte in that case (the `remaining` budget is always
+    None, so no truncation branch is ever taken). When positive, it caps the *total*
+    number of lines across every paragraph combined: each line is still greedily
+    filled first ("go to the first break that uses all the space" — the operator's
+    words), and once the cumulative budget runs out the remainder — whether the rest
+    of the current paragraph's lines, or entire following paragraphs — is dropped and
+    the second return value is True. Truncation is never silent: the caller must
+    surface that flag as overflow (see docs/decisions.md).
     """
     scratch = ImageDraw.Draw(Image.new("L", (1, 1)))
     out_paragraphs: list[str] = []
+    lines_used = 0
+    truncated = False
     for paragraph in text.split("\n"):
+        if max_lines and lines_used >= max_lines:
+            truncated = True
+            break
+        remaining = max_lines - lines_used if max_lines else None
         if scratch.textlength(paragraph, font=font) <= target_width:
             out_paragraphs.append(paragraph)
+            lines_used += 1
             continue
         words = paragraph.split(" ")
         lines: list[str] = []
@@ -205,8 +224,41 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, target_width: int) -> st
             else:
                 current = candidate
         lines.append(current)
+        if remaining is not None and len(lines) > remaining:
+            lines = lines[:remaining]
+            truncated = True
         out_paragraphs.append("\n".join(lines))
-    return "\n".join(out_paragraphs)
+        lines_used += len(lines)
+    return "\n".join(out_paragraphs), truncated
+
+
+def _wrap_target_width(box_w: float, head_width: int | None, angle: float, rotated: bool) -> float:
+    """The wrap target width: the axis the text actually runs along.
+
+    Text runs along the element's own local x-axis (`box_w`'s direction). Composing
+    the element's own rotation (`angle`) with the template's orientation (which
+    transposes the whole design canvas onto the length axis — see render_template's
+    docstring) determines whether that local axis lands on the print head's fixed
+    ceiling or the free length axis. This reuses the same rotation composition
+    `_rotated_aabb` uses (radians, cos/sin) rather than a second, divergent formula.
+
+    - angle ~ 0/180 in a standard template, or angle ~ 90/270 in a rotated
+      template: box_w's axis coincides with the head-width axis, so it's a hard
+      ceiling — `min(box_w, head_width)`, the original (pre-orientation-aware)
+      behavior, preserved byte-for-byte for the common unrotated case.
+    - Otherwise the local x-axis has been transposed onto the free length axis
+      (unbounded for continuous media, and this is exactly the "rotated template"
+      case the wrap width was wrapping too early on) — box_w alone governs, with
+      no head_width clamp.
+    """
+    if head_width is None:
+        return box_w
+    rad = math.radians(angle)
+    box_w_is_x_axis = abs(math.cos(rad)) >= abs(math.sin(rad))
+    head_axis_is_x = not rotated
+    if box_w_is_x_axis == head_axis_is_x:
+        return min(box_w, head_width)
+    return box_w
 
 
 def _render_text_element(
@@ -216,7 +268,8 @@ def _render_text_element(
     box_h: int,
     *,
     head_width: int | None = None,
-) -> Image.Image:
+    rotated: bool = False,
+) -> tuple[Image.Image, bool]:
     raw = obj.get("labelforge_raw_content") or obj.get("text", "")
     text = resolve_content(raw, values)
 
@@ -235,12 +288,12 @@ def _render_text_element(
     if align not in ("left", "center", "right"):
         align = "left"
 
+    truncated = False
     if obj.get("labelforge_wrap"):
-        # Wrap target is the element's own box width, clamped to the print head
-        # width — the one axis that's always physically fixed regardless of
-        # media type or orientation. See docs/decisions.md.
-        target_w = box_w if head_width is None else min(box_w, head_width)
-        text = _wrap_text(text, pil_font, max(target_w, 1))
+        angle = float(obj.get("angle", 0))
+        target_w = _wrap_target_width(box_w, head_width, angle, rotated)
+        max_lines = int(obj.get("labelforge_wrap_max_lines") or 0)
+        text, truncated = _wrap_text(text, pil_font, max(int(target_w), 1), max_lines)
 
     # Measure actual PIL text extent — browser font metrics in Fabric differ from PIL's.
     scratch = Image.new("L", (1, 1))
@@ -254,7 +307,7 @@ def _render_text_element(
     draw = ImageDraw.Draw(sub)
     # Cancel any positive ascender gap so ink starts at y=0, not shifted down.
     draw.multiline_text((0, -bbox[1]), text, font=pil_font, fill=0, align=align, spacing=4)
-    return sub
+    return sub, truncated
 
 
 def _render_qr_element(payload: str, correction: str, box_w: int, box_h: int) -> Image.Image:
@@ -337,6 +390,13 @@ def detect_overflow(
     render_template). The print-head-width axis is still fixed, though — that's the
     x axis normally, or y in a rotated template's transposed design frame — so a
     line wider than the head is flagged even on continuous media.
+
+    Wrap truncation: when `values` is given and a wrapped element's content needed
+    more lines than its `labelforge_wrap_max_lines` cap, the excess is dropped by
+    `_render_text_element`/`_wrap_text` — that never shrinks the element's AABB
+    below the printable area, so it can't be caught by the bounds checks above. It
+    is reported directly instead: any truncated element makes this return True. See
+    docs/decisions.md (truncate-with-warning, not shrink-to-fit).
     """
     label = get_label(media_id)
     if label is None:
@@ -356,8 +416,12 @@ def detect_overflow(
         h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
         if values is not None and norm_type in ("itext", "text", "textbox"):
             try:
-                sub = _render_text_element(obj, values, max(w, 1), max(h, 1), head_width=head_width)
+                sub, truncated = _render_text_element(
+                    obj, values, max(w, 1), max(h, 1), head_width=head_width, rotated=rotated
+                )
                 w, h = sub.width, sub.height
+                if truncated:
+                    return True
             except RenderError:
                 pass  # fall back to the stored box; render_template will raise properly
         _, _, x1, y1 = _rotated_aabb(raw_left, raw_top, obj, w, h, angle)
@@ -416,8 +480,11 @@ def render_template(
             box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
             box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
             try:
-                text_subs[i] = _render_text_element(
-                    obj, values, box_w, box_h, head_width=head_width
+                # Truncation (if any) is surfaced separately by detect_overflow's own
+                # call to this function — the print/preview routes always re-run it
+                # against the same values, so it's the single source of the warning.
+                text_subs[i], _truncated = _render_text_element(
+                    obj, values, box_w, box_h, head_width=head_width, rotated=rotated
                 )
             except RenderError:
                 raise

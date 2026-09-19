@@ -100,6 +100,7 @@ Standard Fabric.js objects with extensions:
 - Text: `text`, `fontFamily`, `fontSize`, `fontWeight`, `fontStyle`, `textAlign`
   - Extension: `labelforge_raw_content` — original string with `{placeholders}`, used to re-derive fields on edit
   - Extension: `labelforge_wrap` (boolean, default `false`/absent) — word-wrap at spaces to fit the element's box width; see Wrap, below
+  - Extension: `labelforge_wrap_max_lines` (integer, default `0` = no limit) — caps wrapped output at this many lines, truncating and flagging overflow beyond it; see Wrap, below
 - QR code: stored as Fabric `Image` with extension `labelforge_qr_payload` (string with placeholders) and `labelforge_qr_error_correction` (`L`/`M`/`Q`/`H`)
 - Barcode: same pattern with `labelforge_barcode_payload` and `labelforge_barcode_symbology`
 - Image: standard Fabric image with extension `labelforge_image_id` pointing to an entry in an `images` table
@@ -239,17 +240,34 @@ which would silently lose both.
 
 ### Wrap
 
-Every text element has an opt-in **Wrap** checkbox in the contextual control row (default
-off — existing templates are unaffected). When enabled, the *resolved* text (after field
-substitution) is word-wrapped at spaces to fit the element's own box width
-(`width × scaleX`), clamped to the print head width — the one axis that's always physically
-fixed regardless of media type or template orientation. This makes the wrap width something
-the user controls directly by sizing the box.
+Every text element has an opt-in **Wrap** control in the contextual control row: a select
+with **Off / No limit / 2 / 3 / 4 / 5 lines** (default Off — existing templates are
+unaffected). When enabled, the *resolved* text (after field substitution) is word-wrapped at
+spaces to fit the element's own box width (`width × scaleX`). "No limit" wraps to as many
+lines as needed (the v0.1.8 behavior — a template saved before the cap existed, with
+`labelforge_wrap: true` and no `labelforge_wrap_max_lines`, keeps rendering exactly as it
+did, byte-for-byte). Choosing 2–5 sets `labelforge_wrap_max_lines`: each line is still
+greedily filled first (as much text as fits before breaking), and once the content needs
+more lines than the cap, the remainder is **truncated** — not shrunk to fit — and the print
+and preview responses' existing `overflow` flag is set, surfacing the same warning the
+recall page already shows for any other kind of overflow. Truncation is a deliberate
+operator choice over auto-shrinking text to fit: it keeps font size predictable and pairs a
+visible warning with the one case it can't avoid. See docs/decisions.md.
+
+The wrap target width is orientation-aware: text runs along whichever axis the element's
+local width actually maps onto once its own `angle` composes with the template's
+`orientation`. On a **standard** (unrotated) template with an axis-aligned element, that's
+still the print-head width — a hard, physical ceiling, exactly as before. On a **rotated**
+template, the design canvas is transposed and text normally runs along the free (tape)
+length axis instead, which is effectively unbounded — clamping to the print-head width there
+wrapped far too early. The element's own `angle` can flip this again (a 90°-rotated element
+inside a rotated template lands back on the head-width axis) — the renderer composes both
+rotations rather than special-casing orientation alone.
 
 Wrapping only ever breaks at a space; it never hyphenates or splits a word mid-character. A
 single word wider than the target width is left on its own line, overflowing — the overflow
-warning (above) catches this case, since wrap can't fix it. A value that already fits on one
-line renders identically whether Wrap is on or off.
+warning (above) catches this case too, since wrap can't fix it. A value that already fits on
+one line, or within its line cap, renders identically whether Wrap is on or off.
 
 Wrap is a per-element choice, not automatic, because auto-wrapping every text element would
 silently change the layout of templates that currently rely on a fixed one-line box (e.g. a

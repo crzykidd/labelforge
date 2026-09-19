@@ -106,8 +106,16 @@ export function mountTemplateEditor(root: HTMLElement): void {
             <option value="#ff0000">Red</option>
           </select>
           <span class="toolbar-sep"></span>
-          <label title="Wrap this element's text at spaces to fit its box width. A single word wider than the box is never split, and still prints past the edge.">
-            <input id="text-wrap" type="checkbox" /> Wrap
+          <label title="Wrap this element's text at spaces to fit its box width, capped at a maximum number of lines. A single word wider than the box is never split. Content beyond the cap is truncated and flagged as overflow.">
+            Wrap
+            <select id="text-wrap">
+              <option value="off">Off</option>
+              <option value="nolimit">No limit</option>
+              <option value="2">2 lines</option>
+              <option value="3">3 lines</option>
+              <option value="4">4 lines</option>
+              <option value="5">5 lines</option>
+            </select>
           </label>
         </span>
         <span class="context-controls" id="context-controls-qr" hidden>
@@ -162,7 +170,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const fontSelect = root.querySelector<HTMLSelectElement>('#font-select')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
   const textColorSelect = root.querySelector<HTMLSelectElement>('#text-color')!
-  const textWrapCheckbox = root.querySelector<HTMLInputElement>('#text-wrap')!
+  const textWrapSelect = root.querySelector<HTMLSelectElement>('#text-wrap')!
   const qrPayloadInput = root.querySelector<HTMLInputElement>('#qr-payload')!
   const qrEcSelect = root.querySelector<HTMLSelectElement>('#qr-ec')!
   const barcodePayloadInput = root.querySelector<HTMLInputElement>('#barcode-payload')!
@@ -407,7 +415,18 @@ export function mountTemplateEditor(root: HTMLElement): void {
       textColorSelect.value = wantRed ? '#ff0000' : '#000000'
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    textWrapCheckbox.checked = Boolean((obj as any)['labelforge_wrap'])
+    const wrapObj = obj as any
+    const wrapOn = Boolean(wrapObj['labelforge_wrap'])
+    const maxLines = Number(wrapObj['labelforge_wrap_max_lines']) || 0
+    if (!wrapOn) {
+      textWrapSelect.value = 'off'
+    } else if (maxLines >= 2 && maxLines <= 5) {
+      textWrapSelect.value = String(maxLines)
+    } else {
+      // v0.1.8 templates saved with wrap on and no cap — show as unlimited
+      // rather than silently coercing them to a cap the user never chose.
+      textWrapSelect.value = 'nolimit'
+    }
   }
 
   fontSelect.addEventListener('change', () => {
@@ -440,11 +459,21 @@ export function mountTemplateEditor(root: HTMLElement): void {
     }
   })
 
-  textWrapCheckbox.addEventListener('change', () => {
+  textWrapSelect.addEventListener('change', () => {
     if (!fabricCanvas) return
     const obj = fabricCanvas.getActiveObject()
     if (obj && isTextType(obj.type)) {
-      obj.set('labelforge_wrap', textWrapCheckbox.checked)
+      const val = textWrapSelect.value
+      if (val === 'off') {
+        obj.set('labelforge_wrap', false)
+        obj.set('labelforge_wrap_max_lines', 0)
+      } else if (val === 'nolimit') {
+        obj.set('labelforge_wrap', true)
+        obj.set('labelforge_wrap_max_lines', 0)
+      } else {
+        obj.set('labelforge_wrap', true)
+        obj.set('labelforge_wrap_max_lines', parseInt(val, 10))
+      }
       fabricCanvas.renderAll()
     }
   })

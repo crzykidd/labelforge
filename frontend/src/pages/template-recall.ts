@@ -128,7 +128,7 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
         <p class="recall-meta">Print media (default: <code>${esc(tpl.label_media)}</code>):</p>
         <div id="media-selector-container"></div>
         <p id="mono-red-notice" class="recall-notice info" hidden>This label is black-only — red elements will print in black.</p>
-        <p id="overflow-notice" class="recall-notice warn" hidden>Content may be clipped — it's taller than this label.</p>
+        <p id="overflow-notice" class="recall-notice warn" hidden>Content may be clipped — some of it doesn't fit this label.</p>
       </div>
 
       <form id="recall-form" autocomplete="off">
@@ -388,8 +388,14 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
         )
       } else {
         const result = await printTemplate(tpl.name, collectFields(), mediaOverride, override)
+        // Print is allowed to run without a preceding Preview (e.g. no required
+        // fields, previewStale still false) — so the print response's own
+        // overflow flag is the only guaranteed place a truncation warning can
+        // surface for that path. Show it regardless of preview state.
+        overflowNotice.hidden = !result.overflow
         showStatus(
-          `Sent — job #${result.job_id} (status: ${result.status}). "Sent" means the job was transmitted to the printer; delivery is not confirmed.`,
+          `Sent — job #${result.job_id} (status: ${result.status}). "Sent" means the job was transmitted to the printer; delivery is not confirmed.` +
+            (result.overflow ? ' Warning: some content may not have fit this label.' : ''),
           'success',
         )
       }
