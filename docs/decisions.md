@@ -4,6 +4,54 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Element rotation pivots about the Fabric origin point, not the box's own centre
+
+**Decision**: `backend/labelforge/render/template.py` now computes every rotation-aware
+extent and paste position by pivoting about the element's raw `left`/`top` (its Fabric
+anchor point) rather than the unrotated box's geometric centre. A new helper, `_rotated_aabb`,
+resolves the origin via the existing `_origin_top_left`, finds the box's own (unrotated)
+centre, and swings that centre around the anchor by `angle` degrees to get the true
+world-space centre; the AABB size itself uses the standard pivot-independent formula
+`w' = |w·cosθ| + |h·sinθ|`, `h' = |w·sinθ| + |h·cosθ|`. `_paste_onto` uses the same swing
+to decide where to paste the PIL-rotated (centre-pivoted, expand=True) sub-image. `angle == 0`
+is short-circuited before any trig runs, so unrotated output is untouched bit-for-bit.
+
+**Why this pivot, not the box centre**: read directly from Fabric.js 7's source
+(`frontend/node_modules/fabric/dist/index.node.mjs`, `Object.calcOwnMatrix` /
+`getRelativeCenterPoint` / `translateToCenterPoint`) and cross-checked by instantiating a
+real Fabric object in Node: a `left`/`top`-origin `Rect` at `(20,20)`, `400×60`, `angle=90`
+reports `calcACoords().tl === {20,20}` (the anchor never moves) while its other three
+corners swing around it — `tr` lands at `(20,421)`, not at the naive "rotate about centre"
+position. Fabric 7 *does* default new objects to centre origin (where anchor and centre
+coincide, so the old code's centre-pivot already looked correct for text/rect/most
+elements) — but `addQrElement`/`addBarcodeElement` in `frontend/src/editor/canvas.ts`
+explicitly set `originX:'left', originY:'top'`, and for those, pivoting about the box's own
+centre put a rotated QR/barcode in the wrong place relative to what the editor shows.
+
+**Operator impact this fixes**: *"if I just hit rotate 90 button and leave everything the
+same on a working label, it puts the text at the bottom of the label not the top so it
+prints a huge blank spot. When we rotate 90 it should start the print at the top of the
+label and it should be variable length based on the length of text."* Reproduced before
+the fix: a 90°-rotated `IText` on continuous 62mm media rendered on a canvas whose length
+never grew (still sized for the unrotated ~60px-tall box instead of the rotated ~400px-tall
+one), so the text ran off the bottom with zero blank margin. After the fix, the same
+template's continuous length grows to fit the rotated content and the ink starts near the
+top, matching the editor. See `backend/tests/test_render_rotation.py`.
+
+**Non-obvious consequence, noted for the record**: pivoting about the anchor means a
+left/top-origin element rotated near the edge of its bounding area can swing *into negative
+coordinates* (off-canvas) even though it looked fine unrotated — this is correct Fabric
+behavior (verified against the library directly), not a bug in the renderer. The editor
+already has off-canvas detection/recovery (elements panel, clamp) from the 2026-09-19 "Editor
+polish" work below, so this is a pre-existing UI concern, not something the backend fix
+needs to prevent.
+
+**Would revisit if**: Fabric's own rotation semantics change in a future major version (the
+pivot derivation above is tied to Fabric 7's `calcOwnMatrix`), or if a non-Fabric client
+starts producing `canvas_json` with different pivot semantics.
+
+---
+
 ## 2026-09-19 — Rotation direction: 90°, so the design's top edge prints on the label's left
 
 **Decision**: `render_template` rotates a finished rotated-orientation canvas with

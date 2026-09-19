@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Rotating an element 90° no longer prints it clipped with a large blank area above it. The server renderer now accounts for an element's rotation when sizing a continuous-media label (so the print length grows to fit the rotated content, matching the editor) and when checking a die-cut label for overflow. It also rotates left/top-origin elements (QR codes, barcodes) about the same point Fabric does in the editor, so their printed position matches what's shown on screen. Unrotated templates are unaffected.
+
 ## [0.1.6] — 2026-09-19
 
 ### Added
