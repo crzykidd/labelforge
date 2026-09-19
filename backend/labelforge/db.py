@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS templates (
     label_media  TEXT NOT NULL,
     canvas_json  TEXT NOT NULL,
     field_schema TEXT NOT NULL DEFAULT '[]',
+    orientation  TEXT NOT NULL DEFAULT 'standard',
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
     deleted_at   TEXT NULL
@@ -59,12 +60,27 @@ def _migrate_print_jobs(conn: sqlite3.Connection) -> None:
         logger.info("Applied print_jobs migrations: added column(s) %s", ", ".join(added))
 
 
+def _migrate_templates(conn: sqlite3.Connection) -> None:
+    """Idempotently add columns to templates that post-date the initial schema."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(templates)")}
+    added = []
+    if "orientation" not in existing:
+        conn.execute(
+            "ALTER TABLE templates ADD COLUMN orientation TEXT NOT NULL DEFAULT 'standard'"
+        )
+        added.append("orientation")
+    conn.commit()
+    if added:
+        logger.info("Applied templates migrations: added column(s) %s", ", ".join(added))
+
+
 def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     is_new = not db_path.exists()
     conn = get_connection(db_path)
     conn.executescript(_SCHEMA)
     _migrate_print_jobs(conn)
+    _migrate_templates(conn)
     conn.close()
     if is_new:
         logger.info("Database created at %s", db_path)

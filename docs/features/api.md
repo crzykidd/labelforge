@@ -47,6 +47,10 @@ POST   /api/templates/{name}/duplicate          Save As (new name, new label med
 GET    /api/templates/{name}/last-values        Field values from this template's last print
 ```
 
+Create/update bodies and the template response all carry `orientation: "standard" | "rotated"`
+(create/response default to `"standard"`; omit it on update to leave it unchanged). `duplicate`
+takes no `orientation` — Save As always inherits the source template's orientation.
+
 ### Printing
 
 ```

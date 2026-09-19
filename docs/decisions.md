@@ -4,6 +4,49 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-18 — Template orientation: rotate the finished canvas 270°, not 90°; no auto-reflow on toggle
+
+**Decision**: `render_template` draws every element on a canvas transposed to the label's length
+axis when `orientation == "rotated"` (mirroring the editor, which transposes the same way), then
+rotates the *finished* canvas once with `img.rotate(270, expand=True, fillcolor=white)` —
+**270, not the 90 that Quick Print's text renderer uses** (`render/text.py:90-91`). Toggling
+orientation on an existing template preserves element `left`/`top` exactly; nothing is reflowed to
+compensate, and the editor shows a one-time inline warning instead.
+
+**Why 270, not 90**: Quick Print's rotation and this one solve different geometry problems. Quick
+Print rotates an already-finished, correctly-invariant image as a cosmetic flourish. Templates
+instead *build* the design on a deliberately transposed canvas (width = length axis, height =
+head width) and must rotate it back to restore the print-head-width invariant `printer/client.py`
+relies on (`rotate="0"`, confirmed against `brother_ql`'s own `convert()`: for die-cut media it
+raises `ValueError` on any size mismatch, and for continuous media it silently rescales, so the
+final size must be exact, not approximately right). Tracing pixels through both rotations
+(`Image.rotate(90/270, expand=True)` on a marked test image) showed that only 270° maps the design's
+left edge — where the editor places new elements, and where continuous auto-length starts counting
+— to the top of the final image (printed/fed first). 90° maps the design's left edge to the
+*bottom* of the final image, i.e. printed last, which would make content authored first come out
+of the printer last. Both directions produce upright, non-mirrored text (a pure rotation, not a
+reflection); 270 was chosen for this feed-order consistency, not glyph orientation. Verified with
+`backend/tests/test_render_orientation.py`, including the continuous-media case where length must
+grow along the flipped axis.
+
+**Why no auto-reflow on toggling orientation**: Once elements are transposed onto swapped axes,
+there is no single mechanically "correct" repositioning that preserves design intent — reflowing
+would silently rearrange a user's layout based on a guess. The prompt for this feature was explicit
+that visibly wrong (unchanged coordinates, now possibly out of bounds) beats mysteriously
+rearranged. The editor instead resizes the live canvas in place (`setDimensions`/`setZoom`,
+preserving every object) and shows a one-time status message that the layout will need adjusting.
+
+**Known gap**: `detect_overflow` (used for the die-cut "content may be clipped" recall warning)
+was not updated to account for the transposed axis on a rotated die-cut template, so it compares
+against the wrong bound and under-warns. Out of scope for this change (not touched by the
+orientation prompt); flagged here for a follow-up.
+
+**Considered**: mirroring Quick Print's `rotate(90)` literally, per the prompt's initial framing —
+rejected once the pixel trace showed it inverts feed order relative to the standard orientation's
+existing top-to-bottom convention. Auto-reflowing element positions on toggle — rejected, see above.
+
+---
+
 ## 2026-09-18 — Markdown is excluded from ruff; `ruff` is pinned to a compatible range
 
 **Decision**: `[tool.ruff] extend-exclude = ["*.md"]` in `pyproject.toml`, and the `ruff` dev

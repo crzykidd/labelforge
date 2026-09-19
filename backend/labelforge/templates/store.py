@@ -25,6 +25,7 @@ def _row_to_template(row: sqlite3.Row) -> Template:
         label_media=row["label_media"],
         canvas_json=json.loads(row["canvas_json"]),
         field_schema=[FieldSpec(**f) for f in json.loads(row["field_schema"])],
+        orientation=row["orientation"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -79,14 +80,16 @@ def create_template(data: TemplateCreate) -> Template:
         now = _now_utc()
         conn.execute(
             """INSERT INTO templates
-               (name, display_name, label_media, canvas_json, field_schema, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (name, display_name, label_media, canvas_json, field_schema, orientation,
+                created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 data.name,
                 display_name,
                 data.label_media,
                 json.dumps(data.canvas_json),
                 json.dumps([f.model_dump() for f in data.field_schema]),
+                data.orientation,
                 now,
                 now,
             ),
@@ -116,6 +119,8 @@ def update_template(name: str, data: TemplateUpdate) -> Template | None:
             updates["canvas_json"] = json.dumps(data.canvas_json)
         if data.field_schema is not None:
             updates["field_schema"] = json.dumps([f.model_dump() for f in data.field_schema])
+        if data.orientation is not None:
+            updates["orientation"] = data.orientation
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         conn.execute(
@@ -164,14 +169,16 @@ def duplicate(name: str, new_name: str, new_label_media: str) -> Template:
         now = _now_utc()
         conn.execute(
             """INSERT INTO templates
-               (name, display_name, label_media, canvas_json, field_schema, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (name, display_name, label_media, canvas_json, field_schema, orientation,
+                created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 new_name,
                 new_name,
                 new_label_media,
                 orig["canvas_json"],
                 orig["field_schema"],
+                orig["orientation"],
                 now,
                 now,
             ),

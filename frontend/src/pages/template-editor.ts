@@ -1,6 +1,6 @@
 import { createTemplate, duplicateTemplate, getFonts, getLabels, getTemplate, previewTemplate, updateTemplate } from '../api'
 import { navigate } from '../router'
-import type { LabelEntry } from '../types'
+import type { LabelEntry, Template } from '../types'
 import {
   DEFAULT_CONTINUOUS_LENGTH_DOTS,
   addBarcodeElement,
@@ -57,6 +57,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <span class="toolbar-sep"></span>
         <span class="editor-title" id="editor-title">${esc(displayName)}</span>${displayName !== name ? `<span class="editor-title-slug" id="editor-title-slug">${esc(name)}</span>` : ''}
         <code class="editor-media-badge" id="editor-media">${esc(isNew ? newMedia : '')}</code>
+        <select id="orientation-select" title="Standard: design prints as drawn. Rotated 90°: design canvas is transposed to the label's length axis; the printed/previewed output is rotated a quarter turn.">
+          <option value="standard">Standard</option>
+          <option value="rotated">Rotated 90°</option>
+        </select>
         <span class="toolbar-sep"></span>
         <button id="btn-add-text" title="Add a text element. Use {fieldname} placeholders (single braces) for variable fields.">Add Text</button>
         <button id="btn-add-qr" title="Add a QR code element. QR preview is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads.">Add QR</button>
@@ -124,6 +128,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const barcodePayloadInput = root.querySelector<HTMLInputElement>('#barcode-payload')!
   const barcodeSymbologySelect = root.querySelector<HTMLSelectElement>('#barcode-symbology')!
   const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
+  const orientationSelect = root.querySelector<HTMLSelectElement>('#orientation-select')!
   const statusEl = root.querySelector<HTMLDivElement>('#editor-status')!
   const canvasWrap = root.querySelector<HTMLDivElement>('#canvas-wrap')!
   const previewArea = root.querySelector<HTMLDivElement>('#preview-area')!
@@ -136,6 +141,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
   let defaultFont = 'DejaVuSans'
   let previewObjectUrl: string | null = null
   let cachedLabels: LabelEntry[] = []
+  let orientation: Template['orientation'] = 'standard'
+  let currentLabel: LabelEntry | null = null
 
   // Text and QR controls are only relevant when those element types are selected.
   // Start hidden; selection events reveal them. QR controls are already hidden via
@@ -157,15 +164,25 @@ export function mountTemplateEditor(root: HTMLElement): void {
     return canvasWrap.clientWidth || 800
   }
 
+  // The design canvas the user draws on. Standard: head-width × length, same as
+  // the label. Rotated: transposed — length × head-width — so text is authored
+  // upright; the server rotates the finished render back for printing.
+  function designDims(label: LabelEntry): [number, number] {
+    const [headWidth, rawLength] = label.dots_printable
+    // Continuous media report length 0; open at a default working length so the
+    // editor canvas isn't zero-height (print length is content-driven server-side).
+    const length = rawLength > 0 ? rawLength : DEFAULT_CONTINUOUS_LENGTH_DOTS
+    return orientation === 'rotated' ? [length, headWidth] : [headWidth, length]
+  }
+
   async function initEditor(label: LabelEntry): Promise<void> {
     labelMedia = label.id
     labelColorCapable = label.color === 1
+    currentLabel = label
     mediaBadge.textContent = label.id
+    orientationSelect.value = orientation
 
-    const [w, rawH] = label.dots_printable
-    // Continuous media report length 0; open at a default working length so the
-    // editor canvas isn't zero-height (print length is content-driven server-side).
-    const h = rawH > 0 ? rawH : DEFAULT_CONTINUOUS_LENGTH_DOTS
+    const [w, h] = designDims(label)
     const canvasEl = root.querySelector<HTMLCanvasElement>('#fabric-canvas')!
     const { canvas } = initCanvas(canvasEl, w, h, getContainerWidth())
     fabricCanvas = canvas
@@ -184,6 +201,32 @@ export function mountTemplateEditor(root: HTMLElement): void {
       showBarcodeControls(false)
     })
   }
+
+  // Resize the live canvas in place (mirrors initCanvas's scale math) instead of
+  // rebuilding the Fabric.Canvas, which would discard existing elements. Object
+  // left/top are untouched — this is what makes an orientation toggle non-reflowing.
+  function applyCanvasDimensions(canvas: Canvas, labelW: number, labelH: number): void {
+    const maxDisplayH = 600
+    const scale = Math.min(1, (getContainerWidth() - 48) / labelW, maxDisplayH / labelH)
+    canvas.setDimensions({ width: Math.round(labelW * scale), height: Math.round(labelH * scale) })
+    canvas.setZoom(scale)
+    canvas.renderAll()
+  }
+
+  orientationSelect.addEventListener('change', () => {
+    const next = orientationSelect.value as Template['orientation']
+    orientation = next
+    if (!fabricCanvas || !currentLabel) return
+    const hadObjects = fabricCanvas.getObjects().length > 0
+    const [w, h] = designDims(currentLabel)
+    applyCanvasDimensions(fabricCanvas, w, h)
+    if (hadObjects) {
+      showStatus(
+        'Orientation changed. Element positions were kept as-is — the layout will likely need adjusting.',
+        '',
+      )
+    }
+  })
 
   function showTextControls(visible: boolean): void {
     fontSelect.style.display = visible ? '' : 'none'
@@ -369,9 +412,9 @@ export function mountTemplateEditor(root: HTMLElement): void {
     try {
       const canvasJson = getCanvasJSON(fabricCanvas)
       if (existsOnServer) {
-        await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia })
+        await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation })
       } else {
-        await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson })
+        await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation })
         existsOnServer = true
       }
       showStatus('Saved.', 'success')
@@ -400,9 +443,9 @@ export function mountTemplateEditor(root: HTMLElement): void {
       if (objs.length > 0) {
         const canvasJson = getCanvasJSON(fabricCanvas)
         if (existsOnServer) {
-          await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia })
+          await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation })
         } else {
-          await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson })
+          await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation })
           existsOnServer = true
         }
       }
@@ -449,6 +492,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
       try {
         const tmpl = await getTemplate(name)
         labelMedia = tmpl.label_media
+        orientation = tmpl.orientation
         // Update title to show the stored display_name
         displayName = tmpl.display_name || name
         const titleEl = root.querySelector<HTMLElement>('#editor-title')

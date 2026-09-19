@@ -77,6 +77,7 @@ templates
   label_media     text                -- e.g. "62", "62red", "29x90"
   canvas_json     text                -- serialized Fabric.js scene
   field_schema    text (json)         -- list of {name, type, required, default, increment}
+  orientation     text                -- "standard" (default) or "rotated"
   created_at      timestamp
   updated_at      timestamp
   deleted_at      timestamp nullable
@@ -107,6 +108,26 @@ QR and barcode elements are rendered as bitmaps in the editor (Fabric Image) but
 The canvas matches the label media at print DPI (300dpi for QL series). A 62×100 die-cut at 300dpi = 696×1109 pixels. The editor displays this scaled to fit the viewport but operates in label pixel coordinates.
 
 For continuous media (62mm endless), the canvas has a fixed width and a user-settable initial length. The length can grow as elements are added beyond the bottom; print length matches the bottommost element's `top + height` plus padding.
+
+### Orientation
+
+Every template stores an `orientation`: `standard` (default) or `rotated`. This mirrors Quick
+Print's rotation concept (`orientation` on `QuickPrintRequest`), but templates store it per
+template rather than reading Settings' `default_orientation` — a template's orientation is a
+property of the design, not a global default, and the two are otherwise unrelated.
+
+When `rotated`, the editor canvas is **transposed**: its width is the label's length axis and its
+height is the fixed print-head width, so you design and type upright, in normal reading
+orientation. The rendered/printed output — what Preview shows and what actually prints — is that
+canvas rotated a quarter turn, i.e. sideways relative to how it was authored. Continuous media's
+auto-length still works under rotation; it just grows along the transposed axis (the design's
+width instead of its height).
+
+Toggling orientation on an existing template **never moves or resizes elements** — `left`/`top`
+coordinates are preserved exactly, even though the canvas they sit on changes shape. There is no
+auto-reflow: a one-time status message says the layout will likely need adjusting. This is
+deliberate — a design that's visibly wrong after toggling is easier to fix than one silently
+rearranged to some guessed-at "correct" layout.
 
 ### Toolbar
 

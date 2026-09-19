@@ -266,18 +266,26 @@ def render_template(
     (255,255,255). The print path promotes L→RGB and passes red=True for two-color
     media; an RGB image here means red pixels land on the red print plane.
     On mono media any red element is rendered as black (via _canvas_color_to_l/rgb).
+
+    template.orientation == "rotated": elements are drawn on a canvas transposed
+    to the label's length axis (matching the editor, which designs upright on the
+    same transposed canvas) and the finished canvas is rotated 270° once at the
+    end, restoring the print-head-width invariant client.py relies on. See the
+    rotation direction comment near the end of this function for why 270, not 90.
     """
     effective_media = media_override or template.label_media
     label = get_label(effective_media)
     if label is None:
         raise RenderError(f"Unknown label media: {effective_media!r}")
 
-    canvas_w = label.dots_printable[0]
+    rotated = template.orientation == "rotated"
+    head_width = label.dots_printable[0]
     objects = template.canvas_json.get("objects", [])
     is_continuous = label.form_factor in _CONTINUOUS_FORM_FACTORS
     two_color = label.color == 1
 
-    # Pre-render text elements once so PIL-measured extents inform continuous canvas height.
+    # Pre-render text elements once so PIL-measured extents inform the continuous
+    # auto-length axis below.
     text_subs: dict[int, Image.Image] = {}
     for i, obj in enumerate(objects):
         norm_type = obj.get("type", "").lower().replace("-", "")
@@ -292,21 +300,35 @@ def render_template(
                 raise RenderError(f"Failed to render element 'text': {exc}") from exc
 
     if is_continuous:
-        bottommost = 0
+        # Standard: length grows downward, tracked via top+height (bottommost).
+        # Rotated: the design canvas is transposed, so length is the design's
+        # *width* and grows rightward — the same logic, mirrored onto left+width.
+        extent = 0
         for i, obj in enumerate(objects):
-            raw_top = int(obj.get("top", 0))
-            box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
-            # Text: use PIL-measured height; other elements: Fabric height is reliable.
-            h = (
-                text_subs[i].height
-                if i in text_subs
-                else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
-            )
-            _, t = _origin_top_left(obj, 0, raw_top, box_w, h)
-            bottommost = max(bottommost, t + h)
-        canvas_h = max(bottommost + _PADDING, 1)
+            if rotated:
+                raw_pos = int(obj.get("left", 0))
+                size = (
+                    text_subs[i].width
+                    if i in text_subs
+                    else int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
+                )
+                other = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
+                pos, _ = _origin_top_left(obj, raw_pos, 0, size, other)
+            else:
+                raw_pos = int(obj.get("top", 0))
+                size = (
+                    text_subs[i].height
+                    if i in text_subs
+                    else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
+                )
+                other = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
+                _, pos = _origin_top_left(obj, 0, raw_pos, other, size)
+            extent = max(extent, pos + size)
+        length = max(extent + _PADDING, 1)
     else:
-        canvas_h = label.dots_printable[1]
+        length = label.dots_printable[1]
+
+    canvas_w, canvas_h = (length, head_width) if rotated else (head_width, length)
 
     if two_color:
         canvas: Image.Image = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
@@ -407,5 +429,13 @@ def render_template(
             raise
         except Exception as exc:
             raise RenderError(f"Failed to render element '{obj_type}': {exc}") from exc
+
+    if rotated:
+        # 270 (not 90): content authored at the design's left edge — where the
+        # editor places new elements and where continuous auto-length starts —
+        # must land at the top of the final image (printed/fed first). 90 would
+        # put it at the bottom, printing the design in reverse feed order.
+        white = 255 if canvas.mode == "L" else (255, 255, 255)
+        canvas = canvas.rotate(270, expand=True, fillcolor=white)
 
     return canvas

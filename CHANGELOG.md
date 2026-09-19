@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Templates support a rotated orientation, matching Quick Print. Set it in the editor toolbar (Standard / Rotated 90°): the design canvas transposes to the label's length axis so you type upright, and Preview/print shows the label rotated a quarter turn — what you'd get if you turned the finished label sideways. Continuous media's auto-length still grows correctly under rotation. Toggling orientation on an existing template never moves or resizes its elements; a status message warns that the layout may need adjusting. Requires a container image rebuild.
+
 ### Fixed
 
 - CI no longer fails on unrelated pull requests. The `ruff format --check` gate reformatted Python code blocks embedded in Markdown (a behavior ruff added in 0.14), so documentation and archived handoff prompts failed the check and blocked every PR. Markdown is now excluded from ruff, and the `ruff` dev dependency is pinned to a compatible range so the toolchain no longer changes under CI without a dependency bump. No runtime change.
