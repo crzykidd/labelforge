@@ -105,6 +105,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
             <option value="#000000">Black</option>
             <option value="#ff0000">Red</option>
           </select>
+          <span class="toolbar-sep"></span>
+          <label title="Wrap this element's text at spaces to fit its box width. A single word wider than the box is never split, and still prints past the edge.">
+            <input id="text-wrap" type="checkbox" /> Wrap
+          </label>
         </span>
         <span class="context-controls" id="context-controls-qr" hidden>
           <input id="qr-payload" type="text" placeholder="QR payload or {field}" title="QR code payload. Use {fieldname} for variable fields." style="width:200px" />
@@ -158,6 +162,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const fontSelect = root.querySelector<HTMLSelectElement>('#font-select')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
   const textColorSelect = root.querySelector<HTMLSelectElement>('#text-color')!
+  const textWrapCheckbox = root.querySelector<HTMLInputElement>('#text-wrap')!
   const qrPayloadInput = root.querySelector<HTMLInputElement>('#qr-payload')!
   const qrEcSelect = root.querySelector<HTMLSelectElement>('#qr-ec')!
   const barcodePayloadInput = root.querySelector<HTMLInputElement>('#barcode-payload')!
@@ -401,6 +406,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
       const wantRed = (f === '#ff0000' || f === 'red') && labelColorCapable
       textColorSelect.value = wantRed ? '#ff0000' : '#000000'
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    textWrapCheckbox.checked = Boolean((obj as any)['labelforge_wrap'])
   }
 
   fontSelect.addEventListener('change', () => {
@@ -429,6 +436,15 @@ export function mountTemplateEditor(root: HTMLElement): void {
     const obj = fabricCanvas.getActiveObject()
     if (obj && isTextType(obj.type)) {
       obj.set('fill', textColorSelect.value)
+      fabricCanvas.renderAll()
+    }
+  })
+
+  textWrapCheckbox.addEventListener('change', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (obj && isTextType(obj.type)) {
+      obj.set('labelforge_wrap', textWrapCheckbox.checked)
       fabricCanvas.renderAll()
     }
   })

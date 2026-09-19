@@ -4,6 +4,102 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Continuous auto-length grows in both directions; wrap is opt-in and clamps to print-head width; overflow detection measures resolved values
+
+**Decision**: Three related fixes for the operator report *"a template designed around
+`{name}` prints clipped when the value is 'Master Bedroom' at 150pt, with no warning"*
+(`prompts/done/2026-09-19-text-wrap-option.md` has the full measured evidence).
+
+1. **`render_template`'s continuous auto-length loop now tracks the nearest edge as well
+   as the farthest.** It previously took `max(extent, far_edge)` only. A centre- (or
+   right/bottom-) origin element whose *resolved* value is wider than the placeholder it
+   was designed around grows backwards past the start of the label too — Fabric 7's
+   default origin is centre, so this is the common case, not an edge case. The fix tracks
+   `min(...)` across every element's full rotated AABB as well; if the minimum goes
+   negative, the free axis grows to cover `[min, max]` and every element is shifted
+   forward by `-min` so nothing is lost off the front. The shift is 0 whenever nothing
+   goes negative — which is every template that already fit — so this is provably a
+   no-op for existing content (49 pre-existing render tests pass unchanged, plus a new
+   explicit byte-identical regression test).
+2. **The same paste loop's origin-offset calculation (`_origin_top_left`'s `box_w`/`box_h`)
+   now takes `max(design_box, real_rendered_size)`, not the design box alone, for text
+   elements.** This has to move in lockstep with fix #1: the auto-length loop already used
+   the real rendered width for text; if the paste loop kept centering on the *design*
+   width, the two would disagree and the fix in #1 wouldn't actually stop the clipping. The
+   first attempt used the raw real size (`sub.width`/`sub.height` outright, not maxed with
+   the design box) and broke `test_center_origin_matches_left_origin_pixel_identical`: PIL's
+   real font-metric height routinely differs from the arbitrary design box height even
+   when the text fits comfortably, so replacing (not growing) the effective box shifted
+   already-fitting center/right/bottom-origin text vertically. `max()` fixes both: it's a
+   no-op whenever the rendered content is smaller than or equal to its box (the common
+   case, preserving the pinned test), and only grows the effective box — matching what's
+   actually being pasted — when content truly overflows it.
+3. **A second, independently-discovered defect — template `orientation=rotated` plus an
+   individual element `angle=90` collapsed the continuous length to ~41 dots** (a nearly
+   blank label) instead of the ~1439 dots either rotation alone produces. Root-caused by
+   direct experiment (pasting the same rotated sub-image onto a deliberately oversized
+   canvas, bypassing the auto-length calculation entirely) rather than by reasoning alone:
+   composing a template's own transposed design frame with a *second*, per-element 90°
+   rotation drives that element's long axis onto the print-head-width axis (fixed, 696 dots)
+   instead of the free length axis — a genuinely different, unfixable-by-growing-length
+   geometry, not merely a wrong axis picked by the old code. Fix #1's general min/max
+   tracking (applied per-element, not hardcoded to "x if rotated else y" globally) already
+   corrects this element's own contribution to the auto-length calculation, which turns the
+   near-total blank collapse into a sanely-sized canvas (~167 dots, matching what this
+   element's rotated footprint actually needs along the free axis) — but the content still
+   overflows the *other*, fixed axis, and that residual overflow is now correctly reported
+   by `detect_overflow`'s continuous-media check (fix below) rather than silently rendered
+   blank. **This is not "fixed to fit"** — that specific combination is a legitimately bad
+   template configuration (equivalent to asking one rotation to undo the other and then
+   applying a second one on top) — it is fixed from "silently prints nothing" to "sanely
+   sized and correctly flagged."
+4. **`detect_overflow(template, media_id, values=None)` gained an optional `values` param.**
+   When given, text elements are measured at their real PIL-rendered size (reusing
+   `_render_text_element`) instead of the stored placeholder box — this is what actually
+   catches the reported bug (a value longer than `{name}` returned `False` before). Both
+   call sites in `template_print.py` (print and preview) now pass the already-resolved
+   `values` dict; the parameter defaults to `None` so the old 2-arg call keeps working
+   (several tests and one scratch script still use it, deliberately left alone rather than
+   force-migrated). `detect_overflow` also now catches horizontal overflow **on continuous
+   media** — a single line wider than the print head — which it previously could not, since
+   it returned `False` unconditionally for any continuous media. Vertical/length overflow on
+   continuous is still correctly "never overflows" (the label grows instead).
+   **Deliberately not changed**: die-cut overflow detection still only checks the *far* edge
+   (`x1 > max_w or y1 > max_h`), not the near edge. A rotated die-cut element can legitimately
+   swing into negative local coordinates (see the 2026-09-19 rotation-pivot ADR below,
+   "Non-obvious consequence" paragraph) without that being a print-overflow condition — it's
+   an editor/off-canvas concern with its own recovery UI, and `test_detect_overflow_false_for_fitting_rotated_element`
+   pins exactly this case. Adding a near-edge check for die-cut was tried and reverted: it
+   flipped that pinned test to failing.
+5. **Wrap (`labelforge_wrap`, opt-in, default `false`) breaks resolved text at spaces only —
+   never mid-word.** Wrap target width is the element's own box width (`width × scaleX`),
+   clamped to the print head width (`min(box_w, head_width)`) — the one axis that's always
+   physically fixed regardless of media type or template orientation. This is a deliberate
+   simplification: the *fully* correct clamp would need to know, per element, which of its
+   local axes maps to the fixed head-width axis under the combination of template
+   orientation and the element's own `angle` — exactly the complexity fix #3 above
+   describes. Clamping to head width is always *safe* (never produces a wrap target wider
+   than the label could ever be) and is a no-op for the common case (an axis-aligned text
+   box on standard orientation, box width already well under head width). The known
+   consequence: an element on a rotated-orientation template whose local width maps to the
+   *free* length axis may wrap sooner than strictly necessary, since it's clamped to head
+   width even though its true available width is unbounded. No mid-word breaking is a hard
+   rule, not a limitation to lift later — the alternative (hyphenation or a forced
+   character-level break) was explicitly rejected as more complex than the problem
+   warrants for a self-hosted label app; a single word wider than its target width is left
+   on its own line, overflowing, and reported by `detect_overflow` like any other overflow.
+   Wrapping only rewrites a paragraph that actually needs it (each already-fitting line is
+   returned byte-for-byte unchanged) specifically so "wrap on, content already fits" renders
+   byte-identically to wrap off — required by the regression bar for this whole change.
+
+**Would revisit if**: a future request wants wrap to use the true per-orientation/per-angle
+available width instead of the head-width clamp (fix #3's cross-cutting complexity would
+need solving generally, not just for wrap), or if the combined-rotation case (#3) turns out
+to be common enough in practice to warrant a dedicated editor-side warning instead of relying
+on `detect_overflow` at print/preview time.
+
+---
+
 ## 2026-09-19 — Element rotation pivots about the Fabric origin point, not the box's own centre
 
 **Decision**: `backend/labelforge/render/template.py` now computes every rotation-aware

@@ -58,8 +58,13 @@ History rows referencing a deleted template keep their `template_id` and resolve
 5. Required fields validated client-side and server-side
 6. **Preview** button → true preview reflecting filled values on the chosen media. The Print
    button is gated until a fresh preview has been taken after any media change.
-7. **Overflow warning** — if the chosen media is a die-cut and content extends beyond its
-   printable height, an inline warning appears ("Content may be clipped"). Printing still
+7. **Overflow warning** — if content extends beyond the printable area, an inline warning
+   appears ("Content may be clipped"). This checks the *resolved* field values, not the
+   stored placeholders, so a value longer than the placeholder it was designed around (e.g.
+   `{name}` filled with a long name) is caught even though the template looked fine in the
+   editor. Die-cut media is checked on both axes; continuous media only on the print-head
+   width (a single line wider than the tape) — continuous length itself never overflows,
+   since the label just prints longer (see Rotation → auto-length, below). Printing still
    proceeds; the user decides from the preview.
 8. **Print** button → prints on the chosen media, logs to history with the chosen media.
 9. **Batch** toggle → see [`templates - batch`](#batch--increment) below
@@ -94,6 +99,7 @@ Standard Fabric.js objects with extensions:
 - All elements: standard `left`, `top`, `width`, `height`, `angle`, `scaleX`, `scaleY`. The renderer also honors `originX`/`originY` (defaulting to `left`/`top` when absent), so `left`/`top` are interpreted exactly as Fabric does: as coordinates relative to the element's declared origin, not necessarily its top-left corner.
 - Text: `text`, `fontFamily`, `fontSize`, `fontWeight`, `fontStyle`, `textAlign`
   - Extension: `labelforge_raw_content` — original string with `{placeholders}`, used to re-derive fields on edit
+  - Extension: `labelforge_wrap` (boolean, default `false`/absent) — word-wrap at spaces to fit the element's box width; see Wrap, below
 - QR code: stored as Fabric `Image` with extension `labelforge_qr_payload` (string with placeholders) and `labelforge_qr_error_correction` (`L`/`M`/`Q`/`H`)
 - Barcode: same pattern with `labelforge_barcode_payload` and `labelforge_barcode_symbology`
 - Image: standard Fabric image with extension `labelforge_image_id` pointing to an entry in an `images` table
@@ -208,12 +214,46 @@ detection (`detect_overflow`) checks the rotated footprint too. The renderer
 also rotates an element about its Fabric origin point, matching the editor —
 see docs/decisions.md for why that isn't always the element's own centre.
 
+On continuous media the auto-length calculation tracks both the nearest and
+farthest edge of every element, not just the farthest: a centre-anchored
+element (Fabric's default) whose printed value is wider than the design it was
+sized around grows the label backwards past the start as well as forwards, and
+the label grows to cover all of it rather than silently losing the part that
+grew backwards.
+
+**Don't combine template `orientation: rotated` with a 90° `angle` on the same
+element.** To print text longer than the tape width, use *one* of: the
+template's own `Rotated 90°` orientation (design upright, the whole label
+prints sideways), or rotate the individual element 90° on a `standard`
+template. Doing both together drives that element's long axis onto the fixed
+print-head-width axis instead of the free length axis — content that can't be
+made to fit by growing the label, flagged by the overflow warning rather than
+silently clipped. See docs/decisions.md.
+
 **Undo/redo** — a 50-entry snapshot stack. A snapshot is taken after every
 add/remove/modify, and once per text-editing session (debounced, not per
 keystroke). Restoring a snapshot goes through the same load path used to open a
 saved template, so QR/barcode placeholder bitmaps and the text raw-content sync
 are regenerated exactly as on initial load — not a bare Fabric deserialize,
 which would silently lose both.
+
+### Wrap
+
+Every text element has an opt-in **Wrap** checkbox in the contextual control row (default
+off — existing templates are unaffected). When enabled, the *resolved* text (after field
+substitution) is word-wrapped at spaces to fit the element's own box width
+(`width × scaleX`), clamped to the print head width — the one axis that's always physically
+fixed regardless of media type or template orientation. This makes the wrap width something
+the user controls directly by sizing the box.
+
+Wrapping only ever breaks at a space; it never hyphenates or splits a word mid-character. A
+single word wider than the target width is left on its own line, overflowing — the overflow
+warning (above) catches this case, since wrap can't fix it. A value that already fits on one
+line renders identically whether Wrap is on or off.
+
+Wrap is a per-element choice, not automatic, because auto-wrapping every text element would
+silently change the layout of templates that currently rely on a fixed one-line box (e.g. a
+tight label under a barcode) — the operator opts in per element instead.
 
 ### Toolbar
 
