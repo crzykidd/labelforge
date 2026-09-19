@@ -1,6 +1,6 @@
 # labelforge — session start briefing
 
-**Written:** 2026-09-18 · Regenerate this file when it goes stale.
+**Written:** 2026-09-19 · Regenerate this file when it goes stale.
 
 Read `CLAUDE.md` first (it wins over anything here). This file is a status snapshot,
 not a handoff prompt — it has no frontmatter and never moves to `prompts/done/`.
@@ -9,116 +9,138 @@ not a handoff prompt — it has no frontmatter and never moves to `prompts/done/
 
 ## Where we are
 
-- **Shipped:** `v0.1.5` (2026-06-24). Tag exists on `main`; GitHub release published.
+- **Shipped:** `v0.1.7` (2026-09-19). `v0.1.6` shipped the same day.
 - **Version source of truth:** `pyproject.toml:7` (bare, no `v` prefix).
-- **`CHANGELOG.md` `## [Unreleased]`** holds one entry: the CI format-gate fix below.
-  Not enough to justify a release on its own — roll the dependency PRs in first.
-- **`dev` is one commit ahead of `main`** (that same fix). Work on `dev`; `main` is PR-only.
-- **The repo has been dormant since 2026-06-24** — roughly three months. Everything below
-  accumulated while nobody was driving.
+- **`[Unreleased]` holds an unreleased fix** — oversized field values on continuous
+  labels, plus the per-element text-wrap option. Not yet printed on real media.
+- **No open PRs.** One open issue (#42) that is actually already fixed — see below.
+- Local `HEAD` may be on `main` after a release cut. Start with `git checkout dev`.
 
-v1 is functionally **done**: all eight success criteria in `docs/PRD.md` are implemented
-(quick print, canvas editor with `{field}` placeholders, recall + batch/increment, two-color
-DK-2251, HTTP API, history with reprint + pin, `labels.yml` friendly names). Post-v1 work has
-been incremental polish: QR element (0.1.4), barcode element (0.1.5), version footer and
-update check (0.1.3).
+v1 is functionally complete — all eight `docs/PRD.md` success criteria work. Recent
+work has been the template editor and rotation.
 
 ---
 
-## Recently fixed — the CI format gate (2026-09-18)
+## What shipped on 2026-09-19 (v0.1.6 + v0.1.7)
 
-**Resolved on `dev`.** Recorded as an ADR in `docs/decisions.md`; no action needed beyond
-knowing why the config looks the way it does.
+A large day. Context for anything that looks unfamiliar in the editor:
 
-`ci.yml:53` runs `ruff format --check .`, and `ruff` was pinned only as `ruff>=0.7`. CI
-resolved ruff 0.16.x, and ruff ≥0.14 formats Python code blocks **inside Markdown**. Four
-files failed — `docs/decisions.md`, `docs/features/label-catalog.md`, and two archived
-prompts under `prompts/done/` — so the `python` job failed on every PR regardless of its
-contents, blocking all seven dependency PRs and the next release.
+- **CI was red on every PR** and had been since ruff 0.14. `ruff format --check` began
+  formatting Python blocks inside Markdown, so `docs/` and `prompts/done/` failed the
+  gate and blocked all seven dependency PRs. Fixed by excluding `*.md` from ruff and
+  pinning `ruff>=0.16.8,<0.17`.
+- **Three months of dependency updates** merged (FastAPI 0.141.1, pydantic-settings
+  2.15.0, qrcode 8.2, pytest 9.1.1, Vite 8.3.0, GitHub Actions v7/v4).
+- **Template orientation** — Standard / Rotated 90°, stored per template. The editor
+  canvas transposes so you design upright; the renderer rotates the finished canvas.
+- **Template editor overhaul** — elements panel (lists every object, flags off-canvas
+  ones, click the red badge to recover just that one), bounds clamping with a backstop,
+  grid + snap, keyboard shortcuts, undo/redo, and a fixed-height contextual control row
+  so selecting an element no longer shifts the page.
+- **Element rotation** — snaps to 0/90/180/270 within ~8°, free elsewhere, plus a
+  "Rotate 90°" button. The renderer now accounts for rotation when sizing continuous
+  labels and detecting overflow.
 
-Fix: `extend-exclude = ["*.md"]` under `[tool.ruff]`, plus `ruff>=0.16.8,<0.17` on the dev
-extra so the gate's tooling can't drift again without a dependabot PR. Verified against a
-clean `pip install -e .[dev]`: `ruff check`, `ruff format --check`, `mypy backend` and
-`pytest -q` (33 passed) are all green at ruff 0.16.8 / mypy 2.3.1 / pytest 9.1.1.
-
-Note for anyone re-deriving this: excluding only `prompts/**` does **not** work — half the
-failing files are under `docs/`. The problem is Markdown generally.
-
-Your local ruff must now be ≥0.16.8; re-run `pip install -e .[dev]` if yours is older.
-
----
-
-## Open dependabot PRs (7, all targeting `dev`)
-
-| PR | Bump | Opened |
-|----|------|--------|
-| #41 | github-actions group (checkout, setup-python, setup-node, codeql-action) | 2026-09-01 |
-| #39 | pydantic-settings `>=2.6` → `>=2.14.2` | 2026-07-01 |
-| #38 | fastapi `>=0.136.3` → `>=0.138.2` | 2026-07-01 |
-| #37 | ruff `>=0.7` → `>=0.15.20` | 2026-07-01 |
-| #36 | pytest `>=8.3` → `>=9.1.1` | 2026-07-01 |
-| #35 | qrcode `>=8.0` → `>=8.2` | 2026-07-01 |
-| #34 | vite 8.0.16 → 8.1.2 (frontend, npm minor/patch group) | 2026-07-01 |
-
-Only #41 has a run on record, and it failed on the format gate above rather than on anything
-it changed. With that gate fixed these should now be able to go green once rebased onto `dev`.
-
-**#37 (ruff) is superseded** — the pin this repo now carries is narrower than the `>=0.15.20`
-it proposes, and 0.15 still has the Markdown behavior. Close it rather than merge it.
-
-A clean `pip install -e .[dev]` already resolves pytest 9.1.1 and mypy 2.3.1 and the suite
-passes, so #36 looks safe. Suggested order: rebase the remaining dependabot PRs → merge the
-batch → one `chore:` changelog line covering the dependency roll → release prep.
+New frontend modules: `frontend/src/editor/{elements-panel,grid-snap,history,keyboard}.ts`.
 
 ---
 
-## Feature gaps worth knowing about
+## Open items
 
-These are real, in-scope, and not yet built. None is urgent; pick from them when the
-maintenance work above is done.
+### Issue #42 is fixed but still open
 
-- **Plain image elements are unimplemented end-to-end.** `docs/PRD.md` lists `image` as an
-  in-scope element type, but `backend/labelforge/render/template.py:359` raises
-  `RenderError("Image elements not yet supported")`, and the editor toolbar
-  (`frontend/src/pages/template-editor.ts:61-63`) offers only Add Text / Add QR / Add Barcode.
-  Doing this properly needs an asset story first — there is **no upload endpoint**, and the
-  route list has nothing under `/api/assets` or similar. Scope that before writing code; it is
-  a handoff-prompt-sized job, not an in-session edit.
-- **No "Add Line" / "Add Rect" buttons.** The *renderer* handles both
-  (`render/template.py:362` and `:378`), so the backend is ready; only the editor toolbar is
-  missing. This is the cheapest visible win available and mirrors the QR/barcode pattern that
-  ADR 2026-06-24 documents.
-- **Template `display_name` cannot be renamed in the UI** — `docs/features/templates.md:182`.
-  The `TemplateUpdate` model already supports it over the API; a rename modal was deferred.
+`gh issue view 42` — the drag-clamp leak. It **was fixed** in v0.1.6 (`3906373`) and
+verified in a real browser. The commit referenced it as "(#42)" rather than a
+`Fixes #42` keyword, so GitHub never auto-closed it. Close it, or confirm first with
+`gh issue view 42`.
 
-Explicitly deferred, do not "helpfully" build: template versioning, template categories/tags
-(`docs/features/templates.md:201-202`), and a comment-preserving `labels.yml` writer
-(ADR 2026-06-05).
+### Rotation and text fitting are unverified on physical media
+
+Rotation/fitting has now been wrong **three times**, and every time only a real print
+revealed it:
+
+1. Template orientation rotated the wrong way (270° instead of 90°) — the label read
+   upside down. Fixed in `a15fcaf`; direction is now pinned by
+   `test_rotated_direction_design_top_lands_on_label_left`. The dimension tests could
+   not catch it, because 90° and 270° produce identical output sizes.
+2. Rotated elements printed clipped, because the continuous auto-length measured the
+   element's *unrotated* height. Fixed in `6e1f1f0`.
+
+3. A field value longer than its placeholder printed clipped with no warning. The
+   continuous auto-length measured only each element's *far* edge, so a centre-origin
+   element (Fabric's default) grew backwards past the start of the label and was cut.
+   The label got longer, just not in the direction that saved the text. Fixed on `dev`,
+   unreleased.
+
+**Still unconfirmed on paper:** the `6e1f1f0` fix also changed the rotation pivot for
+`left`/`top`-origin elements — which is QR codes and barcodes — from the sub-image
+centre to the Fabric origin. That is verified against Fabric's source and runtime but
+has never been printed. If a rotated QR or barcode lands in the wrong place, start
+there.
+
+When touching rotation, the regression bar is that `angle == 0` output stays
+**byte-identical** — nearly every existing template is unrotated.
+
+---
+
+## Feature gaps (real, in scope, not urgent)
+
+Verified still true as of this writing:
+
+- **Plain image elements are unimplemented end-to-end.** `docs/PRD.md` lists `image` as
+  in scope, but `backend/labelforge/render/template.py:433` raises
+  `RenderError("Image elements not yet supported")`, the editor has only Add Text / Add
+  QR / Add Barcode, and there is **no upload endpoint at all**. Needs an asset story
+  scoped first — handoff-prompt sized, not an in-session edit.
+- **No "Add Line" / "Add Rect" buttons.** The renderer already handles both; only the
+  toolbar is missing. Cheapest visible win, and the QR/barcode pattern shows how.
+- **Template `display_name` cannot be renamed in the UI** —
+  `docs/features/templates.md:298`. The API supports it; a rename modal was deferred.
+
+Explicitly deferred — do not "helpfully" build: template versioning, template
+categories/tags, a comment-preserving `labels.yml` writer.
 
 ---
 
 ## Ground rules that bite most often
 
-Full text is in `CLAUDE.md`; these are the ones a fresh session trips over.
+Full text in `CLAUDE.md`; these are the ones a fresh session trips over.
 
 - **Work on `dev`.** `main` is protected — PR only, never a direct push.
-- **Commit, don't push.** Propose one commit, list the exact paths, ask `y/n`,
-  stage only those paths. Never `git add -A`.
-- **Changelog entry for every change**, under `## [Unreleased]`, written as release notes.
-- **Handoff prompts:** more than ~2 files or a multi-step change → write
-  `prompts/<date>-<slug>.md` from `prompts/TEMPLATE.md` and spawn a subagent on it
-  (`model:` — Opus for planning, Sonnet for coding). Don't hand the user a CLI command.
-  The prompt file is committed *with* the work in one end commit, after the agent
-  `git mv`s it to `prompts/done/`.
+- **Commit, don't push** (releases excepted). Propose one commit, list exact paths, ask
+  `y/n`, stage only those paths. Never `git add -A`. **No `Co-authored-by` trailers** —
+  CLAUDE.md forbids them even when the harness suggests otherwise.
+- **Changelog entry for every change**, under `## [Unreleased]`, as release notes. Do
+  not write "Fixed" entries for bugs that only ever existed unreleased — fold those into
+  the feature's own entry, or the notes describe churn users never saw.
+- **Handoff prompts:** more than ~2 files or multi-step → write
+  `prompts/<date>-<slug>.md` from `prompts/TEMPLATE.md` and spawn a subagent on it.
+  The prompt file is committed *with* the work in one end commit.
 - **Record non-obvious decisions** in `docs/decisions.md`, newest at top.
-- **Non-negotiables:** GPL-3.0, no SSO, no multi-user, no SaaS, no SSR framework, no swapping
-  `brother-ql-inventree` or SQLite without an ADR.
-- **Load docs narrowly** — `architecture.md` + `glossary.md` + only the feature doc you need.
+- **Non-negotiables:** GPL-3.0, no SSO, no multi-user, no SaaS, no SSR framework, no
+  swapping `brother-ql-inventree` or SQLite without an ADR.
+
+---
+
+## Two traps that have already cost real time
+
+- **The system `ruff` on this machine is 0.8.4; the project pins 0.16.8.** The stale
+  binary reports false formatting failures on `backend/tests/`. Always validate with the
+  pinned one (`pip install -e ".[dev]"` in a venv). Two separate agents reported those
+  false failures as "pre-existing".
+- **Fabric 7 defaults object origin to `center`, not `left`/`top`.** Any bounds or
+  position assertion must be origin-aware, mirroring the backend's `_origin_top_left`.
+  A whole round of browser QA produced three false failures from assuming top-left.
+
+And one method note worth keeping: **DOM assertions do not prove a UI works.** A
+Playwright click on a selector succeeds whether or not a human can find the control, and
+passed while Save/Preview were scrolled off-screen. Screenshot the page and look at it.
 
 ---
 
 ## Verify the snapshot
 
 ```
-git fetch --all && git status --porcelain && git log --oneline main..dev && gh pr list --state open
+git fetch --all && git status --porcelain && git log --oneline origin/main..dev
+gh pr list --state open && gh issue list --state open
 ```
