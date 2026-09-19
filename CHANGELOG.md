@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-09-19
+
 ### Added
 
 - Template editor: elements panel, bounds clamping, grid + snap, keyboard shortcuts, and undo/redo. An elements list beside the canvas shows every object (type + content snippet) and flags any that lie off the visible label — click a row to select it, or click its red "off canvas" flag to pull just that element back inside. When anything is off the label, a "Bring all on-canvas" button appears above the list to recover everything at once. This rescues elements that were previously invisible, unselectable, and (on continuous media) silently inflating the printed length. Dragging and resizing clamp to the label bounds and snap to the label edges, horizontal/vertical centerlines, and an optional grid (toggle in the toolbar; remembered per browser). Arrow keys nudge the selected element by 1 label pixel (Shift: 10), Delete/Backspace removes it, and Escape deselects — all suspended while editing text inline. Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo/redo up to 50 steps.
