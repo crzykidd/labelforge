@@ -197,3 +197,35 @@ export function clearSnapGuides(innerEl: HTMLElement): void {
   if (v) v.hidden = true
   if (h) h.hidden = true
 }
+
+function ensureAngleReadoutElement(innerEl: HTMLElement): HTMLElement {
+  let el = innerEl.querySelector<HTMLElement>(':scope > .angle-readout')
+  if (!el) {
+    el = document.createElement('div')
+    el.className = 'angle-readout'
+    el.hidden = true
+    innerEl.appendChild(el)
+  }
+  return el
+}
+
+/**
+ * Show a small "N°" readout near obj while it's being rotated, reusing the
+ * snap-guide overlay approach (a plain positioned div, never a Fabric object).
+ * Reads obj.angle directly, so it reflects whatever the rotate control already
+ * snapped it to (obj.snapAngle / snapThreshold) with no separate math here.
+ */
+export function updateAngleReadout(innerEl: HTMLElement, obj: FabricObject, zoom: number): void {
+  const el = ensureAngleReadoutElement(innerEl)
+  const angle = Math.round(((obj.angle ?? 0) % 360 + 360) % 360)
+  el.textContent = `${angle}°`
+  const r = obj.getBoundingRect()
+  el.style.left = `${(r.left + r.width / 2) * zoom}px`
+  el.style.top = `${Math.max(0, r.top * zoom - 22)}px`
+  el.hidden = false
+}
+
+export function clearAngleReadout(innerEl: HTMLElement): void {
+  const el = innerEl.querySelector<HTMLElement>(':scope > .angle-readout')
+  if (el) el.hidden = true
+}

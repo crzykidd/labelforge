@@ -24,9 +24,11 @@ import { loadServerFonts } from '../editor/fonts'
 import {
   applyMoveSnap,
   applyScaleSnap,
+  clearAngleReadout,
   clearSnapGuides,
   isGridEnabled,
   setGridEnabled,
+  updateAngleReadout,
   updateGridOverlay,
   updateSnapGuides,
 } from '../editor/grid-snap'
@@ -84,39 +86,45 @@ export function mountTemplateEditor(root: HTMLElement): void {
         <button id="btn-add-qr" title="Add a QR code element. QR preview is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads.">Add QR</button>
         <button id="btn-add-barcode" title="Add a barcode element. Real barcode is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads. Note: some symbologies require specific digit counts (e.g. EAN-13 needs 12–13 digits, EAN-8 needs 7–8, UPC-A needs 11–12).">Add Barcode</button>
         <button id="btn-grid-toggle" title="Toggle grid overlay and snap-to-grid">Grid</button>
-        <button id="btn-bring-on-canvas" title="Move every off-canvas element back inside the label">Bring all on-canvas</button>
         <button id="btn-delete">Delete</button>
-        <span class="toolbar-sep"></span>
-        <select id="font-select" title="Font family" style="max-width:160px">
-          <option value="">Loading fonts…</option>
-        </select>
-        <input id="font-size" type="number" min="6" max="400" value="48" title="Font size" style="width:60px" />
-        <span class="toolbar-sep" id="sep-color"></span>
-        <select id="text-color" title="Text color">
-          <option value="#000000">Black</option>
-          <option value="#ff0000">Red</option>
-        </select>
-        <span class="toolbar-sep" id="sep-qr" hidden></span>
-        <input id="qr-payload" type="text" placeholder="QR payload or {field}" title="QR code payload. Use {fieldname} for variable fields." style="width:200px" hidden />
-        <select id="qr-ec" title="Error correction level" hidden>
-          <option value="L">EC: L (7%)</option>
-          <option value="M" selected>EC: M (15%)</option>
-          <option value="Q">EC: Q (25%)</option>
-          <option value="H">EC: H (30%)</option>
-        </select>
-        <span class="toolbar-sep" id="sep-barcode" hidden></span>
-        <input id="barcode-payload" type="text" placeholder="Barcode payload or {field}" title="Barcode payload. Use {fieldname} for variable fields. Some symbologies require specific digit counts (e.g. EAN-13 = 12–13 digits). The backend falls back to Code 128 on an invalid symbology." style="width:200px" hidden />
-        <select id="barcode-symbology" title="Barcode symbology" hidden>
-          <option value="code128" selected>Code 128</option>
-          <option value="code39">Code 39</option>
-          <option value="ean13">EAN-13</option>
-          <option value="ean8">EAN-8</option>
-          <option value="upca">UPC-A</option>
-        </select>
         <span class="toolbar-sep"></span>
         <button id="btn-save-as">Save As</button>
         <button id="btn-preview">Preview</button>
         <button id="btn-save" class="btn-primary">Save</button>
+      </div>
+      <div class="editor-context-row" id="editor-context-row">
+        <span class="context-hint" id="context-hint">No element selected</span>
+        <button id="btn-rotate-90" title="Rotate the selected element 90°" hidden>Rotate 90°</button>
+        <span class="context-controls" id="context-controls-text" hidden>
+          <select id="font-select" title="Font family" style="max-width:160px">
+            <option value="">Loading fonts…</option>
+          </select>
+          <input id="font-size" type="number" min="6" max="400" value="48" title="Font size" style="width:60px" />
+          <span class="toolbar-sep" id="sep-color"></span>
+          <select id="text-color" title="Text color">
+            <option value="#000000">Black</option>
+            <option value="#ff0000">Red</option>
+          </select>
+        </span>
+        <span class="context-controls" id="context-controls-qr" hidden>
+          <input id="qr-payload" type="text" placeholder="QR payload or {field}" title="QR code payload. Use {fieldname} for variable fields." style="width:200px" />
+          <select id="qr-ec" title="Error correction level">
+            <option value="L">EC: L (7%)</option>
+            <option value="M" selected>EC: M (15%)</option>
+            <option value="Q">EC: Q (25%)</option>
+            <option value="H">EC: H (30%)</option>
+          </select>
+        </span>
+        <span class="context-controls" id="context-controls-barcode" hidden>
+          <input id="barcode-payload" type="text" placeholder="Barcode payload or {field}" title="Barcode payload. Use {fieldname} for variable fields. Some symbologies require specific digit counts (e.g. EAN-13 = 12–13 digits). The backend falls back to Code 128 on an invalid symbology." style="width:200px" />
+          <select id="barcode-symbology" title="Barcode symbology">
+            <option value="code128" selected>Code 128</option>
+            <option value="code39">Code 39</option>
+            <option value="ean13">EAN-13</option>
+            <option value="ean8">EAN-8</option>
+            <option value="upca">UPC-A</option>
+          </select>
+        </span>
       </div>
       <div id="editor-status" class="editor-status" hidden></div>
       <div class="editor-body">
@@ -126,7 +134,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
           </div>
         </div>
         <div class="editor-elements-panel">
-          <h3>Elements</h3>
+          <div class="elements-panel-header">
+            <h3>Elements</h3>
+            <button id="btn-bring-on-canvas" title="Move every off-canvas element back inside the label" hidden>Bring all on-canvas</button>
+          </div>
           <div class="elements-panel-list" id="elements-panel-list"></div>
         </div>
       </div>
@@ -147,10 +158,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const fontSelect = root.querySelector<HTMLSelectElement>('#font-select')!
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
   const textColorSelect = root.querySelector<HTMLSelectElement>('#text-color')!
-  const sepQr = root.querySelector<HTMLSpanElement>('#sep-qr')!
   const qrPayloadInput = root.querySelector<HTMLInputElement>('#qr-payload')!
   const qrEcSelect = root.querySelector<HTMLSelectElement>('#qr-ec')!
-  const sepBarcode = root.querySelector<HTMLSpanElement>('#sep-barcode')!
   const barcodePayloadInput = root.querySelector<HTMLInputElement>('#barcode-payload')!
   const barcodeSymbologySelect = root.querySelector<HTMLSelectElement>('#barcode-symbology')!
   const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
@@ -165,6 +174,11 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const btnGridToggle = root.querySelector<HTMLButtonElement>('#btn-grid-toggle')!
   const btnBringOnCanvas = root.querySelector<HTMLButtonElement>('#btn-bring-on-canvas')!
   const elementsPanelListEl = root.querySelector<HTMLDivElement>('#elements-panel-list')!
+  const contextHint = root.querySelector<HTMLElement>('#context-hint')!
+  const btnRotate90 = root.querySelector<HTMLButtonElement>('#btn-rotate-90')!
+  const contextControlsText = root.querySelector<HTMLElement>('#context-controls-text')!
+  const contextControlsQr = root.querySelector<HTMLElement>('#context-controls-qr')!
+  const contextControlsBarcode = root.querySelector<HTMLElement>('#context-controls-barcode')!
 
   let fabricCanvas: Canvas | null = null
   let labelMedia: string = newMedia
@@ -186,20 +200,29 @@ export function mountTemplateEditor(root: HTMLElement): void {
   let textHistoryDebounce: number | undefined
   let detachKeyboard: (() => void) | null = null
 
-  // Text and QR controls are only relevant when those element types are selected.
-  // Start hidden; selection events reveal them. QR controls are already hidden via
-  // HTML `hidden` attribute; text controls need an explicit JS hide since they were
-  // previously always visible.
-  fontSelect.style.display = 'none'
-  fontSizeInput.style.display = 'none'
-  root.querySelector<HTMLElement>('#sep-color')!.hidden = true
-  textColorSelect.style.display = 'none'
-
   function showStatus(msg: string, kind: 'success' | 'error' | ''): void {
+    delete statusEl.dataset.hintKind
     if (!msg) { statusEl.hidden = true; return }
     statusEl.textContent = msg
     statusEl.className = `editor-status ${kind}`
     statusEl.hidden = false
+  }
+
+  // A user reported dragging an element off-canvas and not finding the
+  // recovery path even with the elements-panel flag and "Bring all
+  // on-canvas" both present — this names the fix in the status line the
+  // moment the count changes, without clobbering a Save/Preview result that's
+  // already showing (only clears itself, via the hintKind tag).
+  function showOffCanvasHint(count: number): void {
+    if (count > 0) {
+      showStatus(
+        `${count} element${count === 1 ? ' is' : 's are'} off the label — click "off canvas" on its row, or use "Bring all on-canvas" above the elements list.`,
+        '',
+      )
+      statusEl.dataset.hintKind = 'off-canvas'
+    } else if (statusEl.dataset.hintKind === 'off-canvas') {
+      showStatus('', '')
+    }
   }
 
   function getContainerWidth(): number {
@@ -243,6 +266,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
       showTextControls(false)
       showQrControls(false)
       showBarcodeControls(false)
+      updateRotateButton(null)
+      updateContextHint(null)
     })
 
     // Clamp + snap keep elements inside the label. Both work in label-pixel
@@ -258,7 +283,26 @@ export function mountTemplateEditor(root: HTMLElement): void {
       clampObjectToCanvas(e.target, currentDesignW, currentDesignH)
       canvas.requestRenderAll()
     })
-    canvas.on('mouse:up', () => clearSnapGuides(canvasInnerEl))
+    canvas.on('object:rotating', (e) => {
+      updateAngleReadout(canvasInnerEl, e.target, canvas.getZoom())
+    })
+    // Backstop: whatever happened mid-drag (moving/scaling/rotating), the
+    // committed position must be in bounds. Independent of any frame-lag
+    // subtlety during the transform itself — see docs/decisions.md.
+    canvas.on('object:modified', (e) => {
+      if (!e.target) return
+      if (clampObjectToCanvas(e.target, currentDesignW, currentDesignH)) {
+        canvas.requestRenderAll()
+      }
+    })
+    canvas.on('mouse:up', (e) => {
+      clearSnapGuides(canvasInnerEl)
+      clearAngleReadout(canvasInnerEl)
+      const target = e.target ?? canvas.getActiveObject()
+      if (target && clampObjectToCanvas(target, currentDesignW, currentDesignH)) {
+        canvas.requestRenderAll()
+      }
+    })
 
     updateGridOverlay(canvasInnerEl, gridEnabled, canvas.getZoom())
   }
@@ -294,23 +338,26 @@ export function mountTemplateEditor(root: HTMLElement): void {
   })
 
   function showTextControls(visible: boolean): void {
-    fontSelect.style.display = visible ? '' : 'none'
-    fontSizeInput.style.display = visible ? '' : 'none'
-    const sepColor = root.querySelector<HTMLElement>('#sep-color')!
-    sepColor.hidden = !visible
-    textColorSelect.style.display = visible ? '' : 'none'
+    contextControlsText.hidden = !visible
   }
 
   function showQrControls(visible: boolean): void {
-    sepQr.hidden = !visible
-    qrPayloadInput.hidden = !visible
-    qrEcSelect.hidden = !visible
+    contextControlsQr.hidden = !visible
   }
 
   function showBarcodeControls(visible: boolean): void {
-    sepBarcode.hidden = !visible
-    barcodePayloadInput.hidden = !visible
-    barcodeSymbologySelect.hidden = !visible
+    contextControlsBarcode.hidden = !visible
+  }
+
+  // Contextual row is always present at a fixed height (see .editor-context-row
+  // in style.css) — this only swaps its contents, never the row's presence, so
+  // selecting/deselecting an element never shifts the canvas below it.
+  function updateContextHint(obj: import('fabric').FabricObject | null | undefined): void {
+    contextHint.hidden = !!obj
+  }
+
+  function updateRotateButton(obj: import('fabric').FabricObject | null | undefined): void {
+    btnRotate90.hidden = !obj
   }
 
   function updateSelectionControls(): void {
@@ -323,6 +370,8 @@ export function mountTemplateEditor(root: HTMLElement): void {
     showTextControls(textSelected)
     showQrControls(qrSelected)
     showBarcodeControls(barcodeSelected)
+    updateContextHint(obj)
+    updateRotateButton(obj)
 
     if (textSelected) {
       updateFontControls(obj)
@@ -484,6 +533,19 @@ export function mountTemplateEditor(root: HTMLElement): void {
     }
   })
 
+  btnRotate90.addEventListener('click', () => {
+    if (!fabricCanvas) return
+    const obj = fabricCanvas.getActiveObject()
+    if (!obj) return
+    const current = ((Math.round(obj.angle ?? 0) % 360) + 360) % 360
+    const next = (current + 90) % 360
+    obj.set('angle', next)
+    obj.setCoords()
+    clampObjectToCanvas(obj, currentDesignW, currentDesignH)
+    fabricCanvas.requestRenderAll()
+    fabricCanvas.fire('object:modified', { target: obj })
+  })
+
   function updateUndoRedoButtons(): void {
     btnUndo.disabled = !history?.canUndo()
     btnRedo.disabled = !history?.canRedo()
@@ -533,7 +595,18 @@ export function mountTemplateEditor(root: HTMLElement): void {
       textHistoryDebounce = window.setTimeout(onHistoryEvent, 500)
     })
 
-    elementsPanel = mountElementsPanel(elementsPanelListEl, canvas, () => [currentDesignW, currentDesignH])
+    elementsPanel = mountElementsPanel(
+      elementsPanelListEl,
+      canvas,
+      () => [currentDesignW, currentDesignH],
+      (count) => {
+        // Bulk repair only earns a spot once something is actually broken —
+        // a permanently visible button here is noise when nothing is off
+        // canvas, and this puts it right above the flagged rows when it isn't.
+        btnBringOnCanvas.hidden = count === 0
+        showOffCanvasHint(count)
+      },
+    )
     canvas.on('object:added', () => elementsPanel?.refresh())
     canvas.on('object:removed', () => elementsPanel?.refresh())
     canvas.on('object:modified', () => elementsPanel?.refresh())

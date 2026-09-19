@@ -18,6 +18,19 @@ export const CUSTOM_PROPS = [
 // See docs/features/templates.md.
 export const DEFAULT_CONTINUOUS_LENGTH_DOTS = 1000
 
+// Element rotation snaps to 0/90/180/270 within this many degrees of them;
+// free rotation otherwise. Fabric's rotate control reads these two properties
+// directly off the object (see InteractiveObject) — no custom event math.
+// Single place to tune both. See docs/features/templates.md.
+export const ROTATION_SNAP_ANGLE = 90
+export const ROTATION_SNAP_THRESHOLD = 8
+
+/** Apply the standard rotation snap to an element. Call on every created/restored object. */
+export function applyRotationSnap(obj: FabricObject): void {
+  obj.snapAngle = ROTATION_SNAP_ANGLE
+  obj.snapThreshold = ROTATION_SNAP_THRESHOLD
+}
+
 // Register all custom props so canvas.toJSON() includes them on every object automatically.
 for (const prop of CUSTOM_PROPS) {
   FabricObject.customProperties.push(prop)
@@ -91,6 +104,7 @@ export function describeObject(obj: FabricObject): { label: string; snippet: str
  * dimensions), never canvas.width/canvas.height, which are display-scaled.
  */
 export function isObjectOutOfBounds(obj: FabricObject, canvasW: number, canvasH: number): boolean {
+  obj.setCoords()
   const r = obj.getBoundingRect()
   return r.left < 0 || r.top < 0 || r.left + r.width > canvasW || r.top + r.height > canvasH
 }
@@ -102,6 +116,7 @@ export function isObjectOutOfBounds(obj: FabricObject, canvasW: number, canvasH:
  * moved.
  */
 export function clampObjectToCanvas(obj: FabricObject, canvasW: number, canvasH: number): boolean {
+  obj.setCoords()
   const r = obj.getBoundingRect()
   let dx = 0
   let dy = 0
@@ -300,6 +315,7 @@ export function addTextElement(canvas: Canvas, defaultFont: string, fill = '#000
     fill,
   })
   text.set('labelforge_raw_content', 'Text')
+  applyRotationSnap(text)
 
   // Keep raw content in sync when text changes
   text.on('changed', () => {
@@ -349,6 +365,7 @@ export async function addQrElement(
   })
   img.set('labelforge_qr_payload', payload)
   img.set('labelforge_qr_error_correction', errorCorrection)
+  applyRotationSnap(img)
 
   canvas.add(img)
   canvas.setActiveObject(img)
@@ -388,6 +405,7 @@ export async function addBarcodeElement(
   })
   img.set('labelforge_barcode_payload', payload)
   img.set('labelforge_barcode_symbology', symbology)
+  applyRotationSnap(img)
 
   canvas.add(img)
   canvas.setActiveObject(img)
@@ -447,6 +465,7 @@ export async function loadCanvasJSON(
   // Re-attach raw content sync to each loaded text object; regenerate QR/barcode placeholders.
   const refreshes: Promise<void>[] = []
   canvas.getObjects().forEach(obj => {
+    applyRotationSnap(obj)
     if (isTextType(obj.type)) {
       const t = obj as IText
       t.on('changed', () => {

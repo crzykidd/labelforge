@@ -145,12 +145,29 @@ Barcode / Line / Rect / Image) and a short content snippet. Clicking a row
 selects that object. Rows for an object currently outside the canvas bounds are
 flagged. The list re-renders on every add/remove/modify and on text edits.
 
+An off-canvas row's flag is itself a button (**"off canvas"**, not just a
+label) — clicking it clamps that one element back inside and selects it,
+without touching any other element. The panel header additionally shows a
+**"Bring all on-canvas"** button, but only while at least one element actually
+is off canvas; it clamps every out-of-bounds object at once and selects the
+first one it moved. Both exist because the per-row fix reads as the obvious
+action right where a user notices the problem, while the bulk button is faster
+once several elements need it — see docs/decisions.md for why the bulk button
+lives here instead of the main toolbar.
+
+The status line also shows a one-line hint ("N elements are off the
+label — …") the moment the off-canvas count changes away from zero, naming
+both recovery paths; it clears itself once nothing is off canvas, without
+clobbering an unrelated Save/Preview message.
+
 **Clamping** — dragging or resizing an element keeps its bounding box inside
-the canvas; you cannot drag or grow an element out of bounds. This only
-prevents new breakage. To repair a template that already has an off-canvas
-element (e.g. one created before this existed, or edited via raw API calls),
-use **Bring all on-canvas** in the toolbar: it clamps every out-of-bounds
-object back inside and selects the first one it moved.
+the canvas; you cannot drag or grow an element out of bounds. A backstop clamp
+also runs on `object:modified` and `mouse:up`, so the position actually
+committed at the end of a drag is always back-checked against the bounds
+regardless of what happened mid-drag. This only prevents new breakage. To
+repair a template that already has an off-canvas element (e.g. one created
+before this existed, or edited via raw API calls), use the elements panel's
+recovery controls described above.
 
 Bounds checks and clamping compare against the label's pixel dimensions (the
 same axis-swap `orientation` applies to the design canvas), not the on-screen
@@ -173,6 +190,17 @@ None of this fires while inline-editing a text element's content, or while a
 toolbar input/select has focus — otherwise typing would move or delete the
 element being edited.
 
+**Rotation** — every element (text, QR, barcode) has a standard Fabric rotate
+handle. Rotating within about 8° of 0/90/180/270 snaps exactly to that angle;
+outside that window rotation is free. This uses Fabric's built-in
+`snapAngle`/`snapThreshold` object properties, not custom event math. A brief
+"N°" readout appears near the element while rotating, and a **"Rotate 90°"**
+button in the contextual row (visible whenever an element is selected) turns
+the current selection by 90° per click, mod 360, for discoverability without
+needing to grab the handle. Per-element rotation (the `angle` property) is
+independent of the template's `orientation` (below) — rotating one element
+does not affect the label's orientation, and vice versa.
+
 **Undo/redo** — a 50-entry snapshot stack. A snapshot is taken after every
 add/remove/modify, and once per text-editing session (debounced, not per
 keystroke). Restoring a snapshot goes through the same load path used to open a
@@ -187,6 +215,15 @@ Top: undo, redo, zoom, fit, save, save-as, preview, print
 The editor title shows the friendly `display_name` (falls back to the slug when they match).
 The current label media is shown as a read-only badge next to the template name so
 the user can see what they are editing without opening any menu.
+
+The main toolbar never wraps to a second row (it scrolls horizontally instead
+at narrow widths) — selecting an element used to reflow the toolbar and shift
+the canvas down; it can no longer do either. Per-selection controls (font,
+text color, QR/barcode payload, the rotate button) live in a separate,
+fixed-height row below the main toolbar, always present, whose *contents*
+swap by selection type. When nothing is selected it shows a short hint instead
+of collapsing. **Bring all on-canvas** is not in either toolbar row — it's in
+the elements panel header, described above.
 
 **Save As** opens a modal for entering a new slug name and picking a label media
 (pre-filled with the current media). It saves the current canvas first, then calls

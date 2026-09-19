@@ -4,6 +4,52 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Editor polish: clamp backstop over root-cause fix, fixed-height contextual row, off-canvas recovery lives at the point of discovery
+
+**Decision**: Three implementation choices for the clamp-leak/toolbar-reflow/rotation-snap work
+(`frontend/src/editor/canvas.ts`, `grid-snap.ts`, `elements-panel.ts`, `pages/template-editor.ts`,
+`style.css`), plus a placement change made mid-session from direct user feedback on a running
+build:
+
+1. **The clamp leak (issue #42) is fixed with a backstop, not a proven root cause.** `clampObjectToCanvas`
+   and `isObjectOutOfBounds` now call `obj.setCoords()` before `getBoundingRect()`, matching the
+   issue's suspected frame-lag theory — but that theory was never independently confirmed, and the
+   fix that actually guarantees the invariant is the backstop: `object:modified` and `mouse:up` now
+   re-clamp whatever object was just transformed, regardless of what happened mid-drag. Verified via
+   a Playwright harness (10-step, 80/30px-per-step violent drags past both the bottom-right and
+   top-left corners) that the bounding box lands and stays inside the label, including after Save +
+   a full page reload. If the frame-lag theory is wrong, the backstop still holds; this is
+   deliberately not contingent on being right about the cause.
+
+2. **The contextual per-selection row is a real DOM row with a fixed CSS height, not a
+   conditionally-rendered one**, and its child groups are toggled via the existing `hidden`
+   attribute. This tripped a real bug during the session: `.context-controls { display: flex }`
+   has the same specificity as the browser's default `[hidden] { display: none }`, and author
+   styles win that tie regardless of source order — so the hidden font/QR/barcode control groups
+   rendered anyway until an explicit `.context-controls[hidden] { display: none }` override was
+   added. Caught by an actual screenshot during verification, not by the DOM assertions (which
+   only checked `.hidden` the JS property, not resulting layout) — a reminder that "reasoned from
+   the code" and "observed in the browser" can disagree even when the JS logic is correct.
+
+3. **"Bring all on-canvas" moved out of the main toolbar into the elements panel header, and only
+   renders when at least one element is actually off canvas; each flagged row's "off canvas" badge
+   is itself a clickable per-element fix, not a passive label.** The original plan kept the bulk
+   button permanently in the main toolbar. The user tried the shipped build, found the button
+   before this change ("it is in a weird spot"), and proposed exactly this instead — the recovery
+   action should appear where the problem is noticed, not filed under generic edit actions. A
+   `mountElementsPanel` render-count callback (`onFlaggedChange`) drives both the panel header
+   button's visibility and a one-line status-bar hint, transitioning only when the count actually
+   changes so it doesn't fight a Save/Preview message already showing.
+
+**What would cause us to revisit**: if a future element type's bounding box isn't well-approximated
+by `getBoundingRect()` (e.g. a path with concave geometry), the backstop clamp would still square it
+off to an axis-aligned box, which may look wrong even though it's technically in-bounds — evaluate
+per-shape clamping if that type is added. If Fabric ever changes how `snapAngle`/`snapThreshold`
+interact with a non-uniform canvas zoom, re-verify the rotate-handle geometry math used only in the
+QA harness (not shipped code) — it assumes a uniform, unpanned viewport transform.
+
+---
+
 ## 2026-09-18 — Template editor usability: CSS-background grid, translation-only clamp, load-path-gated undo
 
 **Decision**: Three implementation choices for the elements-panel/clamp/grid/snap/undo work
