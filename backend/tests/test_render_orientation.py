@@ -1,8 +1,8 @@
 """Tests for template orientation ("standard" vs "rotated").
 
 Rotated orientation designs on a canvas transposed to the label's length axis
-and rotates the finished render 270° once at the end (see render_template's
-docstring for why 270, not 90). These tests check the geometry invariants
+and rotates the finished render 90° once at the end (see render_template's
+docstring for why 90, not 270). These tests check the geometry invariants
 that rotation must preserve, not per-element rendering (which is untouched).
 """
 
@@ -245,3 +245,43 @@ def test_missing_orientation_defaults_to_standard_and_renders_unchanged():
 
     assert img_default.size == (696, 271)
     assert img_default.tobytes() == img_explicit.tobytes()
+
+
+# ── 7. Rotation direction: the design's top edge must land on the label's left ─
+
+
+def test_rotated_direction_design_top_lands_on_label_left():
+    """The design's top edge must end up on the printed label's LEFT edge.
+
+    This pins the rotation *direction*, which the dimension tests above cannot
+    catch: 90° and 270° produce identical output sizes but differ by 180°, so a
+    flipped constant renders every rotated label upside down. Reported by the
+    operator against the original 270°.
+    """
+    label = _make_label("62x29", form_factor=1, dots_printable=(696, 271), tape_size=(62, 29))
+    # Design canvas for a rotated 62x29 is 271 wide x 696 tall. Band across its top.
+    canvas_json = {"objects": [_rect(0, 0, 271, 60)]}
+    tmpl = _make_template(canvas_json, orientation="rotated")
+
+    with patch("labelforge.render.template.get_label", return_value=label):
+        from labelforge.render.template import render_template
+
+        img = render_template(tmpl, {}).convert("L")
+
+    w, h = img.size
+    assert (w, h) == (696, 271)
+    px = img.load()
+
+    def dark_fraction(x0: int, x1: int) -> float:
+        total = dark = 0
+        for x in range(x0, x1):
+            for y in range(0, h, 4):
+                total += 1
+                if px[x, y] < 128:
+                    dark += 1
+        return dark / max(total, 1)
+
+    left = dark_fraction(0, w // 5)
+    right = dark_fraction(w - w // 5, w)
+    assert left > 0.2, f"expected the design's top band on the label's left edge, got {left:.2f}"
+    assert right < 0.05, f"nothing should be on the right edge, got {right:.2f}"

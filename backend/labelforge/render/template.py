@@ -440,11 +440,13 @@ def render_template(
             raise RenderError(f"Failed to render element '{obj_type}': {exc}") from exc
 
     if rotated:
-        # 270 (not 90): content authored at the design's left edge — where the
-        # editor places new elements and where continuous auto-length starts —
-        # must land at the top of the final image (printed/fed first). 90 would
-        # put it at the bottom, printing the design in reverse feed order.
+        # 90, so the design's top edge lands on the label's left edge: turning
+        # the printed label a quarter turn clockwise then reads it the same way
+        # up as the editor showed it. 270 puts the design's top on the right,
+        # which reads upside down relative to the canvas — reported as wrong by
+        # the operator. See docs/decisions.md; this outranks the feed-order
+        # argument that originally motivated 270.
         white = 255 if canvas.mode == "L" else (255, 255, 255)
-        canvas = canvas.rotate(270, expand=True, fillcolor=white)
+        canvas = canvas.rotate(90, expand=True, fillcolor=white)
 
     return canvas

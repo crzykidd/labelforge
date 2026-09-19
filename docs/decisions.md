@@ -4,6 +4,39 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-19 — Rotation direction: 90°, so the design's top edge prints on the label's left
+
+**Decision**: `render_template` rotates a finished rotated-orientation canvas with
+`img.rotate(90, expand=True, fillcolor=white)`, not the 270° chosen the day before. The design's
+top edge now lands on the printed label's **left** edge, so turning the label a quarter turn
+clockwise reads it the same way up as the editor showed it.
+
+**Why the reversal**: the operator tested a rotated template and reported that the preview came out
+inverted — "the top of the page should be the top of the label, but when I preview the top is the
+bottom." Measured it before changing anything: with 270°, a black band across the top of the design
+canvas rendered onto the **right** fifth of the output (dark fraction 0.43 right, 0.00 left). With
+90° it lands on the left. 90° and 270° differ by exactly 180°, which is precisely the flip
+described.
+
+**What this overrides**: the original 270° was chosen for *feed order* — it put the design's left
+edge (where the editor places new elements, and where continuous auto-length starts counting) at
+the top of the image, so content authored first is printed first. That reasoning was sound but
+weighted the wrong thing. Feed order only decides which end of a continuous label emerges from the
+printer first; it does not change how the finished label reads. Reading orientation is what the
+operator sees in every preview and on every printed label, so it wins. The consequence is accepted:
+on continuous media the design's left edge is now printed last.
+
+**Guarded by a test**: `test_rotated_direction_design_top_lands_on_label_left` in
+`backend/tests/test_render_orientation.py` asserts the band lands left. The pre-existing dimension
+tests could not catch this — 90° and 270° produce identical output sizes, so a flipped constant
+renders every rotated label upside down while every size assertion still passes.
+
+**Would revisit if**: continuous-media feed order turns out to matter in practice (e.g. long labels
+being torn off before the print completes), in which case the two goals genuinely conflict and the
+direction should become a per-template or per-media choice rather than a constant.
+
+---
+
 ## 2026-09-19 — Editor polish: clamp backstop over root-cause fix, fixed-height contextual row, off-canvas recovery lives at the point of discovery
 
 **Decision**: Three implementation choices for the clamp-leak/toolbar-reflow/rotation-snap work
@@ -110,7 +143,12 @@ that naming).
 
 ---
 
-## 2026-09-18 — Template orientation: rotate the finished canvas 270°, not 90°; no auto-reflow on toggle
+## 2026-09-18 — Template orientation: rotate the finished canvas; no auto-reflow on toggle
+
+> **Superseded in part on 2026-09-19 — the rotation is now 90°, not 270°.** See the
+> "Rotation direction" entry at the top of this log. The reasoning below about the
+> transposed canvas, the print-head-width invariant and no-auto-reflow all still stand;
+> only the direction constant changed.
 
 **Decision**: `render_template` draws every element on a canvas transposed to the label's length
 axis when `orientation == "rotated"` (mirroring the editor, which transposes the same way), then
