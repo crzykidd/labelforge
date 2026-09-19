@@ -47,6 +47,34 @@ def _origin_top_left(obj: dict, left: int, top: int, box_w: int, box_h: int) -> 
     return left, top
 
 
+def _rotated_aabb(
+    anchor_x: float, anchor_y: float, obj: dict, box_w: float, box_h: float, angle: float
+) -> tuple[float, float, float, float]:
+    """World-space AABB of a box_w×box_h element after rotating by `angle` degrees.
+
+    (anchor_x, anchor_y) is the element's stored left/top — Fabric's pivot for
+    rotation is that origin point, not the box's own centre (see
+    docs/decisions.md), so the box's *unrotated* centre is first found via
+    `_origin_top_left` and then swung around the anchor by `angle` to get the
+    true centre; the AABB size is the standard rotated-rectangle formula
+    (pivot-independent — rotating a rigid box never changes its bounding size,
+    only its position). angle == 0 is an exact no-op: no trig, no float drift
+    on the overwhelmingly common unrotated case.
+    """
+    left, top = _origin_top_left(obj, int(anchor_x), int(anchor_y), int(box_w), int(box_h))
+    if angle == 0:
+        return left, top, left + box_w, top + box_h
+    rad = math.radians(angle)
+    c, s = math.cos(rad), math.sin(rad)
+    cx, cy = left + box_w / 2, top + box_h / 2
+    dx, dy = cx - anchor_x, cy - anchor_y
+    wcx = anchor_x + dx * c - dy * s
+    wcy = anchor_y + dx * s + dy * c
+    rw = abs(box_w * c) + abs(box_h * s)
+    rh = abs(box_w * s) + abs(box_h * c)
+    return wcx - rw / 2, wcy - rh / 2, wcx + rw / 2, wcy + rh / 2
+
+
 def _canvas_color_to_l(color: str | None) -> int | None:
     """Map a CSS color string to mode-L pixel value; None means no fill."""
     if not color or color in ("transparent", "rgba(0,0,0,0)", "none"):
@@ -110,6 +138,8 @@ def _paste_onto(
     left: int,
     top: int,
     angle: float,
+    anchor_x: float,
+    anchor_y: float,
     rgb: tuple[int, int, int] | None = None,
 ) -> None:
     """Paste sub-image (mode-L coverage mask) onto canvas.
@@ -118,14 +148,27 @@ def _paste_onto(
     rgb: when set, composites a solid RGB patch through the coverage mask onto
     an RGB canvas — used for coloured text/shapes on two-color media. When None,
     pastes the grayscale sub directly (mono path).
+
+    (anchor_x, anchor_y) is the element's raw (pre-origin-resolution) left/top —
+    Fabric rotates an object about that origin point, not its own centre (Fabric
+    7 defaults new objects to centre origin, where the two coincide, but QR and
+    barcode elements use left/top origin — see docs/decisions.md). `sub.rotate`
+    below always rotates about the sub-image's own centre and expands around it,
+    so the fix is to find where that centre *actually* lands once the box
+    pivots about the anchor, and paste the expanded/rotated image there instead
+    of just re-centring on the untransformed box.
     """
     if abs(angle) > 0.01:
-        # Preserve centre point across expand-rotation.
-        cx = left + sub.width // 2
-        cy = top + sub.height // 2
+        cx = left + sub.width / 2
+        cy = top + sub.height / 2
+        rad = math.radians(angle)
+        c, s = math.cos(rad), math.sin(rad)
+        dx, dy = cx - anchor_x, cy - anchor_y
+        cx = anchor_x + dx * c - dy * s
+        cy = anchor_y + dx * s + dy * c
         sub = sub.rotate(-angle, expand=True, resample=Image.Resampling.BICUBIC, fillcolor=255)
-        left = cx - sub.width // 2
-        top = cy - sub.height // 2
+        left = round(cx - sub.width / 2)
+        top = round(cy - sub.height / 2)
     # Dark pixels (value≈0) → mask 255 (opaque); white (255) → mask 0 (skip).
     # Preserves antialiasing in intermediate greys.
     mask = sub.point(lambda p: 255 - p)
@@ -251,8 +294,9 @@ def detect_overflow(template: Template, media_id: str) -> bool:
         raw_top = int(obj.get("top", 0))
         w = int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
         h = int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
-        left, top = _origin_top_left(obj, raw_left, raw_top, w, h)
-        if top + h > max_h or left + w > max_w:
+        angle = float(obj.get("angle", 0))
+        _, _, x1, y1 = _rotated_aabb(raw_left, raw_top, obj, w, h, angle)
+        if y1 > max_h or x1 > max_w:
             return True
     return False
 
@@ -309,31 +353,25 @@ def render_template(
                 raise RenderError(f"Failed to render element 'text': {exc}") from exc
 
     if is_continuous:
-        # Standard: length grows downward, tracked via top+height (bottommost).
+        # Standard: length grows downward, tracked via the bottommost extent.
         # Rotated: the design canvas is transposed, so length is the design's
-        # *width* and grows rightward — the same logic, mirrored onto left+width.
-        extent = 0
+        # rightmost extent instead. Either way, a rotated *element* can push
+        # extent along either design axis, so the full rotated AABB is needed —
+        # not just the element's unrotated height (standard) or width (rotated).
+        extent = 0.0
         for i, obj in enumerate(objects):
-            if rotated:
-                raw_pos = int(obj.get("left", 0))
-                size = (
-                    text_subs[i].width
-                    if i in text_subs
-                    else int(obj.get("width", 0) * float(obj.get("scaleX", 1.0)))
-                )
-                other = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
-                pos, _ = _origin_top_left(obj, raw_pos, 0, size, other)
+            angle = float(obj.get("angle", 0))
+            raw_left = int(obj.get("left", 0))
+            raw_top = int(obj.get("top", 0))
+            if i in text_subs:
+                ext_w: float = text_subs[i].width
+                ext_h: float = text_subs[i].height
             else:
-                raw_pos = int(obj.get("top", 0))
-                size = (
-                    text_subs[i].height
-                    if i in text_subs
-                    else int(obj.get("height", 0) * float(obj.get("scaleY", 1.0)))
-                )
-                other = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
-                _, pos = _origin_top_left(obj, 0, raw_pos, other, size)
-            extent = max(extent, pos + size)
-        length = max(extent + _PADDING, 1)
+                ext_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
+                ext_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
+            _, _, ext_x1, ext_y1 = _rotated_aabb(raw_left, raw_top, obj, ext_w, ext_h, angle)
+            extent = max(extent, ext_x1 if rotated else ext_y1)
+        length = max(int(math.ceil(extent)) + _PADDING, 1)
     else:
         length = label.dots_printable[1]
 
@@ -350,21 +388,21 @@ def render_template(
         # Fabric v6 serializes `type` as the PascalCase class name (IText, Line,
         # Rect, Image); v5 used lowercase/hyphenated (i-text). Normalize both.
         norm_type = obj_type.lower().replace("-", "")
-        left = int(obj.get("left", 0))
-        top = int(obj.get("top", 0))
+        anchor_x = int(obj.get("left", 0))
+        anchor_y = int(obj.get("top", 0))
         angle = float(obj.get("angle", 0))
         box_w = max(1, int(obj.get("width", 10) * float(obj.get("scaleX", 1.0))))
         box_h = max(1, int(obj.get("height", 10) * float(obj.get("scaleY", 1.0))))
-        left, top = _origin_top_left(obj, left, top, box_w, box_h)
+        left, top = _origin_top_left(obj, anchor_x, anchor_y, box_w, box_h)
 
         try:
             if norm_type in ("itext", "text", "textbox"):
                 sub = text_subs[i]  # pre-rendered above
                 if two_color:
                     rgb = _canvas_color_to_rgb(obj.get("fill")) or (0, 0, 0)
-                    _paste_onto(canvas, sub, left, top, angle, rgb=rgb)
+                    _paste_onto(canvas, sub, left, top, angle, anchor_x, anchor_y, rgb=rgb)
                 else:
-                    _paste_onto(canvas, sub, left, top, angle)
+                    _paste_onto(canvas, sub, left, top, angle, anchor_x, anchor_y)
 
             elif norm_type == "image":
                 if obj.get("labelforge_qr_payload") is not None:
@@ -375,18 +413,22 @@ def render_template(
                         correction = "M"
                     sub = _render_qr_element(qr_payload, correction, box_w, box_h)
                     if two_color:
-                        _paste_onto(canvas, sub, left, top, angle, rgb=(0, 0, 0))
+                        _paste_onto(
+                            canvas, sub, left, top, angle, anchor_x, anchor_y, rgb=(0, 0, 0)
+                        )
                     else:
-                        _paste_onto(canvas, sub, left, top, angle)
+                        _paste_onto(canvas, sub, left, top, angle, anchor_x, anchor_y)
                 elif obj.get("labelforge_barcode_payload") is not None:
                     raw_payload = str(obj["labelforge_barcode_payload"])
                     bc_payload = resolve_content(raw_payload, values)
                     symbology = str(obj.get("labelforge_barcode_symbology") or "code128")
                     sub = _render_barcode_element(bc_payload, symbology, box_w, box_h)
                     if two_color:
-                        _paste_onto(canvas, sub, left, top, angle, rgb=(0, 0, 0))
+                        _paste_onto(
+                            canvas, sub, left, top, angle, anchor_x, anchor_y, rgb=(0, 0, 0)
+                        )
                     else:
-                        _paste_onto(canvas, sub, left, top, angle)
+                        _paste_onto(canvas, sub, left, top, angle, anchor_x, anchor_y)
                 else:
                     raise RenderError("Image elements not yet supported")
 
@@ -417,11 +459,15 @@ def render_template(
                         fill_sub = Image.new("L", (box_w, box_h), 255)
                         fill_sub_draw = ImageDraw.Draw(fill_sub)
                         fill_sub_draw.rectangle([sw, sw, box_w - 1 - sw, box_h - 1 - sw], fill=0)
-                        _paste_onto(canvas, fill_sub, left, top, angle, rgb=fill_rgb)
+                        _paste_onto(
+                            canvas, fill_sub, left, top, angle, anchor_x, anchor_y, rgb=fill_rgb
+                        )
                     outline_sub = Image.new("L", (box_w, box_h), 255)
                     outline_sub_draw = ImageDraw.Draw(outline_sub)
                     outline_sub_draw.rectangle([0, 0, box_w - 1, box_h - 1], outline=0, width=sw)
-                    _paste_onto(canvas, outline_sub, left, top, angle, rgb=outline_rgb)
+                    _paste_onto(
+                        canvas, outline_sub, left, top, angle, anchor_x, anchor_y, rgb=outline_rgb
+                    )
                 else:
                     fill_v = _canvas_color_to_l(obj.get("fill"))
                     sub = Image.new("L", (box_w, box_h), 255)
@@ -429,7 +475,7 @@ def render_template(
                     sub_draw.rectangle(
                         [0, 0, box_w - 1, box_h - 1], fill=fill_v, outline=0, width=sw
                     )
-                    _paste_onto(canvas, sub, left, top, angle)
+                    _paste_onto(canvas, sub, left, top, angle, anchor_x, anchor_y)
 
             else:
                 logger.debug("Skipping unhandled element type %r", obj_type)

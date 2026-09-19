@@ -107,7 +107,7 @@ QR and barcode elements are rendered as bitmaps in the editor (Fabric Image) but
 
 The canvas matches the label media at print DPI (300dpi for QL series). A 62×100 die-cut at 300dpi = 696×1109 pixels. The editor displays this scaled to fit the viewport but operates in label pixel coordinates.
 
-For continuous media (62mm endless), the canvas has a fixed width and a user-settable initial length. The length can grow as elements are added beyond the bottom; print length matches the bottommost element's `top + height` plus padding.
+For continuous media (62mm endless), the canvas has a fixed width and a user-settable initial length. The length can grow as elements are added beyond the bottom; print length matches the bottommost element's extent plus padding — for a rotated element (see Rotation, below) that's the *rotated* bounding box, not the unrotated `top + height`, so a rotated element that's now taller than the label grows the print length to fit it instead of clipping it.
 
 ### Orientation
 
@@ -200,6 +200,13 @@ the current selection by 90° per click, mod 360, for discoverability without
 needing to grab the handle. Per-element rotation (the `angle` property) is
 independent of the template's `orientation` (below) — rotating one element
 does not affect the label's orientation, and vice versa.
+
+The server renderer accounts for `angle` when computing extent: continuous
+auto-length uses the element's *rotated* bounding box (so rotated text isn't
+clipped and doesn't sit under a large blank gap), and die-cut overflow
+detection (`detect_overflow`) checks the rotated footprint too. The renderer
+also rotates an element about its Fabric origin point, matching the editor —
+see docs/decisions.md for why that isn't always the element's own centre.
 
 **Undo/redo** — a 50-entry snapshot stack. A snapshot is taken after every
 add/remove/modify, and once per text-editing session (debounced, not per
