@@ -6,11 +6,14 @@
 
 <p align="center">Self-hosted web app for designing, saving, and printing labels to Brother QL series printers.</p>
 
-**Status**: Released (v0.1.7) — all v1 features are working and the app is packaged as a single Docker image.
+**Status**: Released (v0.1.8) — all v1 features are working and the app is packaged as a single Docker image.
 
-**Version:** 0.1.7
+**Version:** 0.1.8
 
 ## What's New
+
+### v0.1.8 (2026-09-19) — [What's New](CHANGELOG.md#018--2026-09-19)
+Fixes field values longer than their placeholder printing silently cut off on continuous labels, adds an opt-in text Wrap option, and reports overflow based on the value actually being printed.
 
 ### v0.1.7 (2026-09-19) — [What's New](CHANGELOG.md#017--2026-09-19)
 Fixes rotated elements printing clipped with a large blank area: a continuous label's length now grows to fit rotated content, and QR/barcode elements rotate about the same point the editor shows.

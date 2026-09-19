@@ -4,6 +4,8 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-09-19
+
 ### Added
 
 - Text elements have an opt-in **Wrap** checkbox in the template editor. When enabled, resolved text wraps at spaces to fit the element's own box width instead of running past it; a single word too wide to wrap is left on its own line, unbroken (still reported by the overflow warning). Off by default, so existing templates are unaffected.
