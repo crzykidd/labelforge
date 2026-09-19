@@ -9,39 +9,41 @@ not a handoff prompt — it has no frontmatter and never moves to `prompts/done/
 
 ## Where we are
 
-- **Shipped:** `v0.1.7` (2026-09-19). `v0.1.6` shipped the same day.
+- **Shipped:** `v0.1.9` (2026-09-19). Four releases went out that day: v0.1.6 → v0.1.9.
 - **Version source of truth:** `pyproject.toml:7` (bare, no `v` prefix).
-- **`[Unreleased]` holds an unreleased fix** — oversized field values on continuous
-  labels, plus the per-element text-wrap option. Not yet printed on real media.
-- **No open PRs.** One open issue (#42) that is actually already fixed — see below.
+- **`dev` and `main` are in sync**, tree clean, `[Unreleased]` empty.
+- **No open PRs.** One open issue (#42) that is already fixed — see below.
 - Local `HEAD` may be on `main` after a release cut. Start with `git checkout dev`.
 
 v1 is functionally complete — all eight `docs/PRD.md` success criteria work. Recent
-work has been the template editor and rotation.
+work has been the template editor, rotation, and variable fields.
 
 ---
 
-## What shipped on 2026-09-19 (v0.1.6 + v0.1.7)
+## What shipped on 2026-09-19
 
-A large day. Context for anything that looks unfamiliar in the editor:
+Context for anything that looks unfamiliar:
 
-- **CI was red on every PR** and had been since ruff 0.14. `ruff format --check` began
-  formatting Python blocks inside Markdown, so `docs/` and `prompts/done/` failed the
-  gate and blocked all seven dependency PRs. Fixed by excluding `*.md` from ruff and
-  pinning `ruff>=0.16.8,<0.17`.
-- **Three months of dependency updates** merged (FastAPI 0.141.1, pydantic-settings
-  2.15.0, qrcode 8.2, pytest 9.1.1, Vite 8.3.0, GitHub Actions v7/v4).
-- **Template orientation** — Standard / Rotated 90°, stored per template. The editor
-  canvas transposes so you design upright; the renderer rotates the finished canvas.
-- **Template editor overhaul** — elements panel (lists every object, flags off-canvas
-  ones, click the red badge to recover just that one), bounds clamping with a backstop,
-  grid + snap, keyboard shortcuts, undo/redo, and a fixed-height contextual control row
-  so selecting an element no longer shifts the page.
-- **Element rotation** — snaps to 0/90/180/270 within ~8°, free elsewhere, plus a
-  "Rotate 90°" button. The renderer now accounts for rotation when sizing continuous
-  labels and detecting overflow.
+- **CI had been red on every PR** since ruff 0.14 started formatting Python blocks
+  inside Markdown. Fixed by excluding `*.md` from ruff and pinning
+  `ruff>=0.16.8,<0.17`. Three months of blocked dependency PRs then merged.
+- **Template orientation** (Standard / Rotated 90°) — the editor canvas transposes so
+  you design upright; the renderer rotates the finished canvas.
+- **Template editor overhaul** — elements panel with click-to-recover for off-canvas
+  elements, bounds clamping, grid + snap, keyboard shortcuts, undo/redo, and a
+  fixed-height contextual control row so selection no longer shifts the page.
+- **Element rotation** snapping to 0/90/180/270 within ~8°, plus a Rotate 90° button.
+- **Variable field fitting** — a value longer than its placeholder no longer prints
+  clipped; continuous labels grow in both directions.
+- **Text wrap** with a line cap (Off / No limit / 2 / 3 / 4 / 5), orientation-aware
+  target width, truncation reported rather than silent.
+- **FIELDS panel + global value lists** — the first way to edit a template's field
+  schema at all. `{room}` marked as a list field resolves options from a shared,
+  named list; editing it once changes every template using that field name. This also
+  made `increment` settable for the first time.
 
-New frontend modules: `frontend/src/editor/{elements-panel,grid-snap,history,keyboard}.ts`.
+New modules: `frontend/src/editor/{elements-panel,grid-snap,history,keyboard,fields-panel}.ts`,
+`backend/labelforge/field_lists/`.
 
 ---
 
@@ -49,56 +51,67 @@ New frontend modules: `frontend/src/editor/{elements-panel,grid-snap,history,key
 
 ### Issue #42 is fixed but still open
 
-`gh issue view 42` — the drag-clamp leak. It **was fixed** in v0.1.6 (`3906373`) and
-verified in a real browser. The commit referenced it as "(#42)" rather than a
-`Fixes #42` keyword, so GitHub never auto-closed it. Close it, or confirm first with
-`gh issue view 42`.
+`gh issue view 42` — the drag-clamp leak, fixed in v0.1.6 (`3906373`) and verified in
+a real browser. The commit said "(#42)" instead of a `Fixes #42` keyword, so GitHub
+never auto-closed it. Close it.
 
-### Rotation and text fitting are unverified on physical media
+### Batch print has no overflow warning
 
-Rotation/fitting has now been wrong **three times**, and every time only a real print
-revealed it:
+`BatchPrintResponse` (`backend/labelforge/models/__init__.py:133`) has no per-job
+overflow field, so a batch of overflowing labels prints with no warning. Single print
+and preview both warn correctly. A batch is exactly where silent overflow wastes the
+most media. Deliberately deferred from v0.1.9 as a schema change; this is the main
+known gap.
 
-1. Template orientation rotated the wrong way (270° instead of 90°) — the label read
-   upside down. Fixed in `a15fcaf`; direction is now pinned by
-   `test_rotated_direction_design_top_lands_on_label_left`. The dimension tests could
-   not catch it, because 90° and 270° produce identical output sizes.
-2. Rotated elements printed clipped, because the continuous auto-length measured the
-   element's *unrotated* height. Fixed in `6e1f1f0`.
+### Rotation and fitting: one print confirmed, two not
 
-3. A field value longer than its placeholder printed clipped with no warning. The
-   continuous auto-length measured only each element's *far* edge, so a centre-origin
-   element (Fabric's default) grew backwards past the start of the label and was cut.
-   The label got longer, just not in the direction that saved the text. Fixed on `dev`,
-   unreleased.
+Rotation/fitting was wrong **three separate times**, and every time only a physical
+print revealed it — previews and tests all looked right:
 
-**Still unconfirmed on paper:** the `6e1f1f0` fix also changed the rotation pivot for
-`left`/`top`-origin elements — which is QR codes and barcodes — from the sub-image
-centre to the Fabric origin. That is verified against Fabric's source and runtime but
-has never been printed. If a rotated QR or barcode lands in the wrong place, start
-there.
+1. Template orientation rotated the wrong way (270° instead of 90°). Fixed in
+   `a15fcaf`; direction is now pinned by a test, because 90° and 270° produce
+   identical output *sizes* and every dimension assertion passed while the label
+   printed upside down.
+2. Rotated elements printed clipped — continuous auto-length measured the element's
+   *unrotated* height. Fixed in `6e1f1f0`.
+3. A field value longer than its placeholder printed clipped with no warning — the
+   auto-length measured only each element's *far* edge, so a centre-origin element
+   (Fabric's default) grew backwards past the start of the label. Fixed in `5e2ce5e`,
+   **confirmed on real media by the operator**.
 
-When touching rotation, the regression bar is that `angle == 0` output stays
-**byte-identical** — nearly every existing template is unrotated.
+**Not yet printed:** the wrap line cap (changes rasterisation — highest risk), and
+rotated QR/barcode elements, whose pivot point changed in `6e1f1f0`.
+
+When touching any of this, the regression bar is that unrotated / uncapped /
+already-fitting output stays **byte-identical**. Nearly every existing template is in
+that category.
 
 ---
 
-## Feature gaps (real, in scope, not urgent)
+## Known limits — not bugs, don't "fix" them
 
-Verified still true as of this writing:
+- **Rotating twice** (template orientation Rotated 90° *plus* an element rotated 90°)
+  puts the text back across the fixed 62mm tape. It reports overflow instead of
+  printing a blank sliver. Physically cannot fit.
+- **A single word wider than the tape** cannot be wrapped — wrap breaks at spaces
+  only, never mid-word. `"Bedroom"` at 150pt is 760 dots against a 696-dot label; it
+  needs ≤137pt or rotated orientation.
 
-- **Plain image elements are unimplemented end-to-end.** `docs/PRD.md` lists `image` as
-  in scope, but `backend/labelforge/render/template.py:433` raises
-  `RenderError("Image elements not yet supported")`, the editor has only Add Text / Add
-  QR / Add Barcode, and there is **no upload endpoint at all**. Needs an asset story
-  scoped first — handoff-prompt sized, not an in-session edit.
-- **No "Add Line" / "Add Rect" buttons.** The renderer already handles both; only the
-  toolbar is missing. Cheapest visible win, and the QR/barcode pattern shows how.
-- **Template `display_name` cannot be renamed in the UI** —
-  `docs/features/templates.md:298`. The API supports it; a rename modal was deferred.
+---
 
-Explicitly deferred — do not "helpfully" build: template versioning, template
-categories/tags, a comment-preserving `labels.yml` writer.
+## Feature gaps (real, in scope, verified still true)
+
+- **Plain image elements are unimplemented end-to-end.** `docs/PRD.md` lists `image`
+  as in scope, but `render/template.py:612` raises
+  `RenderError("Image elements not yet supported")`, the editor offers only Add Text /
+  Add QR / Add Barcode, and there is **no upload endpoint**. Needs an asset story
+  scoped first — handoff-prompt sized.
+- **No "Add Line" / "Add Rect" buttons.** The renderer handles both already; only the
+  toolbar is missing. Cheapest visible win.
+- **Template `display_name` cannot be renamed in the UI** — the API supports it.
+
+Explicitly deferred — do not build: template versioning, template categories/tags, a
+comment-preserving `labels.yml` writer.
 
 ---
 
@@ -106,13 +119,13 @@ categories/tags, a comment-preserving `labels.yml` writer.
 
 Full text in `CLAUDE.md`; these are the ones a fresh session trips over.
 
-- **Work on `dev`.** `main` is protected — PR only, never a direct push.
-- **Commit, don't push** (releases excepted). Propose one commit, list exact paths, ask
-  `y/n`, stage only those paths. Never `git add -A`. **No `Co-authored-by` trailers** —
-  CLAUDE.md forbids them even when the harness suggests otherwise.
-- **Changelog entry for every change**, under `## [Unreleased]`, as release notes. Do
-  not write "Fixed" entries for bugs that only ever existed unreleased — fold those into
-  the feature's own entry, or the notes describe churn users never saw.
+- **Work on `dev`.** `main` is protected — PR only, gated by CI **and CodeQL**.
+- **Commit, don't push** (releases excepted). Propose one commit, list exact paths,
+  ask `y/n`, stage only those paths. Never `git add -A`. **No `Co-authored-by`
+  trailers** — CLAUDE.md forbids them even when the harness suggests otherwise.
+- **Changelog entry for every change**, under `## [Unreleased]`, as release notes.
+  Do *not* write "Fixed" entries for bugs that only ever existed unreleased — fold
+  those into the feature's own entry, or the notes describe churn users never saw.
 - **Handoff prompts:** more than ~2 files or multi-step → write
   `prompts/<date>-<slug>.md` from `prompts/TEMPLATE.md` and spawn a subagent on it.
   The prompt file is committed *with* the work in one end commit.
@@ -122,19 +135,26 @@ Full text in `CLAUDE.md`; these are the ones a fresh session trips over.
 
 ---
 
-## Two traps that have already cost real time
+## Four traps that have already cost real time
 
-- **The system `ruff` on this machine is 0.8.4; the project pins 0.16.8.** The stale
-  binary reports false formatting failures on `backend/tests/`. Always validate with the
-  pinned one (`pip install -e ".[dev]"` in a venv). Two separate agents reported those
+- **The system `ruff` is 0.8.4; the project pins 0.16.8.** The stale binary reports
+  false formatting failures on `backend/tests/`. Always validate with the pinned one
+  (`pip install -e ".[dev]"` in a venv). **Three separate agents** reported those
   false failures as "pre-existing".
-- **Fabric 7 defaults object origin to `center`, not `left`/`top`.** Any bounds or
+- **Fabric 7 defaults object origin to `center`**, not `left`/`top`. Any bounds or
   position assertion must be origin-aware, mirroring the backend's `_origin_top_left`.
-  A whole round of browser QA produced three false failures from assuming top-left.
+  This produced three false QA failures in one round, and was itself the root cause of
+  the v0.1.8 clipping bug.
+- **DOM assertions do not prove a UI works.** A Playwright click on a selector
+  succeeds whether or not a human can find or reach the control — one passed while
+  Save and Preview were scrolled off-screen. Screenshot the page and *look* at it.
+- **`gh run list` takes `-c <sha>`** to filter by commit; `--arg` is not a `gh` flag.
 
-And one method note worth keeping: **DOM assertions do not prove a UI works.** A
-Playwright click on a selector succeeds whether or not a human can find the control, and
-passed while Save/Preview were scrolled off-screen. Screenshot the page and look at it.
+`playwright-core` plus the cached Chromium at `~/.cache/ms-playwright/` drives the app
+without installing browsers. Dev servers: backend `uvicorn` on :8001 with
+`DISABLE_AUTH=true` and a scratch `DATA_DIR`, frontend Vite on :5174 (**5173 is taken
+by another project on this machine**). Vite also needs `allowedHosts` to be reachable
+by hostname from another machine.
 
 ---
 
