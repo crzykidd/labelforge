@@ -96,6 +96,7 @@ async def quick_print(request: QuickPrintRequest, override: bool = False) -> Pri
             model=settings.printer_model,
             backend=settings.printer_backend,
             host=settings.printer_host,
+            copies=request.copies,
         )
     except PrintError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

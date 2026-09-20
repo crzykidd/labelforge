@@ -142,6 +142,7 @@ async def print_template(name: str, body: PrintRequest, override: bool = False) 
             model=settings.printer_model,
             backend=settings.printer_backend,
             host=settings.printer_host,
+            copies=body.copies,
         )
     except PrintError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -205,6 +206,14 @@ async def batch_print(
         raise HTTPException(status_code=400, detail="Batch count must be >= 1")
     if count > 1000:
         raise HTTPException(status_code=400, detail="Batch count exceeds maximum (1000)")
+    if count * body.copies > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Batch count ({count}) x copies ({body.copies}) exceeds maximum "
+                "total labels (1000)"
+            ),
+        )
 
     tmpl = store.get_template(name)
     if tmpl is None:
@@ -272,6 +281,7 @@ async def batch_print(
                 model=settings.printer_model,
                 backend=settings.printer_backend,
                 host=settings.printer_host,
+                copies=body.copies,
             )
             job_id = insert_job_with_preview(
                 image=image,

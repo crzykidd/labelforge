@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS templates (
     canvas_json  TEXT NOT NULL,
     field_schema TEXT NOT NULL DEFAULT '[]',
     orientation  TEXT NOT NULL DEFAULT 'standard',
+    default_copies INTEGER NOT NULL DEFAULT 1,
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
     deleted_at   TEXT NULL
@@ -81,6 +82,9 @@ def _migrate_templates(conn: sqlite3.Connection) -> None:
             "ALTER TABLE templates ADD COLUMN orientation TEXT NOT NULL DEFAULT 'standard'"
         )
         added.append("orientation")
+    if "default_copies" not in existing:
+        conn.execute("ALTER TABLE templates ADD COLUMN default_copies INTEGER NOT NULL DEFAULT 1")
+        added.append("default_copies")
     conn.commit()
     if added:
         logger.info("Applied templates migrations: added column(s) %s", ", ".join(added))

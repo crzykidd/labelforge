@@ -4,6 +4,10 @@ All notable changes to labelforge are recorded here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Print multiple identical copies of a label in one job: a **Copies** field (1–100, default 1) is now on both Quick Print and template print, remembered per browser (separately for Quick Print and per template). Templates also get a **Default copies** setting in the editor that seeds the count the first time a template is printed from a browser; after that, your last-used count for that template takes over. Copies is independent of batch/increment printing and the two multiply — a batch of 3 labels at 2 copies each prints 6 labels. Reprinting from history always prints exactly 1 copy, regardless of the original count.
+
 ## [0.1.9] — 2026-09-19
 
 ### Added

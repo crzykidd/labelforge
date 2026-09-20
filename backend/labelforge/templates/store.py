@@ -26,6 +26,7 @@ def _row_to_template(row: sqlite3.Row) -> Template:
         canvas_json=json.loads(row["canvas_json"]),
         field_schema=[FieldSpec(**f) for f in json.loads(row["field_schema"])],
         orientation=row["orientation"],
+        default_copies=row["default_copies"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -81,8 +82,8 @@ def create_template(data: TemplateCreate) -> Template:
         conn.execute(
             """INSERT INTO templates
                (name, display_name, label_media, canvas_json, field_schema, orientation,
-                created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                default_copies, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 data.name,
                 display_name,
@@ -90,6 +91,7 @@ def create_template(data: TemplateCreate) -> Template:
                 json.dumps(data.canvas_json),
                 json.dumps([f.model_dump() for f in data.field_schema]),
                 data.orientation,
+                data.default_copies,
                 now,
                 now,
             ),
@@ -121,6 +123,8 @@ def update_template(name: str, data: TemplateUpdate) -> Template | None:
             updates["field_schema"] = json.dumps([f.model_dump() for f in data.field_schema])
         if data.orientation is not None:
             updates["orientation"] = data.orientation
+        if data.default_copies is not None:
+            updates["default_copies"] = data.default_copies
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         conn.execute(
@@ -170,8 +174,8 @@ def duplicate(name: str, new_name: str, new_label_media: str) -> Template:
         conn.execute(
             """INSERT INTO templates
                (name, display_name, label_media, canvas_json, field_schema, orientation,
-                created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                default_copies, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 new_name,
                 new_name,
@@ -179,6 +183,7 @@ def duplicate(name: str, new_name: str, new_label_media: str) -> Template:
                 orig["canvas_json"],
                 orig["field_schema"],
                 orig["orientation"],
+                orig["default_copies"],
                 now,
                 now,
             ),

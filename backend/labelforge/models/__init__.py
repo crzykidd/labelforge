@@ -45,6 +45,7 @@ class QuickPrintRequest(BaseModel):
     label_media: str
     bold: bool = False
     italic: bool = False
+    copies: int = Field(1, ge=1, le=100)
 
 
 class PrintJobResponse(BaseModel):
@@ -74,6 +75,7 @@ class Template(BaseModel):
     canvas_json: dict
     field_schema: list[FieldSpec]
     orientation: Literal["standard", "rotated"] = "standard"
+    default_copies: int = Field(1, ge=1, le=100)
     created_at: str
     updated_at: str
 
@@ -85,6 +87,7 @@ class TemplateCreate(BaseModel):
     canvas_json: dict
     field_schema: list[FieldSpec] = []
     orientation: Literal["standard", "rotated"] = "standard"
+    default_copies: int = Field(1, ge=1, le=100)
 
 
 class TemplateUpdate(BaseModel):
@@ -93,6 +96,7 @@ class TemplateUpdate(BaseModel):
     canvas_json: dict | None = None
     field_schema: list[FieldSpec] | None = None
     orientation: Literal["standard", "rotated"] | None = None
+    default_copies: int | None = Field(None, ge=1, le=100)
 
 
 # ── Field lists (global, keyed by field name) ─────────────────────────────────
@@ -118,11 +122,13 @@ class FieldListUpdate(BaseModel):
 class PrintRequest(BaseModel):
     fields: dict[str, str] = {}
     label_media: str | None = None  # None = use the template's stored media
+    copies: int = Field(1, ge=1, le=100)
 
 
 class BatchPrintRequest(BaseModel):
     labels: list[dict[str, str]]
     label_media: str | None = None  # None = use the template's stored media
+    copies: int = Field(1, ge=1, le=100)  # copies per label
 
 
 class BatchJobResult(BaseModel):

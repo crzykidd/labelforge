@@ -61,7 +61,15 @@ History rows referencing a deleted template keep their `template_id` and resolve
 5. Required fields validated client-side and server-side
 6. **Preview** button → true preview reflecting filled values on the chosen media. The Print
    button is gated until a fresh preview has been taken after any media change.
-7. **Overflow warning** — if content extends beyond the printable area, an inline warning
+7. **Copies** — a number input (1–100, default 1) always visible on the recall page,
+   independent of Batch. The first time a template is printed from a given browser, it seeds
+   from the template's `default_copies`; after that, the browser's last-used count for *that
+   template* wins and `default_copies` is only a starting point, not a forced value. Remembered
+   in `localStorage` per template name, separately from Quick Print's own remembered count.
+   Copies and Batch are independent and multiply: N batch labels × M copies prints N×M labels
+   total, each of the N distinct labels printed M times as one raster job (see
+   [`api.md`](api.md)).
+8. **Overflow warning** — if content extends beyond the printable area, an inline warning
    appears ("Content may be clipped"). This checks the *resolved* field values, not the
    stored placeholders, so a value longer than the placeholder it was designed around (e.g.
    `{name}` filled with a long name) is caught even though the template looked fine in the
@@ -69,8 +77,8 @@ History rows referencing a deleted template keep their `template_id` and resolve
    width (a single line wider than the tape) — continuous length itself never overflows,
    since the label just prints longer (see Rotation → auto-length, below). Printing still
    proceeds; the user decides from the preview.
-8. **Print** button → prints on the chosen media, logs to history with the chosen media.
-9. **Batch** toggle → see [`templates - batch`](#batch--increment) below
+9. **Print** button → prints on the chosen media, logs to history with the chosen media.
+10. **Batch** toggle → see [`templates - batch`](#batch--increment) below
 
 One-off media overrides are captured in history with the actual printed media. Reprinting a
 history row reproduces the original media choice, not the template's stored media.
@@ -87,6 +95,7 @@ templates
   field_schema    text (json)         -- list of {name, type, required, default, increment, enum_values}
                                        -- type: text | number | date | enum | list — see "Value lists" below
   orientation     text                -- "standard" (default) or "rotated"
+  default_copies  integer             -- seeds the recall page's Copies input (default 1, range 1-100)
   created_at      timestamp
   updated_at      timestamp
   deleted_at      timestamp nullable
@@ -284,6 +293,11 @@ Top: undo, redo, zoom, fit, save, save-as, preview, print
 The editor title shows the friendly `display_name` (falls back to the slug when they match).
 The current label media is shown as a read-only badge next to the template name so
 the user can see what they are editing without opening any menu.
+
+A **Default copies** number input (1–100, default 1) sits next to the orientation select. It
+sets the template's `default_copies`, persisted on Save/Preview like everything else in the
+toolbar. It only *seeds* the recall page's Copies input the first time the template is printed
+from a given browser — it does not force a count on every print (see Recall, above).
 
 The main toolbar never wraps to a second row (it scrolls horizontally instead
 at narrow widths) — selecting an element used to reflow the toolbar and shift

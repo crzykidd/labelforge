@@ -36,6 +36,8 @@ Single Docker container, deployed on `docker10` via Dockhand. External access vi
 - Template recall: form auto-generated from field schema, fill, preview, print
 - One-off print of a template on a different label media at recall time (stored media unchanged)
 - Increment / batch printing for numeric fields
+- A copies count (identical labels per print, independent of and multiplying with batch) on
+  Quick Print and template print, with a per-template default
 - Print history with reprint, pinning, and configurable retention
 - HTTP API: every template callable via `POST /api/print/{name}` with JSON field values
 - Label media catalog combining library truth + user-editable UX metadata (`labels.yml`)

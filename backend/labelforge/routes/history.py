@@ -151,12 +151,16 @@ async def _reprint_template(job_id: int, row) -> dict:
     except RenderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
+        # Reprint always sends exactly 1 copy, regardless of what the original
+        # payload's `copies` was — "reprint" means "give me that label again",
+        # not "repeat the whole original run".
         outcome = print_image(
             image=image,
             label_media=row_media,
             model=settings.printer_model,
             backend=settings.printer_backend,
             host=settings.printer_host,
+            copies=1,
         )
     except PrintError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -197,12 +201,14 @@ async def _reprint_quick(job_id: int, row) -> dict:
     except RenderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
+        # See _reprint_template: reprint is always 1 copy, not request.copies.
         outcome = print_image(
             image=image,
             label_media=request.label_media,
             model=settings.printer_model,
             backend=settings.printer_backend,
             host=settings.printer_host,
+            copies=1,
         )
     except PrintError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
