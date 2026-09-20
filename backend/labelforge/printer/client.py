@@ -253,8 +253,14 @@ def print_image(
     model: str,
     backend: str,
     host: str,
+    copies: int = 1,
 ) -> str:
     """Convert *image* to raster instructions and send to the printer.
+
+    *copies* identical labels are sent as ONE raster job (`[img] * copies`),
+    not as *copies* sequential jobs — the printer cuts between labels with no
+    re-feed gap. copies=1 (nearly every caller) produces byte-identical
+    instructions to before this parameter existed.
 
     Returns the send outcome string. NOTE: the network backend cannot read
     back from the printer, so it returns 'sent' (transmitted, result unknown)
@@ -263,6 +269,7 @@ def print_image(
 
     Raises PrintError on any failure so callers can surface a clean 500.
     """
+    copies = max(1, copies)
     try:
         qlr = BrotherQLRaster(model)
         # Two-color media (e.g. "62red" / DK-2251) must be printed with red=True
@@ -277,7 +284,13 @@ def print_image(
         # wide continuous image into a geometry the printer reads as the wrong
         # roll type. The renderer already produces the correct orientation.
         instructions = convert(
-            qlr, [img], label_media, cut=True, rotate="0", threshold=PRINT_THRESHOLD, red=red
+            qlr,
+            [img] * copies,
+            label_media,
+            cut=True,
+            rotate="0",
+            threshold=PRINT_THRESHOLD,
+            red=red,
         )
         identifier = f"tcp://{host}" if backend == "network" else host
         result = send(

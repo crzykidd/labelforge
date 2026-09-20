@@ -2,6 +2,7 @@ import { ApiError, batchPrint, getFieldList, getLabels, getLastValues, getTempla
 import type { FieldSpec, LabelEntry, Template, TemplateLastValues } from '../types'
 import { mountLabelMediaSelect } from '../labels'
 import { navigate } from '../router'
+import { getLastCopies, setLastCopies, templateCopiesKey } from '../copies'
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -153,6 +154,11 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
       <form id="recall-form" autocomplete="off">
         ${hasFields ? fields.map(f => fieldInput(f, fieldLists.get(f.name))).join('') : '<p class="recall-meta">This template has no variable fields.</p>'}
 
+        <div class="recall-field">
+          <label for="copies">Copies</label>
+          <input id="copies" type="number" min="1" max="100" value="1" />
+        </div>
+
         ${canBatch ? `
           <fieldset class="batch-box">
             <legend>Batch</legend>
@@ -190,6 +196,7 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
   const batchEnable = root.querySelector<HTMLInputElement>('#batch-enable')
   const batchOpts = root.querySelector<HTMLDivElement>('#batch-opts')
   const batchCount = root.querySelector<HTMLInputElement>('#batch-count')
+  const copiesInput = root.querySelector<HTMLInputElement>('#copies')!
   const monoRedNotice = root.querySelector<HTMLParagraphElement>('#mono-red-notice')!
   const overflowNotice = root.querySelector<HTMLParagraphElement>('#overflow-notice')!
   const mediaSelectorContainer = root.querySelector<HTMLDivElement>('#media-selector-container')!
@@ -199,6 +206,14 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
   // True when the selected media has changed since the last preview was run.
   // Print is blocked until a fresh preview confirms the user has seen the output.
   let previewStale = false
+
+  // Per-template remembered count wins over default_copies; default_copies only
+  // seeds the input the first time this template is printed from this browser.
+  copiesInput.value = String(getLastCopies(templateCopiesKey(tpl.name)) ?? tpl.default_copies ?? 1)
+
+  function getCopies(): number {
+    return Math.max(1, Math.min(100, parseInt(copiesInput.value, 10) || 1))
+  }
 
   root.querySelector('#back-link')!.addEventListener('click', e => {
     e.preventDefault()
@@ -352,9 +367,11 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
       .finally(() => { btnPreview.disabled = false })
   }
 
-  // Live preview, debounced ~500ms after the last keystroke.
-  form.addEventListener('input', () => {
+  // Live preview, debounced ~500ms after the last keystroke. Copies doesn't
+  // change the rendered image, so it doesn't trigger a re-preview.
+  form.addEventListener('input', (e) => {
     updateButtons()
+    if (e.target === copiesInput) return
     window.clearTimeout(debounceTimer)
     debounceTimer = window.setTimeout(() => {
       if (!previewArea.hidden) runPreview()
@@ -397,16 +414,19 @@ function renderRecall(root: HTMLElement, tpl: Template, lastVals: TemplateLastVa
     const mediaOverride = chosenMedia !== tpl.label_media ? chosenMedia : undefined
 
     async function attemptPrint(override: boolean): Promise<void> {
+      const copies = getCopies()
       if (batchEnable?.checked) {
         const batchLabels = buildBatchLabels()
-        const result = await batchPrint(tpl.name, batchLabels, mediaOverride, override)
+        const result = await batchPrint(tpl.name, batchLabels, { labelMedia: mediaOverride, copies, override })
+        setLastCopies(templateCopiesKey(tpl.name), copies)
         const kind = result.failed > 0 ? 'error' : 'success'
         showStatus(
           `Batch ${result.batch_id}: ${result.succeeded} sent, ${result.failed} failed (${batchLabels.length} requested). "Sent" means transmitted to the printer; delivery is not confirmed.`,
           kind,
         )
       } else {
-        const result = await printTemplate(tpl.name, collectFields(), mediaOverride, override)
+        const result = await printTemplate(tpl.name, collectFields(), { labelMedia: mediaOverride, copies, override })
+        setLastCopies(templateCopiesKey(tpl.name), copies)
         // Print is allowed to run without a preceding Preview (e.g. no required
         // fields, previewStale still false) — so the print response's own
         // overflow flag is the only guaranteed place a truncation warning can

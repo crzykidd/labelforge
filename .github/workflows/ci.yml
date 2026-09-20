@@ -29,6 +29,12 @@ jobs:
     needs: detect
     if: needs.detect.outputs.has_python == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # 3.12 is the requires-python floor; 3.14 is what the Dockerfile ships.
+      # Both must stay green or one of those two claims is untrue.
+      matrix:
+        python-version: ['3.12', '3.14']
     steps:
       - uses: actions/checkout@v7
       - name: Check for pyproject.toml
@@ -43,7 +49,7 @@ jobs:
       - uses: actions/setup-python@v7
         if: steps.check.outputs.exists == 'true'
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - if: steps.check.outputs.exists == 'true'
         run: pip install -e .[dev]

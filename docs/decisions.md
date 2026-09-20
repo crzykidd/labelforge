@@ -4,6 +4,51 @@ Architecture Decision Records, newest at the top. Each entry: what we decided, w
 
 ---
 
+## 2026-09-20 — Copies is a separate axis from batch, sent as one multi-image raster job; reprint is pinned to 1 copy; per-template remembered count outranks `default_copies`
+
+**Decision**: `prompts/done/2026-09-20-label-copies.md` — every print produced exactly one
+label; this adds an explicit copies count. Four decisions, settled by the operator, not
+re-litigated here:
+
+1. **Copies print as ONE raster job, not N sequential jobs.** `print_image()` now builds
+   `convert(qlr, [img] * copies, ...)` instead of always `[img]`. The printer cuts between
+   labels within that single job with no re-feed gap, matching what "N copies" should look like
+   physically. `copies=1` (the default, and nearly every existing caller) must build the exact
+   same single-image call as before this feature existed — covered by a regression test that
+   runs the real `brother_ql.conversion.convert()` and diffs actual instruction bytes, not just
+   call args.
+2. **Copies and batch are independent controls that multiply.** Batch prints N *different*
+   labels (a field incrementing); copies prints N *identical* labels. They compose:
+   `len(labels) * copies` labels total on a batch print. The existing 1000-label sanity cap
+   was extended to guard the *product*, not just `len(labels)` — a batch that individually fits
+   under 1000 can still multiply past it with a high copies count, and that's now a 400 instead
+   of a printer getting asked for an unbounded run.
+3. **Reprint always sends exactly 1 copy**, ignoring whatever `copies` the original stored
+   payload has. Reprint means "give me that label again," not "repeat the whole original run" —
+   silently reprinting N copies would waste media on every reprint of a >1-copy job. Both
+   `_reprint_template` and `_reprint_quick` now pass `copies=1` explicitly to `print_image`
+   rather than relying on it defaulting there, since `copies` living on `QuickPrintRequest`
+   means the reconstructed request object *has* a (possibly stale) `copies` value that must be
+   overridden, not inherited.
+4. **Per-template remembered count wins over `default_copies`; `default_copies` only seeds.**
+   The recall page's Copies input reads `localStorage['lf:last-copies:tpl:<name>']` first,
+   falling back to the template's `default_copies`, falling back to `1` — and only writes that
+   key after a *successful* print. So `default_copies` (set once, in the editor) only matters
+   the first time a template is printed from a given browser; every print after that is driven
+   by what the user actually typed last, not the template's authored default. Quick Print keeps
+   an entirely separate remembered key (`lf:last-copies:quick`) rather than sharing one bucket,
+   matching how `lastLabel.ts`'s pattern is already per-surface. History intentionally gets no
+   UI change (no "×3" badge) — `copies` lands in `payload_json` automatically since it's part of
+   the request models, and adding a badge would read as contradicting decision 3 (reprint always
+   being 1, not the original N) without adding real information.
+
+**Would revisit if**: a request comes up for copies to print as separate jobs instead of one
+(e.g. to interleave differently-numbered batches) — no such need identified; the single-job
+model matches how a physical "print N of this" request is understood and avoids N times the
+per-job TCP/raster overhead.
+
+---
+
 ## 2026-09-19 — Global value lists are keyed by field name (not a separate list id); `list` and `enum` coexist; list deletion is never retroactive
 
 **Decision**: `prompts/done/2026-09-19-field-lists.md` — the editor had `FieldSpec.type` and

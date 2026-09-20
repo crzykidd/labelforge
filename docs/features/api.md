@@ -51,6 +51,12 @@ Create/update bodies and the template response all carry `orientation: "standard
 (create/response default to `"standard"`; omit it on update to leave it unchanged). `duplicate`
 takes no `orientation` — Save As always inherits the source template's orientation.
 
+Create/update bodies and the template response also carry `default_copies` (integer, 1–100,
+default 1) — the count that seeds the recall page's Copies input the first time a template is
+printed from a given browser (the browser's own last-used count for that template wins on every
+print after the first — see [`templates.md`](templates.md)). `duplicate` copies the source
+template's `default_copies`.
+
 ### Field lists
 
 ```
@@ -82,6 +88,19 @@ POST   /api/preview/quick                       Preview a quick-print payload
 ```
 
 All three print endpoints accept an optional `?override=true` query param to print despite a media-mismatch 409 (see "Override media mismatch" below).
+
+`POST /api/print/quick`, `POST /api/print/{name}`, and `POST /api/print/{name}/batch` all accept
+`copies` (integer, 1–100, default 1). It's a separate axis from batch/increment: batch prints N
+*different* labels (fields advancing), copies prints N *identical* labels, and the two multiply
+— a batch of 3 with `copies: 2` prints 6 labels total, each of the 3 distinct labels sent as one
+raster job of 2 copies (the printer cuts between them, no re-feed gap). On `batch`, `copies`
+applies per label, and the existing 1000-label sanity cap applies to the *total*
+(`len(labels) * copies`), not just `len(labels)` — a batch that would multiply out past 1000
+labels gets a 400 even if `labels` itself is under the cap.
+
+**Reprint (`POST /api/history/{job_id}/reprint`) always sends exactly 1 copy**, regardless of
+what `copies` the original print requested — reprint means "give me that label again," not
+"repeat the whole original run."
 
 ### Label catalog
 

@@ -244,30 +244,42 @@ export async function previewTemplate(
   return { blob: await res.blob(), overflow }
 }
 
+export interface PrintTemplateOptions {
+  labelMedia?: string;
+  copies?: number;
+  override?: boolean;
+}
+
 export function printTemplate(
   name: string,
   fields: Record<string, string>,
-  labelMedia?: string,
-  override?: boolean,
+  opts: PrintTemplateOptions = {},
 ): Promise<PrintJobResponse> {
   const body: Record<string, unknown> = { fields }
-  if (labelMedia !== undefined) body.label_media = labelMedia
-  const qs = override ? '?override=true' : ''
+  if (opts.labelMedia !== undefined) body.label_media = opts.labelMedia
+  if (opts.copies !== undefined) body.copies = opts.copies
+  const qs = opts.override ? '?override=true' : ''
   return apiFetch<PrintJobResponse>(`/api/print/${encodeURIComponent(name)}${qs}`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
+export interface BatchPrintOptions {
+  labelMedia?: string;
+  copies?: number;
+  override?: boolean;
+}
+
 export function batchPrint(
   name: string,
   labels: Record<string, string>[],
-  labelMedia?: string,
-  override?: boolean,
+  opts: BatchPrintOptions = {},
 ): Promise<BatchPrintResponse> {
   const body: Record<string, unknown> = { labels }
-  if (labelMedia !== undefined) body.label_media = labelMedia
-  const qs = override ? '?override=true' : ''
+  if (opts.labelMedia !== undefined) body.label_media = opts.labelMedia
+  if (opts.copies !== undefined) body.copies = opts.copies
+  const qs = opts.override ? '?override=true' : ''
   return apiFetch<BatchPrintResponse>(`/api/print/${encodeURIComponent(name)}/batch${qs}`, {
     method: 'POST',
     body: JSON.stringify(body),

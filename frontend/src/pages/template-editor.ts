@@ -83,6 +83,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
           <option value="standard">Standard</option>
           <option value="rotated">Rotated 90°</option>
         </select>
+        <label class="editor-copies-label" title="Seeds the Copies field at print time — the recall page's own remembered count still wins after the first print.">
+          Default copies
+          <input id="default-copies" type="number" min="1" max="100" value="1" style="width:56px" />
+        </label>
         <span class="toolbar-sep"></span>
         <button id="btn-add-text" title="Add a text element. Use {fieldname} placeholders (single braces) for variable fields.">Add Text</button>
         <button id="btn-add-qr" title="Add a QR code element. QR preview is generated on Preview/print (server-side). Use {fieldname} placeholders for variable payloads.">Add QR</button>
@@ -188,6 +192,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const barcodeSymbologySelect = root.querySelector<HTMLSelectElement>('#barcode-symbology')!
   const mediaBadge = root.querySelector<HTMLElement>('#editor-media')!
   const orientationSelect = root.querySelector<HTMLSelectElement>('#orientation-select')!
+  const defaultCopiesInput = root.querySelector<HTMLInputElement>('#default-copies')!
   const statusEl = root.querySelector<HTMLDivElement>('#editor-status')!
   const canvasWrap = root.querySelector<HTMLDivElement>('#canvas-wrap')!
   const canvasInnerEl = root.querySelector<HTMLDivElement>('#canvas-inner')!
@@ -225,6 +230,10 @@ export function mountTemplateEditor(root: HTMLElement): void {
   const fieldsPanel: FieldsPanelHandle = mountFieldsPanel(fieldsPanelListEl, () => {})
   let textHistoryDebounce: number | undefined
   let detachKeyboard: (() => void) | null = null
+
+  function getDefaultCopies(): number {
+    return Math.max(1, Math.min(100, parseInt(defaultCopiesInput.value, 10) || 1))
+  }
 
   function showStatus(msg: string, kind: 'success' | 'error' | ''): void {
     delete statusEl.dataset.hintKind
@@ -695,11 +704,12 @@ export function mountTemplateEditor(root: HTMLElement): void {
     try {
       const canvasJson = getCanvasJSON(fabricCanvas)
       const field_schema = fieldsPanel.getSchema()
+      const default_copies = getDefaultCopies()
       let saved: Template
       if (existsOnServer) {
-        saved = await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation, field_schema })
+        saved = await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation, field_schema, default_copies })
       } else {
-        saved = await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation, field_schema })
+        saved = await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation, field_schema, default_copies })
         existsOnServer = true
       }
       // The server is the source of truth for which fields exist (it re-runs
@@ -732,11 +742,12 @@ export function mountTemplateEditor(root: HTMLElement): void {
       if (objs.length > 0) {
         const canvasJson = getCanvasJSON(fabricCanvas)
         const field_schema = fieldsPanel.getSchema()
+        const default_copies = getDefaultCopies()
         let saved: Template
         if (existsOnServer) {
-          saved = await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation, field_schema })
+          saved = await updateTemplate(name, { canvas_json: canvasJson, label_media: labelMedia, orientation, field_schema, default_copies })
         } else {
-          saved = await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation, field_schema })
+          saved = await createTemplate({ name, display_name: newDisplayName || undefined, label_media: labelMedia, canvas_json: canvasJson, orientation, field_schema, default_copies })
           existsOnServer = true
         }
         fieldsPanel.setSchema(saved.field_schema)
@@ -785,6 +796,7 @@ export function mountTemplateEditor(root: HTMLElement): void {
         const tmpl = await getTemplate(name)
         labelMedia = tmpl.label_media
         orientation = tmpl.orientation
+        defaultCopiesInput.value = String(tmpl.default_copies ?? 1)
         // Update title to show the stored display_name
         displayName = tmpl.display_name || name
         const titleEl = root.querySelector<HTMLElement>('#editor-title')

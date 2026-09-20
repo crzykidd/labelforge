@@ -2,6 +2,7 @@ import { consumeTokenRejected, getFonts, getLabels, getSettings, isAuthRequired,
 import type { QuickPrintRequest } from '../types'
 import { mountLabelMediaSelect, type LabelMediaSelectHandle } from '../labels'
 import { getLastLabel } from '../lastLabel'
+import { getLastCopies, quickCopiesKey, setLastCopies } from '../copies'
 
 function esc(s: string): string {
   return s
@@ -88,6 +89,11 @@ function renderForm(root: HTMLElement): void {
         </div>
 
         <div>
+          <label for="copies">Copies</label>
+          <input id="copies" type="number" min="1" max="100" value="1" />
+        </div>
+
+        <div>
           <label>Style</label>
           <div class="checkboxes">
             <label><input id="bold" type="checkbox" /> Bold</label>
@@ -129,6 +135,7 @@ function renderForm(root: HTMLElement): void {
   const fontSizeInput = root.querySelector<HTMLInputElement>('#font-size')!
   const labelMediaContainer = root.querySelector<HTMLDivElement>('#label-media-container')!
   let labelMediaHandle: LabelMediaSelectHandle | null = null
+  const copiesInput = root.querySelector<HTMLInputElement>('#copies')!
   const boldCheck = root.querySelector<HTMLInputElement>('#bold')!
   const italicCheck = root.querySelector<HTMLInputElement>('#italic')!
   const btnPreview = root.querySelector<HTMLButtonElement>('#btn-preview')!
@@ -154,6 +161,8 @@ function renderForm(root: HTMLElement): void {
     btnPreview.disabled = empty
   }
 
+  copiesInput.value = String(getLastCopies(quickCopiesKey()) ?? 1)
+
   function buildRequest(): QuickPrintRequest {
     const alignment = (
       form.querySelector<HTMLInputElement>('input[name="alignment"]:checked')?.value ?? 'left'
@@ -170,6 +179,7 @@ function renderForm(root: HTMLElement): void {
       label_media: labelMediaHandle?.getValue() ?? '',
       bold: boldCheck.checked,
       italic: italicCheck.checked,
+      copies: Math.max(1, Math.min(100, parseInt(copiesInput.value, 10) || 1)),
     }
   }
 
@@ -252,7 +262,9 @@ function renderForm(root: HTMLElement): void {
     hideStatus()
 
     try {
-      const result = await quickPrint(buildRequest())
+      const request = buildRequest()
+      const result = await quickPrint(request)
+      setLastCopies(quickCopiesKey(), request.copies)
       // "sent" = transmitted to printer network backend, not confirmed printed
       showStatus(
         `Sent — job #${result.job_id} (status: ${result.status}). "Sent" means the job was transmitted to the printer; delivery is not confirmed.`,

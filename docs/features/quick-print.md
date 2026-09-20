@@ -14,17 +14,18 @@ Type some text, pick a font, pick a label media, print. The brother_ql_web mode,
 6. Bold / italic toggles
 7. Alignment: left / center / right
 8. Orientation: standard / rotated 90°
-9. **Preview** button → renders true preview inline
-10. **Print** button → prints and logs to history
+9. **Copies** — number of identical labels to print in one job (default 1, range 1–100)
+10. **Preview** button → renders true preview inline
+11. **Print** button → prints and logs to history
 
-Last-used values for font, size, alignment, and orientation are persisted in the `settings` table (single-row, keyed by setting name) and restored on next visit. Label media is additionally remembered in `localStorage` (`lf:last-label`) and shared with the New Template and Save As pickers so the most-recently-used roll is the default everywhere.
+Last-used values for font, size, alignment, and orientation are persisted in the `settings` table (single-row, keyed by setting name) and restored on next visit. Label media is additionally remembered in `localStorage` (`lf:last-label`) and shared with the New Template and Save As pickers so the most-recently-used roll is the default everywhere. Copies is remembered separately in `localStorage` (`lf:last-copies:quick`), saved only after a successful print.
 
 ## Data model
 
 Quick prints are **not** templates. They produce a `print_jobs` row with:
 
 - `template_id = null`
-- `quick_print_payload` = JSON snapshot of {text, font, size, alignment, orientation, label_media}
+- `quick_print_payload` = JSON snapshot of {text, font, size, alignment, orientation, label_media, copies}
 
 This lets history show quick prints alongside template prints and supports reprint.
 
@@ -42,7 +43,8 @@ Request body:
   "orientation": "standard",
   "label_media": "62",
   "bold": false,
-  "italic": false
+  "italic": false,
+  "copies": 1
 }
 ```
 

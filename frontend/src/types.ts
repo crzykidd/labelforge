@@ -37,6 +37,7 @@ export interface QuickPrintRequest {
   label_media: string;
   bold: boolean;
   italic: boolean;
+  copies: number;
 }
 
 export interface PrintJobResponse {
@@ -76,6 +77,7 @@ export interface Template {
   canvas_json: Record<string, unknown>;
   field_schema: FieldSpec[];
   orientation: 'standard' | 'rotated';
+  default_copies: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -87,6 +89,7 @@ export interface TemplateCreate {
   canvas_json: Record<string, unknown>;
   orientation?: 'standard' | 'rotated';
   field_schema?: FieldSpec[];
+  default_copies?: number;
 }
 
 // A named, reusable list of values for a `type: "list"` field. Global — keyed
