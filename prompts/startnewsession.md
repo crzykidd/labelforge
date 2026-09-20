@@ -12,7 +12,7 @@ not a handoff prompt — it has no frontmatter and never moves to `prompts/done/
 - **Shipped:** `v0.1.9` (2026-09-19). Four releases went out that day: v0.1.6 → v0.1.9.
 - **Version source of truth:** `pyproject.toml:7` (bare, no `v` prefix).
 - **`dev` and `main` are in sync**, tree clean, `[Unreleased]` empty.
-- **No open PRs.** One open issue (#42) that is already fixed — see below.
+- **No open PRs, no open issues.**
 - Local `HEAD` may be on `main` after a release cut. Start with `git checkout dev`.
 
 v1 is functionally complete — all eight `docs/PRD.md` success criteria work. Recent
@@ -48,12 +48,6 @@ New modules: `frontend/src/editor/{elements-panel,grid-snap,history,keyboard,fie
 ---
 
 ## Open items
-
-### Issue #42 is fixed but still open
-
-`gh issue view 42` — the drag-clamp leak, fixed in v0.1.6 (`3906373`) and verified in
-a real browser. The commit said "(#42)" instead of a `Fixes #42` keyword, so GitHub
-never auto-closed it. Close it.
 
 ### Batch print has no overflow warning
 
